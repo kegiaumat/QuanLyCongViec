@@ -31,16 +31,17 @@ def get_connection(sync_from_drive=True):
 
 def commit_and_sync(conn):
     """Commit và nếu dùng Drive thì upload DB lên Drive"""
-    commit_and_sync(conn)
+    conn.commit()   # <-- commit SQLite
     if _get_env("DB_BACKEND", "local").lower() == "drive":
         sa_json = _get_env("GDRIVE_SA")
         folder_id = _get_env("GDRIVE_FOLDER_ID")
         if sa_json and folder_id:
             try:
                 upload_db_to_drive(json.loads(sa_json), folder_id, DB_FILE)
-                print("✅ DB synced to Drive")
+                print("✅ DB synced to Google Drive")
             except Exception as e:
                 print("⚠️ Upload DB failed:", e)
+
 
 def _get_env(name, default=None):
     return os.environ.get(name, default)
