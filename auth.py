@@ -90,3 +90,22 @@ def update_task(task_id, **kwargs):
     cursor.execute(f"UPDATE tasks SET {updates} WHERE id=?", values)
     conn.commit()
     conn.close()
+def add_project(name, deadline, project_type, design_step):
+    conn, cursor = get_connection()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE,
+            deadline TEXT,
+            project_type TEXT,
+            design_step TEXT
+        )
+    """)
+    conn.commit()
+
+    cursor.execute(
+        "INSERT INTO projects (name, deadline, project_type, design_step) VALUES (?,?,?,?)",
+        (name, deadline, project_type, design_step)
+    )
+    conn.commit()
+    conn.close()
