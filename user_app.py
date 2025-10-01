@@ -3,7 +3,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 from auth import get_connection
-
+from auth import commit_and_sync
 from auth import calc_hours
 
 def _load_visible_projects(conn, username: str) -> pd.DataFrame:
@@ -111,7 +111,7 @@ def user_app(user):
                             "UPDATE tasks SET khoi_luong=?, progress=? WHERE id=?",
                             (new_qty, new_prog, tid)
                         )
-                conn.commit()
+                commit_and_sync(conn)
                 st.success("✅ Đã cập nhật công việc")
                 st.rerun()
         with col2:
@@ -123,7 +123,7 @@ def user_app(user):
                 if ids_to_delete:
                     for tid in ids_to_delete:
                         c.execute("DELETE FROM tasks WHERE id=?", (tid,))
-                    conn.commit()
+                    commit_and_sync(conn)
                     st.success(f"✅ Đã xóa {len(ids_to_delete)} dòng")
                     st.rerun()
                 else:
@@ -137,7 +137,7 @@ def user_app(user):
 
         # Lấy job_catalog
         c.execute("UPDATE job_catalog SET project_type='group' WHERE project_type IS NULL")
-        conn.commit()
+        commit_and_sync(conn)
         jobs = pd.read_sql(
             "SELECT id, name, unit, parent_id FROM job_catalog WHERE project_type = ?",
             conn, params=(proj_type,)
@@ -183,7 +183,7 @@ def user_app(user):
                     "INSERT INTO tasks (project, task, assignee, khoi_luong, note, progress) VALUES (?, ?, ?, ?, ?, ?)",
                     (project, task_name, username, hours, note_txt, 0)
                 )
-                conn.commit()
+                commit_and_sync(conn)
                 st.success(f"✅ Đã thêm {hours} giờ công cho công việc '{task_name}'")
                 st.rerun()
         else:
@@ -193,6 +193,6 @@ def user_app(user):
                     "INSERT INTO tasks (project, task, assignee, khoi_luong, note, progress) VALUES (?, ?, ?, ?, ?, ?)",
                     (project, task_name, username, float(qty or 0), "", 0)
                 )
-                conn.commit()
+                commit_and_sync(conn)
                 st.success("✅ Đã thêm công việc cho bạn")
                 st.rerun()

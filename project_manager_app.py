@@ -7,7 +7,7 @@ from auth import get_connection, update_task
 from datetime import datetime, date, time, timedelta
 import sqlite3
 from auth import calc_hours
-
+from auth import commit_and_sync
 
 
 # -----------------------------
@@ -100,7 +100,7 @@ def project_manager_app(user):
 
         # Chuẩn hoá job_catalog: NULL -> 'group'
         c.execute("UPDATE job_catalog SET project_type='group' WHERE project_type IS NULL")
-        conn.commit()
+        commit_and_sync(conn)
 
         # Danh mục công việc cho loại dự án
         jobs = pd.read_sql(
@@ -205,7 +205,7 @@ def project_manager_app(user):
                             "VALUES (?, ?, ?, ?, ?, ?, ?)",
                             (project, task_name, assignee, dl_str, qty, note_common, 0)
                         )
-                conn.commit()
+                commit_and_sync(conn)
                 st.success("✅ Đã giao việc")
                 st.rerun()
 
@@ -289,7 +289,7 @@ def project_manager_app(user):
                         if ids_to_delete:
                             for tid in ids_to_delete:
                                 c.execute("DELETE FROM tasks WHERE id=?", (tid,))
-                            conn.commit()
+                            commit_and_sync(conn)
                             st.success(f"✅ Đã xóa {len(ids_to_delete)} công việc")
                             st.rerun()
                         else:
@@ -358,7 +358,7 @@ def project_manager_app(user):
                             tid = int(my_tasks.iloc[i]["id"])
                             new_qty = float(row.get("Khối lượng (giờ)") or 0)
                             c.execute("UPDATE tasks SET khoi_luong=? WHERE id=?", (new_qty, tid))
-                        conn.commit()
+                        commit_and_sync(conn)
                         st.success("✅ Đã cập nhật khối lượng")
                         st.rerun()
 
@@ -371,7 +371,7 @@ def project_manager_app(user):
                         if ids_to_delete:
                             for tid in ids_to_delete:
                                 c.execute("DELETE FROM tasks WHERE id=?", (tid,))
-                            conn.commit()
+                            commit_and_sync(conn)
                             st.success(f"✅ Đã xóa {len(ids_to_delete)} dòng")
                             st.rerun()
                         else:
@@ -409,7 +409,7 @@ def project_manager_app(user):
                         "VALUES (?, ?, ?, ?, ?, ?)",
                         (project, task_name, username, total_hours, note_txt, 0)
                     )
-                    conn.commit()
+                    commit_and_sync(conn)
                     st.success(f"✅ Đã thêm {total_hours} giờ công cho công việc '{task_name}'")
                     st.rerun()
 

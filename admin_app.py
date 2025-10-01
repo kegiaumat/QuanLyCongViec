@@ -6,7 +6,7 @@ import datetime
 from auth import get_connection
 from auth import add_project   # thêm import ở đầu file.
 from auth import calc_hours
-
+from auth import commit_and_sync
 
 st.set_page_config(layout="wide")
 
@@ -24,7 +24,7 @@ def search_units(query: str):
 def update_last_seen(username):
     conn, c = get_connection()
     c.execute("UPDATE users SET last_seen=CURRENT_TIMESTAMP WHERE username=?", (username,))
-    conn.commit()
+    commit_and_sync(conn)
 
 
 def admin_app(user):
@@ -35,7 +35,7 @@ def admin_app(user):
 
     # ✅ cập nhật trạng thái online (last_seen)
     c.execute("UPDATE users SET last_seen=CURRENT_TIMESTAMP WHERE username=?", (user[1],))
-    conn.commit()
+    commit_and_sync(conn)
 
     menu = ["Quản lý người dùng", "Mục lục công việc","Quản lý dự án", "Quản lý Giao Việc",  "Thống kê công việc"]
 
@@ -106,14 +106,14 @@ def admin_app(user):
                     "UPDATE users SET role=?, project_manager_of=?, project_leader_of=? WHERE username=?",
                     (roles_str, project_manager, project_leader, selected_user)
                 )
-                conn.commit()
+                commit_and_sync(conn)
                 st.success("✅ Đã cập nhật quyền")
                 st.rerun()  # refresh lại danh sách
 
         with col2:
             if st.button("❌ Xóa user"):
                 c.execute("DELETE FROM users WHERE username=?", (selected_user,))
-                conn.commit()
+                commit_and_sync(conn)
                 st.success("🗑️ Đã xóa user")
                 st.rerun()
 
@@ -132,7 +132,7 @@ def admin_app(user):
                         "UPDATE users SET password=? WHERE username=?",
                         (new_password, selected_user)
                     )
-                    conn.commit()
+                    commit_and_sync(conn)
                     st.success("✅ Đã đổi mật khẩu cho người dùng.")
                     st.rerun()
                 except Exception as e:
@@ -170,7 +170,7 @@ def admin_app(user):
                     "INSERT INTO job_catalog (name, unit, parent_id, project_type) VALUES (?, ?, ?, ?)",
                     (new_job.strip(), new_unit.strip() if new_unit else None, parent_id, new_project_type)
                 )
-                conn.commit()
+                commit_and_sync(conn)
                 st.success(f"✅ Đã thêm: {new_job} ({new_unit}, {new_project_type})"
                            + (f" → thuộc '{parent_choice}'" if parent_id else ""))
                 st.rerun()
@@ -268,7 +268,7 @@ def admin_app(user):
                         except Exception as e:
                             st.error(f"⚠️ Lỗi khi cập nhật {old_name}: {e}")
 
-                    conn.commit()
+                    commit_and_sync(conn)
                     st.success("✅ Đã cập nhật mục lục công việc")
                     st.rerun()
 
@@ -302,7 +302,7 @@ def admin_app(user):
                             c.execute("DELETE FROM tasks WHERE task=?", (job_name,))
                             # Xoá trong job_catalog
                             c.execute("DELETE FROM job_catalog WHERE id=?", (job_id,))
-                        conn.commit()
+                        commit_and_sync(conn)
                         st.success("🗑️ Đã xoá các công việc được chọn")
                         del st.session_state["confirm_delete_jobs"]
                         st.rerun()
@@ -416,7 +416,7 @@ def admin_app(user):
                                         new_csv = ",".join(parts) if parts else None
                                         cur.execute(f"UPDATE users SET {colu}=? WHERE username=?", (new_csv, username))
 
-                    conn.commit()
+                    commit_and_sync(conn)
                     st.success("✅ Đã cập nhật thông tin dự án")
                     st.rerun()
 
@@ -448,7 +448,7 @@ def admin_app(user):
                                     parts = [p for p in parts if p != proj_name]
                                     new_csv = ",".join(parts) if parts else None
                                     cur.execute(f"UPDATE users SET {colu}=? WHERE username=?", (new_csv, username))
-                        conn.commit()
+                        commit_and_sync(conn)
                         st.success("🗑️ Đã xoá các dự án được chọn")
                         del st.session_state["confirm_delete"]
                         st.rerun()
@@ -506,7 +506,7 @@ def admin_app(user):
                     INSERT INTO payments (project_id, payment_number, percent, note, paid_at)
                     VALUES (?, ?, ?, ?, ?)
                 """, (proj_id, pay_num, pay_percent, pay_note, pay_date.strftime("%Y-%m-%d")))
-                conn.commit()
+                commit_and_sync(conn)
                 st.success("✅ Đã thêm lần thanh toán mới")
                 st.rerun()
 
@@ -529,7 +529,7 @@ def admin_app(user):
 
         # --- Đồng bộ dữ liệu cũ: NULL -> 'group' ---
         c.execute("UPDATE job_catalog SET project_type='group' WHERE project_type IS NULL")
-        conn.commit()
+        commit_and_sync(conn)
 
         # --- Lọc job_catalog theo project_type ---
         jobs = pd.read_sql(
@@ -609,7 +609,7 @@ def admin_app(user):
                         "VALUES (?, ?, ?, ?, ?, ?)",
                         (project, task, assignee, total_hours, note_txt, 0)
                     )
-                conn.commit()
+                commit_and_sync(conn)
                 st.success("✅ Đã giao công nhật")
                 st.session_state.task_rows = [0]
                 st.rerun()
@@ -710,7 +710,7 @@ def admin_app(user):
                             "VALUES (?, ?, ?, ?, ?, ?, ?)",
                             (project, task, assignee, dl_str, qty, group_note, 0)
                         )
-                conn.commit()
+                commit_and_sync(conn)
                 st.success("✅ Đã giao việc")
                 st.session_state.task_rows = [0]
                 st.rerun()
@@ -805,7 +805,7 @@ def admin_app(user):
                                     tid = int(df_cong.iloc[i]["ID"])
                                     new_qty = float(row.get("Khối lượng (giờ)") or 0)
                                     c.execute("UPDATE tasks SET khoi_luong=? WHERE id=?", (new_qty, tid))
-                                conn.commit()
+                                commit_and_sync(conn)
                                 st.success(f"✅ Đã cập nhật khối lượng công nhật của {u}")
                                 st.rerun()
 
@@ -820,7 +820,7 @@ def admin_app(user):
                                 if ids_to_delete:
                                     for tid in ids_to_delete:
                                         c.execute("DELETE FROM tasks WHERE id=?", (tid,))
-                                    conn.commit()
+                                    commit_and_sync(conn)
                                     st.success(f"✅ Đã xóa {len(ids_to_delete)} dòng công nhật của {u}")
                                     st.rerun()
                                 else:
@@ -901,7 +901,7 @@ def admin_app(user):
                                             int(row.get("Tiến độ (%)") or 0), tid
                                         )
                                     )
-                                conn.commit()
+                                commit_and_sync(conn)
                                 st.success(f"✅ Đã cập nhật công việc khối lượng của {u}")
                                 st.rerun()
 
@@ -915,7 +915,7 @@ def admin_app(user):
                                 if ids_to_delete:
                                     for tid in ids_to_delete:
                                         c.execute("DELETE FROM tasks WHERE id=?", (tid,))
-                                    conn.commit()
+                                    commit_and_sync(conn)
                                     st.success(f"✅ Đã xóa {len(ids_to_delete)} dòng công việc của {u}")
                                     st.rerun()
                                 else:

@@ -14,6 +14,33 @@ from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 import io, json
 
 DEFAULT_LOCAL_DB = "tasks.db"
+def get_connection(sync_from_drive=True):
+    """Mỗi lần mở kết nối, nếu dùng Drive thì tải DB mới nhất về"""
+    if _get_env("DB_BACKEND", "local").lower() == "drive":
+        sa_json = _get_env("GDRIVE_SA")
+        folder_id = _get_env("GDRIVE_FOLDER_ID")
+        if sa_json and folder_id and sync_from_drive:
+            try:
+                download_db_from_drive(json.loads(sa_json), folder_id, DB_FILE)
+            except Exception as e:
+                print("⚠️ Download DB failed:", e)
+
+    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+    return conn, conn.cursor()
+
+
+def commit_and_sync(conn):
+    """Commit và nếu dùng Drive thì upload DB lên Drive"""
+    commit_and_sync(conn)
+    if _get_env("DB_BACKEND", "local").lower() == "drive":
+        sa_json = _get_env("GDRIVE_SA")
+        folder_id = _get_env("GDRIVE_FOLDER_ID")
+        if sa_json and folder_id:
+            try:
+                upload_db_to_drive(json.loads(sa_json), folder_id, DB_FILE)
+                print("✅ DB synced to Drive")
+            except Exception as e:
+                print("⚠️ Upload DB failed:", e)
 
 def _get_env(name, default=None):
     return os.environ.get(name, default)
@@ -136,7 +163,7 @@ def update_task(task_id, task_name=None, khoi_luong=None, deadline=None, note=No
     sql = f"UPDATE tasks SET {', '.join(fields)} WHERE id=?"
     values.append(task_id)
     c.execute(sql, values)
-    conn.commit()
+    commit_and_sync(conn)
 
 def init_db():
     conn, c = get_connection()
@@ -203,7 +230,7 @@ def init_db():
             FOREIGN KEY(project_id) REFERENCES projects(id)
         )""")
     except sqlite3.OperationalError: pass
-    conn.commit()
+    commit_and_sync(conn)
     return conn, c
 
 def add_project(name, deadline, project_type="group", design_step=None):
@@ -214,7 +241,7 @@ def add_project(name, deadline, project_type="group", design_step=None):
         "INSERT INTO projects (name, deadline, project_type, design_step) VALUES (?,?,?,?)",
         (name, deadline, project_type, design_step)
     )
-    conn.commit()
+    commit_and_sync(conn)
 
 def get_projects():
     conn, _ = get_connection()
@@ -224,7 +251,7 @@ def delete_project(project_name):
     conn, c = get_connection()
     c.execute("DELETE FROM tasks WHERE project=?", (project_name,))
     c.execute("DELETE FROM projects WHERE name=?", (project_name,))
-    conn.commit()
+    commit_and_sync(conn)
 
 def get_all_projects():
     conn, _ = get_connection()
@@ -236,7 +263,7 @@ def add_user(username, display_name, dob, password, role="user"):
     conn, c = get_connection()
     c.execute("INSERT INTO users (username, display_name, dob, password, role) VALUES (?,?,?,?,?)",
               (username, display_name, dob, hash_password(password), role))
-    conn.commit()
+    commit_and_sync(conn)
 
 def login_user(username, password):
     if username == "TDPRO" and password == "Giadinh12":
@@ -246,13 +273,13 @@ def login_user(username, password):
     user = c.fetchone()
     if user:
         c.execute("UPDATE users SET online=1, last_seen=CURRENT_TIMESTAMP WHERE username=?", (username,))
-        conn.commit()
+        commit_and_sync(conn)
     return user
 
 def logout_user(username):
     conn, c = get_connection()
     c.execute("UPDATE users SET online=0 WHERE username=?", (username,))
-    conn.commit()
+    commit_and_sync(conn)
 
 def get_online_users():
     conn, _ = get_connection()

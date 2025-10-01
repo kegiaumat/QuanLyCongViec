@@ -6,10 +6,9 @@ from auth import init_db, get_connection
 from admin_app import admin_app
 from project_manager_app import project_manager_app
 from user_app import user_app   # nếu vẫn muốn dùng giao diện user thường
-
+from auth import commit_and_sync
 # ==================== HỖ TRỢ ====================
-import auth
-st.sidebar.write("📂 DB path:", auth.DB_FILE)
+
 
 def init_default_admin():
     conn, c = get_connection()
@@ -24,7 +23,7 @@ def init_default_admin():
             last_seen TEXT
         )
     """)
-    conn.commit()
+    commit_and_sync(conn)
     conn.close()
 
 
@@ -81,7 +80,7 @@ def profile_page(user):
             "UPDATE users SET display_name=?, dob=? WHERE lower(username)=lower(?)",
             (new_display, new_dob.strftime("%Y-%m-%d") if new_dob else None, user[1])
         )
-        conn.commit()
+        commit_and_sync(conn)
         st.success("✅ Đã cập nhật hồ sơ.")
         user = list(user)
         user[2] = new_display
@@ -108,7 +107,7 @@ def profile_page(user):
                 "UPDATE users SET password=? WHERE lower(username)=lower(?)",
                 (new_pw, user[1])
             )
-            conn.commit()
+            commit_and_sync(conn)
             st.success("✅ Đã đổi mật khẩu. Vui lòng đăng nhập lại.")
             logout_user()
             st.rerun()
@@ -202,7 +201,7 @@ def main():
                                     "user",
                                 )
                             )
-                            conn.commit()
+                            commit_and_sync(conn)
                             st.success("✅ Đăng ký thành công! Hãy đăng nhập.")
                     finally:
                         conn.close()
