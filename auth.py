@@ -74,6 +74,7 @@ def get_db_path():
     else:
         return local_path
 
+DB_FILE = get_db_path()
 
 def get_connection():
     conn = sqlite3.connect(DB_FILE, check_same_thread=False)

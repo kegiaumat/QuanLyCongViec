@@ -6,9 +6,10 @@ from auth import init_db, get_connection
 from admin_app import admin_app
 from project_manager_app import project_manager_app
 from user_app import user_app   # nếu vẫn muốn dùng giao diện user thường
+
+# ==================== HỖ TRỢ ====================
 import auth
 st.sidebar.write("📂 DB path:", auth.DB_FILE)
-# ==================== HỖ TRỢ ====================
 
 def init_default_admin():
     conn, c = get_connection()
