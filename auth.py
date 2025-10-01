@@ -167,16 +167,20 @@ def update_task(task_id, task_name=None, khoi_luong=None, deadline=None, note=No
 def init_db():
     conn, c = get_connection()
     try:
-        c.execute("""CREATE TABLE users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE,
-            display_name TEXT,
-            dob DATE,
-            password TEXT,
-            role TEXT,
-            project_manager_of TEXT,
-            online INTEGER DEFAULT 0
-        )""")
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE,
+                display_name TEXT,
+                dob DATE,
+                password TEXT,
+                role TEXT,
+                project_manager_of TEXT,
+                online INTEGER DEFAULT 0,
+                last_seen TIMESTAMP
+            )
+        """)
+
     except sqlite3.OperationalError: pass
     try:
         c.execute("""CREATE TABLE projects (
