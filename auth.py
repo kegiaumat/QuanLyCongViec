@@ -7,7 +7,7 @@ import pandas as pd
 import datetime
 from datetime import date, datetime, time, timedelta
 
-# ==================== GOOGLE DRIVE SUPPORT ====================
+# ==================== GOOGLE DRIVE SUPPORT (FOLDER-BASED) ====================
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
@@ -23,9 +23,24 @@ def _build_drive_service_from_sa(sa_info: dict):
     credentials = service_account.Credentials.from_service_account_info(sa_info, scopes=scopes)
     return build("drive", "v3", credentials=credentials, cache_discovery=False)
 
-def download_db_from_drive(sa_info: dict, drive_file_id: str, local_path: str):
+def _find_or_create_db_file(service, folder_id: str, filename: str = "tasks.db") -> str:
+    """Tìm file trong folder. Nếu chưa có thì tạo mới và trả về fileId"""
+    query = f"'{folder_id}' in parents and name='{filename}' and trashed=false"
+    results = service.files().list(q=query, spaces='drive', fields="files(id, name)", pageSize=1).execute()
+    items = results.get("files", [])
+    if items:
+        return items[0]["id"]
+    else:
+        # tạo mới file rỗng
+        file_metadata = {"name": filename, "parents": [folder_id]}
+        media = MediaFileUpload(filename, resumable=True) if os.path.exists(filename) else None
+        new_file = service.files().create(body=file_metadata, media_body=media, fields="id").execute()
+        return new_file["id"]
+
+def download_db_from_drive(sa_info: dict, folder_id: str, local_path: str):
     service = _build_drive_service_from_sa(sa_info)
-    request = service.files().get_media(fileId=drive_file_id)
+    file_id = _find_or_create_db_file(service, folder_id, os.path.basename(local_path))
+    request = service.files().get_media(fileId=file_id)
     fh = io.FileIO(local_path, mode="wb")
     downloader = MediaIoBaseDownload(fh, request)
     done = False
@@ -33,37 +48,32 @@ def download_db_from_drive(sa_info: dict, drive_file_id: str, local_path: str):
         status, done = downloader.next_chunk()
     fh.close()
 
-def upload_db_to_drive(sa_info: dict, drive_file_id: str, local_path: str):
+def upload_db_to_drive(sa_info: dict, folder_id: str, local_path: str):
     service = _build_drive_service_from_sa(sa_info)
+    file_id = _find_or_create_db_file(service, folder_id, os.path.basename(local_path))
     media = MediaFileUpload(local_path, mimetype="application/x-sqlite3", resumable=True)
-    if drive_file_id:
-        service.files().update(fileId=drive_file_id, media_body=media).execute()
-    else:
-        file_metadata = {"name": os.path.basename(local_path)}
-        file = service.files().create(body=file_metadata, media_body=media, fields="id").execute()
-        return file.get("id")
+    service.files().update(fileId=file_id, media_body=media).execute()
 
 def get_db_path():
     backend = _get_env("DB_BACKEND", "local").lower()
     local_path = _get_env("DB_LOCAL_PATH", DEFAULT_LOCAL_DB)
     if backend == "drive":
-        file_id = _get_env("GDRIVE_FILE_ID")
+        folder_id = _get_env("GDRIVE_FOLDER_ID")
         sa_json = _get_env("GDRIVE_SA")
-        if not file_id or not sa_json:
+        if not folder_id or not sa_json:
             return local_path
         os.makedirs(os.path.dirname(local_path) or ".", exist_ok=True)
         try:
             if not os.path.exists(local_path):
                 creds_info = json.loads(sa_json) if sa_json.strip().startswith("{") else None
                 if creds_info:
-                    download_db_from_drive(creds_info, file_id, local_path)
+                    download_db_from_drive(creds_info, folder_id, local_path)
         except Exception as e:
             print("⚠️ GDrive download error:", e)
         return local_path
     else:
         return local_path
 
-DB_FILE = get_db_path()
 
 def get_connection():
     conn = sqlite3.connect(DB_FILE, check_same_thread=False)
