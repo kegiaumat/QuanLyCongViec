@@ -15,7 +15,6 @@ import io, json
 
 DEFAULT_LOCAL_DB = "tasks.db"
 def get_connection(sync_from_drive=True):
-    """Mỗi lần mở kết nối, nếu dùng Drive thì tải DB mới nhất về"""
     if _get_env("DB_BACKEND", "local").lower() == "drive":
         sa_json = _get_env("GDRIVE_SA")
         folder_id = _get_env("GDRIVE_FOLDER_ID")
@@ -24,7 +23,6 @@ def get_connection(sync_from_drive=True):
                 download_db_from_drive(json.loads(sa_json), folder_id, DB_FILE)
             except Exception as e:
                 print("⚠️ Download DB failed:", e)
-
     conn = sqlite3.connect(DB_FILE, check_same_thread=False)
     return conn, conn.cursor()
 
