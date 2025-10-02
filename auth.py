@@ -26,6 +26,12 @@ def get_connection(sync_from_drive=True):
                 print("⚠️ Download DB failed:", e)
     conn = sqlite3.connect(DB_FILE, check_same_thread=False)
     return conn, conn.cursor()
+def ensure_column_exists(cursor, table, column, coltype):
+    """Nếu bảng thiếu cột thì thêm vào"""
+    cursor.execute(f"PRAGMA table_info({table})")
+    cols = [row[1] for row in cursor.fetchall()]
+    if column not in cols:
+        cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
 
 
 def commit_and_sync(conn):
@@ -189,8 +195,17 @@ def init_db():
                 last_seen TIMESTAMP
             )
         """)
+    except sqlite3.OperationalError:
+        pass
 
-    except sqlite3.OperationalError: pass
+    # === Đảm bảo các cột cần thiết tồn tại ===
+    ensure_column_exists(c, "users", "dob", "DATE")
+    ensure_column_exists(c, "users", "role", "TEXT")
+    ensure_column_exists(c, "users", "project_manager_of", "TEXT")
+    ensure_column_exists(c, "users", "project_leader_of", "TEXT")
+    ensure_column_exists(c, "users", "online", "INTEGER DEFAULT 0")
+    ensure_column_exists(c, "users", "last_seen", "TIMESTAMP")
+
     try:
         c.execute("""CREATE TABLE projects (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -199,7 +214,8 @@ def init_db():
             project_type TEXT DEFAULT 'group',
             design_step TEXT
         )""")
-    except sqlite3.OperationalError: pass
+    except sqlite3.OperationalError:
+        pass
     try:
         c.execute("""CREATE TABLE tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
