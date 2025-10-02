@@ -26,6 +26,7 @@ def get_connection(sync_from_drive=True):
                 print("⚠️ Download DB failed:", e)
     conn = sqlite3.connect(DB_FILE, check_same_thread=False)
     return conn, conn.cursor()
+
 def ensure_column_exists(cursor, table, column, coltype):
     """Nếu bảng thiếu cột thì thêm vào"""
     cursor.execute(f"PRAGMA table_info({table})")
@@ -69,7 +70,7 @@ def _build_drive_service_from_sa(sa_info: dict):
         # media = MediaFileUpload(filename, resumable=True) if os.path.exists(filename) else None
         # new_file = service.files().create(body=file_metadata, media_body=media, fields="id").execute()
         # return new_file["id"]
-def _find_db_file(service, folder_id: str, filename: str = "tasks.db") -> str:
+def _find_db_file(service, folder_id: str, filename: str = "QLWorkXN.db") -> str:
     """Tìm file DB trong folder. Nếu không có thì báo lỗi (không tự tạo mới)."""
     query = f"'{folder_id}' in parents and name='{filename}' and trashed=false"
     results = service.files().list(q=query, spaces='drive', fields="files(id, name)", pageSize=1).execute()
@@ -117,9 +118,7 @@ def get_db_path():
 
 DB_FILE = get_db_path()
 
-def get_connection():
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
-    return conn, conn.cursor()
+
 
 # ==================== GIỮ NGUYÊN TOÀN BỘ HÀM CŨ ====================
 
