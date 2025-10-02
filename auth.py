@@ -13,7 +13,8 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 import io, json
 
-DEFAULT_LOCAL_DB = "tasks.db"
+DEFAULT_LOCAL_DB = "QLWorkXN.db"
+
 def get_connection(sync_from_drive=True):
     if _get_env("DB_BACKEND", "local").lower() == "drive":
         sa_json = _get_env("GDRIVE_SA")
@@ -49,23 +50,31 @@ def _build_drive_service_from_sa(sa_info: dict):
     credentials = service_account.Credentials.from_service_account_info(sa_info, scopes=scopes)
     return build("drive", "v3", credentials=credentials, cache_discovery=False)
 
-def _find_or_create_db_file(service, folder_id: str, filename: str = "tasks.db") -> str:
-    """Tìm file trong folder. Nếu chưa có thì tạo mới và trả về fileId"""
+# def _find_or_create_db_file(service, folder_id: str, filename: str = "QLWorkXN.db") -> str:
+    # """Tìm file trong folder. Nếu chưa có thì tạo mới và trả về fileId"""
+    # query = f"'{folder_id}' in parents and name='{filename}' and trashed=false"
+    # results = service.files().list(q=query, spaces='drive', fields="files(id, name)", pageSize=1).execute()
+    # items = results.get("files", [])
+    # if items:
+        # return items[0]["id"]
+    # else:
+        #### tạo mới file rỗng
+        # file_metadata = {"name": filename, "parents": [folder_id]}
+        # media = MediaFileUpload(filename, resumable=True) if os.path.exists(filename) else None
+        # new_file = service.files().create(body=file_metadata, media_body=media, fields="id").execute()
+        # return new_file["id"]
+def _find_db_file(service, folder_id: str, filename: str = "tasks.db") -> str:
+    """Tìm file DB trong folder. Nếu không có thì báo lỗi (không tự tạo mới)."""
     query = f"'{folder_id}' in parents and name='{filename}' and trashed=false"
     results = service.files().list(q=query, spaces='drive', fields="files(id, name)", pageSize=1).execute()
     items = results.get("files", [])
-    if items:
-        return items[0]["id"]
-    else:
-        # tạo mới file rỗng
-        file_metadata = {"name": filename, "parents": [folder_id]}
-        media = MediaFileUpload(filename, resumable=True) if os.path.exists(filename) else None
-        new_file = service.files().create(body=file_metadata, media_body=media, fields="id").execute()
-        return new_file["id"]
+    if not items:
+        raise FileNotFoundError(f"❌ Không tìm thấy {filename} trong folder {folder_id}. Hãy tạo file rỗng trước!")
+    return items[0]["id"]
 
 def download_db_from_drive(sa_info: dict, folder_id: str, local_path: str):
     service = _build_drive_service_from_sa(sa_info)
-    file_id = _find_or_create_db_file(service, folder_id, os.path.basename(local_path))
+    file_id = _find_db_file(service, folder_id, os.path.basename(local_path))
     request = service.files().get_media(fileId=file_id)
     fh = io.FileIO(local_path, mode="wb")
     downloader = MediaIoBaseDownload(fh, request)
@@ -76,7 +85,7 @@ def download_db_from_drive(sa_info: dict, folder_id: str, local_path: str):
 
 def upload_db_to_drive(sa_info: dict, folder_id: str, local_path: str):
     service = _build_drive_service_from_sa(sa_info)
-    file_id = _find_or_create_db_file(service, folder_id, os.path.basename(local_path))
+    file_id = _find_db_file(service, folder_id, os.path.basename(local_path))
     media = MediaFileUpload(local_path, mimetype="application/x-sqlite3", resumable=True)
     service.files().update(fileId=file_id, media_body=media).execute()
 
