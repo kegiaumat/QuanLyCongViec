@@ -5,6 +5,7 @@ import streamlit as st
 import hashlib
 import pandas as pd
 import datetime
+import psycopg2
 from datetime import date, datetime, time, timedelta
 
 # ==================== GOOGLE DRIVE SUPPORT (FOLDER-BASED) ====================
@@ -15,18 +16,27 @@ import io, json
 
 DEFAULT_LOCAL_DB = "QLWorkXN.db"
 
-def get_connection(sync_from_drive=True):
-    if _get_env("DB_BACKEND", "local").lower() == "drive":
-        sa_json = _get_env("GDRIVE_SA")
-        folder_id = _get_env("GDRIVE_FOLDER_ID")
-        if sa_json and folder_id and sync_from_drive:
-            try:
-                download_db_from_drive(json.loads(sa_json), folder_id, DB_FILE)
-            except Exception as e:
-                print("⚠️ Download DB failed:", e)
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
-    return conn, conn.cursor()
+# def get_connection(sync_from_drive=True):
+    # if _get_env("DB_BACKEND", "local").lower() == "drive":
+        # sa_json = _get_env("GDRIVE_SA")
+        # folder_id = _get_env("GDRIVE_FOLDER_ID")
+        # if sa_json and folder_id and sync_from_drive:
+            # try:
+                # download_db_from_drive(json.loads(sa_json), folder_id, DB_FILE)
+            # except Exception as e:
+                # print("⚠️ Download DB failed:", e)
+    # conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+    # return conn, conn.cursor()
 
+def get_connection():
+    conn = psycopg2.connect(
+        host=st.secrets["SUPABASE_HOST"],
+        dbname=st.secrets["SUPABASE_DB"],
+        user=st.secrets["SUPABASE_USER"],
+        password=st.secrets["SUPABASE_PASSWORD"],
+        port=st.secrets.get("SUPABASE_PORT", "5432")
+    )
+    return conn, conn.cursor()
 def ensure_column_exists(cursor, table, column, coltype):
     """Nếu bảng thiếu cột thì thêm vào"""
     cursor.execute(f"PRAGMA table_info({table})")
@@ -35,19 +45,20 @@ def ensure_column_exists(cursor, table, column, coltype):
         cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
 
 
+# def commit_and_sync(conn):
+    # """Commit và nếu dùng Drive thì upload DB lên Drive"""
+    # conn.commit()   # <-- commit SQLite
+    # if _get_env("DB_BACKEND", "local").lower() == "drive":
+        # sa_json = _get_env("GDRIVE_SA")
+        # folder_id = _get_env("GDRIVE_FOLDER_ID")
+        # if sa_json and folder_id:
+            # try:
+                # upload_db_to_drive(json.loads(sa_json), folder_id, DB_FILE)
+                # print("✅ DB synced to Google Drive")
+            # except Exception as e:
+                # print("⚠️ Upload DB failed:", e)
 def commit_and_sync(conn):
-    """Commit và nếu dùng Drive thì upload DB lên Drive"""
-    conn.commit()   # <-- commit SQLite
-    if _get_env("DB_BACKEND", "local").lower() == "drive":
-        sa_json = _get_env("GDRIVE_SA")
-        folder_id = _get_env("GDRIVE_FOLDER_ID")
-        if sa_json and folder_id:
-            try:
-                upload_db_to_drive(json.loads(sa_json), folder_id, DB_FILE)
-                print("✅ DB synced to Google Drive")
-            except Exception as e:
-                print("⚠️ Upload DB failed:", e)
-
+    conn.commit()
 
 def _get_env(name, default=None):
     return os.environ.get(name, default)
