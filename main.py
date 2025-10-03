@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import datetime
+from streamlit_cookies_manager import EncryptedCookieManager
 
 from auth import init_db, get_connection
 from admin_app import admin_app
@@ -119,7 +120,13 @@ def profile_page(user):
 
 def main():
     st.set_page_config(page_title="Quản lý công việc", layout="wide", page_icon="🔑")
-
+    # Cookie manager
+    cookies = EncryptedCookieManager(
+        prefix="myapp",   # prefix để phân biệt app
+        password="supersecretkey"  # bạn đổi secret key tuỳ ý
+    )
+    if not cookies.ready():
+        st.stop()
     st.markdown(
         """
         <style>
@@ -153,6 +160,19 @@ def main():
 
     init_db()
     init_default_admin()
+    # Nếu chưa có session_state["user"] nhưng cookie có username thì tự login lại
+    if "user" not in st.session_state and "username" in cookies:
+        username = cookies["username"]
+        # Lấy lại user từ DB để khôi phục session
+        conn, c = get_connection()
+        row = c.execute(
+            "SELECT id, username, display_name, dob, password, role FROM users WHERE lower(username)=?",
+            (username.lower(),)
+        ).fetchone()
+        conn.close()
+        if row:
+            st.session_state["user"] = row
+            st.session_state["page"] = "home"
 
     if "user" not in st.session_state:
         tab_login, tab_register = st.tabs(["Đăng nhập", "Đăng ký"])
@@ -165,7 +185,11 @@ def main():
                 if user:
                     st.session_state["user"] = user
                     st.session_state["page"] = "home"
+                    # Lưu username vào cookie
+                    cookies["username"] = user[1]  # user[1] là username
+                    cookies.save()
                     st.rerun()
+
                 else:
                     st.error("⚠️ Sai tên đăng nhập hoặc mật khẩu")
 
@@ -220,7 +244,11 @@ def main():
                     st.rerun()
             if st.sidebar.button("🚪 Đăng xuất", key="btn_logout"):
                 logout_user()
+                # Xoá cookie
+                cookies.pop("username")
+                cookies.save()
                 st.rerun()
+
 
         if current_page == "profile":
             profile_page(user)
