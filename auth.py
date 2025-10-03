@@ -8,10 +8,7 @@ import datetime
 import psycopg2
 from datetime import date, datetime, time, timedelta
 
-# ==================== GOOGLE DRIVE SUPPORT (FOLDER-BASED) ====================
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
+
 import io, json
 
 DEFAULT_LOCAL_DB = "QLWorkXN.db"
