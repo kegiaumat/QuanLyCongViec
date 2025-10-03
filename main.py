@@ -159,8 +159,6 @@ def main():
         """, unsafe_allow_html=True
     )
 
-    init_db()
-    init_default_admin()
     # Nếu chưa có session_state["user"] nhưng cookie có username thì tự login lại
     if "user" not in st.session_state and "username" in cookies:
         username = cookies["username"]
