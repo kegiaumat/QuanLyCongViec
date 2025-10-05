@@ -1,12 +1,9 @@
 import streamlit as st
 import pandas as pd
-import sqlite3   # thêm ở đầu file nếu chưa có
 import plotly.express as px
+import psycopg2
 import datetime
-from auth import get_connection
-from auth import add_project   # thêm import ở đầu file.
-from auth import calc_hours
-from auth import commit_and_sync
+from auth import get_connection, add_project, calc_hours, commit_and_sync
 
 st.set_page_config(layout="wide")
 
@@ -23,7 +20,7 @@ def search_units(query: str):
 
 def update_last_seen(username):
     conn, c = get_connection()
-    c.execute("UPDATE users SET last_seen=CURRENT_TIMESTAMP WHERE username=?", (username,))
+    c.execute("UPDATE users SET last_seen=NOW() WHERE username=%s", (username,))
     commit_and_sync(conn)
 
 
@@ -34,7 +31,7 @@ def admin_app(user):
     user_map = dict(zip(df_users["username"], df_users["display_name"]))
 
     # ✅ cập nhật trạng thái online (last_seen)
-    c.execute("UPDATE users SET last_seen=CURRENT_TIMESTAMP WHERE username=?", (user[1],))
+    c.execute("UPDATE users SET last_seen=NOW() WHERE username=%s", (user[1],))
     commit_and_sync(conn)
 
     menu = ["Quản lý người dùng", "Mục lục công việc","Quản lý dự án", "Quản lý Giao Việc",  "Thống kê công việc"]
@@ -103,7 +100,7 @@ def admin_app(user):
             if st.button("💾 Cập nhật quyền"):
                 roles_str = ",".join(roles) if roles else "user"
                 c.execute(
-                    "UPDATE users SET role=?, project_manager_of=?, project_leader_of=? WHERE username=?",
+                    "UPDATE users SET role=%s, project_manager_of=%s, project_leader_of=%s WHERE username=%s",
                     (roles_str, project_manager, project_leader, selected_user)
                 )
                 commit_and_sync(conn)
@@ -112,7 +109,7 @@ def admin_app(user):
 
         with col2:
             if st.button("❌ Xóa user"):
-                c.execute("DELETE FROM users WHERE username=?", (selected_user,))
+                c.execute("DELETE FROM users WHERE username=%s", (selected_user,))
                 commit_and_sync(conn)
                 st.success("🗑️ Đã xóa user")
                 st.rerun()
@@ -129,7 +126,7 @@ def admin_app(user):
             else:
                 try:
                     c.execute(
-                        "UPDATE users SET password=? WHERE username=?",
+                        "UPDATE users SET password=%s WHERE username=%s",
                         (new_password, selected_user)
                     )
                     commit_and_sync(conn)
@@ -137,8 +134,9 @@ def admin_app(user):
                     st.rerun()
                 except Exception as e:
                     st.error(f"⚠️ Lỗi khi đổi mật khẩu: {e}")
+        conn.close()
 
-        
+            
     elif choice == "Mục lục công việc":
         st.subheader("📚 Mục lục công việc")
 
@@ -167,17 +165,19 @@ def admin_app(user):
                 if parent_choice != "— Không chọn (tạo Đầu mục công việc) —":
                     parent_id = int(parent_jobs[parent_jobs["name"] == parent_choice]["id"].iloc[0])
                 c.execute(
-                    "INSERT INTO job_catalog (name, unit, parent_id, project_type) VALUES (?, ?, ?, ?)",
+                    "INSERT INTO job_catalog (name, unit, parent_id, project_type) VALUES (%s, %s, %s, %s)",
                     (new_job.strip(), new_unit.strip() if new_unit else None, parent_id, new_project_type)
                 )
                 commit_and_sync(conn)
                 st.success(f"✅ Đã thêm: {new_job} ({new_unit}, {new_project_type})"
                            + (f" → thuộc '{parent_choice}'" if parent_id else ""))
                 st.rerun()
-            except sqlite3.IntegrityError:
-                st.error(f"⚠️ Công việc '{new_job}' đã tồn tại")
             except Exception as e:
-                st.error(f"⚠️ Lỗi khác: {e}")
+                if "duplicate key" in str(e).lower():
+                    st.error(f"⚠️ Công việc '{new_job}' đã tồn tại")
+                else:
+                    st.error(f"⚠️ Lỗi khác: {e}")
+
 
         st.divider()
 
@@ -258,13 +258,13 @@ def admin_app(user):
                         try:
                             c.execute("""
                                 UPDATE job_catalog
-                                SET name=?, unit=?, project_type=?
-                                WHERE id=?
+                                SET name=%s, unit=%s, project_type=%s
+                                WHERE id=%s
                             """, (new_name, new_unit if new_unit else None, new_project_type, job_id))
 
                             # nếu đổi tên thì đồng bộ sang tasks
                             if new_name != old_name:
-                                c.execute("UPDATE tasks SET task=? WHERE task=?", (new_name, old_name))
+                                c.execute("UPDATE tasks SET task=%s WHERE task=%s", (new_name, old_name))
                         except Exception as e:
                             st.error(f"⚠️ Lỗi khi cập nhật {old_name}: {e}")
 
@@ -299,9 +299,9 @@ def admin_app(user):
                             job_name = row["_orig_name"]
 
                             # Xoá trong tasks
-                            c.execute("DELETE FROM tasks WHERE task=?", (job_name,))
+                            c.execute("DELETE FROM tasks WHERE task=%s", (job_name,))
                             # Xoá trong job_catalog
-                            c.execute("DELETE FROM job_catalog WHERE id=?", (job_id,))
+                            c.execute("DELETE FROM job_catalog WHERE id=%s", (job_id,))
                         commit_and_sync(conn)
                         st.success("🗑️ Đã xoá các công việc được chọn")
                         del st.session_state["confirm_delete_jobs"]
@@ -311,6 +311,7 @@ def admin_app(user):
                     if st.button("❌ No, huỷ"):
                         st.info("Đã huỷ thao tác xoá")
                         del st.session_state["confirm_delete_jobs"]
+        conn.close()
 
     elif choice == "Quản lý dự án":
         st.subheader("🗂️ Quản lý dự án")
@@ -329,10 +330,12 @@ def admin_app(user):
                 add_project(project_name, project_deadline, project_type, design_step)
                 st.success(f"✅ Đã thêm dự án: {project_name}")
                 st.rerun()
-            except sqlite3.IntegrityError:
-                st.error("⚠️ Dự án đã tồn tại")
             except Exception as e:
-                st.error(f"⚠️ Lỗi: {e}")
+                if "duplicate key" in str(e).lower():
+                    st.error("⚠️ Dự án đã tồn tại")
+                else:
+                    st.error(f"⚠️ Lỗi: {e}")
+
 
         # ===== Đọc danh sách dự án và tính tổng thanh toán =====
         df_proj = pd.read_sql("SELECT id, name, deadline, project_type, design_step FROM projects", conn)
@@ -394,14 +397,14 @@ def admin_app(user):
                         # Update project
                         c.execute("""
                             UPDATE projects
-                            SET name=?, deadline=?, project_type=?, design_step=?
-                            WHERE id=?
+                            SET name=%s, deadline=%s, project_type=%s, design_step=%s
+                            WHERE id=%s
                         """, (row["name"], dl_str, row["project_type"], row["design_step"], row_id))
 
 
                         # Nếu đổi tên dự án → cập nhật tasks + users
                         if row["name"] != old_name:
-                            c.execute("UPDATE tasks SET project=? WHERE project=?", (row["name"], old_name))
+                            c.execute("UPDATE tasks SET project=%s WHERE project=%s", (row["name"], old_name))
                             for colu in ("project_manager_of", "project_leader_of"):
                                 cur = conn.cursor()
                                 cur.execute(f"SELECT username, {colu} FROM users WHERE {colu} IS NOT NULL")
@@ -414,7 +417,7 @@ def admin_app(user):
                                             changed = True
                                     if changed:
                                         new_csv = ",".join(parts) if parts else None
-                                        cur.execute(f"UPDATE users SET {colu}=? WHERE username=?", (new_csv, username))
+                                        cur.execute(f"UPDATE users SET {colu}=%s WHERE username=%s", (new_csv, username))
 
                     commit_and_sync(conn)
                     st.success("✅ Đã cập nhật thông tin dự án")
@@ -438,8 +441,8 @@ def admin_app(user):
                 with c1:
                     if st.button("✅ Yes, xoá ngay", key="confirm_delete_yes"):
                         for proj_name in proj_list:
-                            c.execute("DELETE FROM tasks WHERE project=?", (proj_name,))
-                            c.execute("DELETE FROM projects WHERE name=?", (proj_name,))
+                            c.execute("DELETE FROM tasks WHERE project=%s", (proj_name,))
+                            c.execute("DELETE FROM projects WHERE name=%s", (proj_name,))
                             for colu in ("project_manager_of", "project_leader_of"):
                                 cur = conn.cursor()
                                 cur.execute(f"SELECT username, {colu} FROM users WHERE {colu} IS NOT NULL")
@@ -447,7 +450,7 @@ def admin_app(user):
                                     parts = [p.strip() for p in csv_vals.split(",") if p.strip()]
                                     parts = [p for p in parts if p != proj_name]
                                     new_csv = ",".join(parts) if parts else None
-                                    cur.execute(f"UPDATE users SET {colu}=? WHERE username=?", (new_csv, username))
+                                    cur.execute(f"UPDATE users SET {colu}=%s WHERE username=%s", (new_csv, username))
                         commit_and_sync(conn)
                         st.success("🗑️ Đã xoá các dự án được chọn")
                         del st.session_state["confirm_delete"]
@@ -472,7 +475,7 @@ def admin_app(user):
             df_pay = pd.read_sql(
                 "SELECT id, payment_number AS 'Lần thanh toán', percent AS 'Tỉ lệ (%)', "
                 "note AS 'Ghi chú', paid_at AS 'Ngày thanh toán' "
-                "FROM payments WHERE project_id=? ORDER BY payment_number",
+                "FROM payments WHERE project_id=%s ORDER BY payment_number",
                 conn, params=(proj_id,)
             )
 
@@ -504,13 +507,14 @@ def admin_app(user):
                     st.warning("⚠️ Tổng thanh toán sẽ vượt quá 100%!")
                 c.execute("""
                     INSERT INTO payments (project_id, payment_number, percent, note, paid_at)
-                    VALUES (?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s)
                 """, (proj_id, pay_num, pay_percent, pay_note, pay_date.strftime("%Y-%m-%d")))
                 commit_and_sync(conn)
                 st.success("✅ Đã thêm lần thanh toán mới")
                 st.rerun()
 
-  
+        conn.close()
+
     elif choice == "Quản lý Giao Việc":
         st.subheader("📝 Giao việc")
 
@@ -533,7 +537,7 @@ def admin_app(user):
 
         # --- Lọc job_catalog theo project_type ---
         jobs = pd.read_sql(
-            "SELECT id, name, unit, parent_id FROM job_catalog WHERE project_type = ?",
+            "SELECT id, name, unit, parent_id FROM job_catalog WHERE project_type = %s",
             conn, params=(proj_type,)
         )
 
@@ -606,7 +610,7 @@ def admin_app(user):
                         note_txt = f"{note_txt}\n{pub_note}"
                     c.execute(
                         "INSERT INTO tasks (project, task, assignee, khoi_luong, note, progress) "
-                        "VALUES (?, ?, ?, ?, ?, ?)",
+                        "VALUES (%s, %s, %s, %s, %s, %s)",
                         (project, task, assignee, total_hours, note_txt, 0)
                     )
                 commit_and_sync(conn)
@@ -697,7 +701,7 @@ def admin_app(user):
                         time_txt = f"⏰ {start_time} - {end_time}" if start_time and end_time else ""
                         merged_note = (group_note + ("\n" if group_note and time_txt else "") + time_txt).strip()
                         c.execute(
-                            "INSERT INTO tasks (project, task, assignee, note, progress) VALUES (?,?,?,?,?)",
+                            "INSERT INTO tasks (project, task, assignee, note, progress) VALUES (%s,%s,%s,%s,%s)",
                             (project, task, assignee, merged_note, 0)
                         )
                     else:
@@ -707,7 +711,7 @@ def admin_app(user):
                         dl_str = dl.strftime("%Y-%m-%d") if pd.notna(dl) else None
                         c.execute(
                             "INSERT INTO tasks (project, task, assignee, deadline, khoi_luong, note, progress) "
-                            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                            "VALUES (%s, %s, %s, %s, %s, %s, %s)",
                             (project, task, assignee, dl_str, qty, group_note, 0)
                         )
                 commit_and_sync(conn)
@@ -718,7 +722,7 @@ def admin_app(user):
         # ---------------- Danh sách công việc ----------------
         # ---------------- Danh sách công việc ----------------
         st.subheader("📋 Danh sách công việc trong dự án")
-        df_tasks = pd.read_sql("SELECT * FROM tasks WHERE project=?", conn, params=(project,))
+        df_tasks = pd.read_sql("SELECT * FROM tasks WHERE project=%s", conn, params=(project,))
         if df_tasks.empty:
             st.info("Chưa có công việc nào trong dự án này.")
         else:
@@ -804,7 +808,7 @@ def admin_app(user):
                                 for i, row in edited_cong.iterrows():
                                     tid = int(df_cong.iloc[i]["ID"])
                                     new_qty = float(row.get("Khối lượng (giờ)") or 0)
-                                    c.execute("UPDATE tasks SET khoi_luong=? WHERE id=?", (new_qty, tid))
+                                    c.execute("UPDATE tasks SET khoi_luong=%s WHERE id=%s", (new_qty, tid))
                                 commit_and_sync(conn)
                                 st.success(f"✅ Đã cập nhật khối lượng công nhật của {u}")
                                 st.rerun()
@@ -819,7 +823,7 @@ def admin_app(user):
 
                                 if ids_to_delete:
                                     for tid in ids_to_delete:
-                                        c.execute("DELETE FROM tasks WHERE id=?", (tid,))
+                                        c.execute("DELETE FROM tasks WHERE id=%s", (tid,))
                                     commit_and_sync(conn)
                                     st.success(f"✅ Đã xóa {len(ids_to_delete)} dòng công nhật của {u}")
                                     st.rerun()
@@ -892,8 +896,8 @@ def admin_app(user):
                                     c.execute(
                                         """
                                         UPDATE tasks
-                                        SET task=?, khoi_luong=?, deadline=?, note=?, progress=?
-                                        WHERE id=?
+                                        SET task=%s, khoi_luong=%s, deadline=%s, note=%s, progress=%s
+                                        WHERE id=%s
                                         """,
                                         (
                                             row["Công việc"], float(row.get("Khối lượng") or 0), dl_str,
@@ -914,13 +918,14 @@ def admin_app(user):
                                         ids_to_delete.append(int(df_other_show.iloc[i]["ID"]))
                                 if ids_to_delete:
                                     for tid in ids_to_delete:
-                                        c.execute("DELETE FROM tasks WHERE id=?", (tid,))
+                                        c.execute("DELETE FROM tasks WHERE id=%s", (tid,))
                                     commit_and_sync(conn)
                                     st.success(f"✅ Đã xóa {len(ids_to_delete)} dòng công việc của {u}")
                                     st.rerun()
                                 else:
                                     st.warning("⚠️ Chưa chọn dòng nào để xóa")
 
+        conn.close()
 
 
 
@@ -947,11 +952,9 @@ def admin_app(user):
 
         # Lấy dữ liệu công việc
         if selected_projects:
-            qmarks = ",".join(["?"] * len(selected_projects))
-            df = pd.read_sql(
-                f"SELECT * FROM tasks WHERE project IN ({qmarks})", 
-                conn, params=selected_projects
-            )
+            placeholders = ",".join(["%s"] * len(selected_projects))
+            df = pd.read_sql(f"SELECT * FROM tasks WHERE project IN ({placeholders})", conn, params=selected_projects)
+
         else:
             df = pd.DataFrame()
 
@@ -1214,3 +1217,4 @@ def admin_app(user):
 
                 st.markdown("### 👤 Thống kê chi tiết theo người dùng")
                 st.dataframe(styled_user, width="stretch")
+        conn.close()
