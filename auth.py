@@ -1,28 +1,22 @@
 import os
 import sys
-import psycopg2
 import streamlit as st
 import hashlib
 import pandas as pd
 import datetime
 from datetime import date, datetime, time, timedelta
-from psycopg2 import sql
+from supabase import create_client, Client
 
+SUPABASE_URL = "https://gvmolpovpsxvfgheoase.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd2bW9scG92cHN4dmZnaGVvYXNlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk1MDQ4OTcsImV4cCI6MjA3NTA4MDg5N30.XVEn1cxLRsGG9Yqw8hdrs62Kh3FXoXeKRSwpyGUApkc"
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def get_connection():
-    conn = psycopg2.connect(
-        host="db.gvmolpovpsxvfgheoase.supabase.co",
-        dbname="postgres",
-        user="postgres",
-        password="Taobe1201@1",
-        port="5432"
-    )
-    return conn, conn.cursor()
+    return supabase
 
-
-
-def commit_and_sync(conn):
-    conn.commit()  # chỉ commit, không còn sync lên Drive
+def commit_and_sync(conn=None):
+    # Không cần commit khi dùng Supabase API
+    pass
 
 
 
@@ -70,216 +64,92 @@ def calc_hours(start_date: date, end_date: date, start_time: time, end_time: tim
     total += _calc_hours_one_day(datetime.combine(end_dt.date(), WORK_MORNING_START), end_dt)
     return round(total, 2)
 
-def update_task(task_id, task_name=None, khoi_luong=None, deadline=None, note=None, progress=None):
-    conn, c = get_connection()
-    fields, values = [], []
+def update_task(task_id, **kwargs):
+    supabase = get_connection()
+    supabase.table("tasks").update(kwargs).eq("id", task_id).execute()
 
-    if task_name is not None:
-        fields.append("task = %s")
-        values.append(task_name)
-    if khoi_luong is not None:
-        fields.append("khoi_luong = %s")
-        values.append(khoi_luong)
-    if deadline is not None:
-        deadline = pd.to_datetime(deadline).strftime("%Y-%m-%d")
-        fields.append("deadline = %s")
-        values.append(deadline)
-    if note is not None:
-        fields.append("note = %s")
-        values.append(note)
-    if progress is not None:
-        fields.append("progress = %s")
-        values.append(progress)
+def get_all_projects():
+    supabase = get_connection()
+    data = supabase.table("projects").select("id, name, deadline, project_type").execute()
+    return pd.DataFrame(data.data)
 
-    if not fields:
-        return
 
-    sql = f"UPDATE tasks SET {', '.join(fields)} WHERE id = %s"
-    values.append(task_id)
-    c.execute(sql, values)
-    commit_and_sync(conn)
-    conn.close()
 
-def ensure_column_exists(cursor, table, column, coltype):
-    """
-    Nếu bảng chưa có cột thì thêm vào (Postgres-safe)
-    """
-    cursor.execute("""
-        SELECT column_name FROM information_schema.columns 
-        WHERE table_name=%s;
-    """, (table,))
-    cols = [r[0] for r in cursor.fetchall()]
-    if column not in cols:
-        cursor.execute(sql.SQL("ALTER TABLE {} ADD COLUMN {} {};")
-                       .format(sql.Identifier(table),
-                               sql.Identifier(column),
-                               sql.SQL(coltype)))
-def init_db():
-    conn, c = get_connection()
 
-    # === USERS ===
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            username TEXT UNIQUE,
-            display_name TEXT,
-            dob DATE,
-            password TEXT,
-            role TEXT,
-            project_manager_of TEXT,
-            project_leader_of TEXT,
-            online BOOLEAN DEFAULT FALSE,
-            last_seen TIMESTAMP
-        );
-    """)
-
-    # === PROJECTS ===
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS projects (
-            id SERIAL PRIMARY KEY,
-            name TEXT UNIQUE,
-            deadline DATE,
-            project_type TEXT DEFAULT 'group',
-            design_step TEXT
-        );
-    """)
-
-    # === TASKS ===
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS tasks (
-            id SERIAL PRIMARY KEY,
-            project TEXT,
-            task TEXT,
-            assignee TEXT,
-            deadline DATE,
-            khoi_luong REAL DEFAULT 0,
-            note TEXT,
-            progress INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-    """)
-
-    # === LOGS ===
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS logs (
-            id SERIAL PRIMARY KEY,
-            task_id INTEGER,
-            action TEXT,
-            user TEXT,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-    """)
-
-    # === JOB_CATALOG ===
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS job_catalog (
-            id SERIAL PRIMARY KEY,
-            name TEXT UNIQUE,
-            unit TEXT,
-            parent_id INTEGER REFERENCES job_catalog(id),
-            project_type TEXT DEFAULT 'group'
-        );
-    """)
-
-    # === PAYMENTS ===
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS payments (
-            id SERIAL PRIMARY KEY,
-            project_id INTEGER REFERENCES projects(id),
-            payment_number INTEGER,
-            percent REAL DEFAULT 0,
-            note TEXT,
-            paid_at DATE DEFAULT CURRENT_DATE
-        );
-    """)
-
-    # === Đảm bảo cột tồn tại (chỉ thêm khi thiếu) ===
-    ensure_column_exists(c, "users", "dob", "DATE")
-    ensure_column_exists(c, "users", "role", "TEXT")
-    ensure_column_exists(c, "users", "project_manager_of", "TEXT")
-    ensure_column_exists(c, "users", "project_leader_of", "TEXT")
-    ensure_column_exists(c, "users", "online", "BOOLEAN DEFAULT FALSE")
-    ensure_column_exists(c, "users", "last_seen", "TIMESTAMP")
-
-    commit_and_sync(conn)
-    conn.close()
-
-def add_project(name, deadline, project_type="group", design_step=None):
-    conn, c = get_connection()
-    if deadline is not None:
-        deadline = pd.to_datetime(deadline).strftime("%Y-%m-%d")
-    c.execute(
-        "INSERT INTO projects (name, deadline, project_type, design_step) VALUES (%s, %s, %s, %s)",
-        (name, deadline, project_type, design_step)
-    )
-    commit_and_sync(conn)
-    conn.close()
 
 
 def get_projects():
-    conn, _ = get_connection()
-    df = pd.read_sql("SELECT * FROM projects", conn)
-    conn.close()
-    return df
+    supabase = get_connection()
+    data = supabase.table("projects").select("*").execute()
+    return pd.DataFrame(data.data)
+
+
 
 
 def delete_project(project_name):
-    conn, c = get_connection()
-    c.execute("DELETE FROM tasks WHERE project=%s", (project_name,))
-    c.execute("DELETE FROM projects WHERE name=%s", (project_name,))
-    commit_and_sync(conn)
-    conn.close()
+    supabase = get_connection()
+    supabase.table("tasks").delete().eq("project", project_name).execute()
+    supabase.table("projects").delete().eq("name", project_name).execute()
 
-
-
-def get_all_projects():
-    conn, _ = get_connection()
-    df = pd.read_sql("SELECT id, name, deadline, project_type FROM projects", conn)
-    conn.close()
-    return df
 
 def hash_password(password): 
     return hashlib.sha256(password.encode()).hexdigest()
 
 def add_user(username, display_name, dob, password, role="user"):
-    conn, c = get_connection()
-    c.execute(
-        "INSERT INTO users (username, display_name, dob, password, role) VALUES (%s, %s, %s, %s, %s)",
-        (username, display_name, dob, hash_password(password), role)
-    )
-    commit_and_sync(conn)
-    conn.close()
+    supabase = get_connection()
+    supabase.table("users").insert({
+        "username": username,
+        "display_name": display_name,
+        "dob": dob,
+        "password": hash_password(password),
+        "role": role
+    }).execute()
+
 
 def login_user(username, password):
     if username == "TDPRO" and password == "Giadinh12":
-        return (0, "TDPRO", "TDPRO", None, hash_password(password), "admin", None, True)
-    conn, c = get_connection()
-    c.execute(
-        "SELECT * FROM users WHERE username=%s AND password=%s",
-        (username, hash_password(password))
-    )
-    user = c.fetchone()
+        return {
+            "id": 0,
+            "username": "TDPRO",
+            "display_name": "TDPRO",
+            "dob": None,
+            "password": hash_password(password),
+            "role": "admin",
+            "online": True
+        }
+
+    supabase = get_connection()
+    data = supabase.table("users") \
+        .select("*") \
+        .eq("username", username) \
+        .eq("password", hash_password(password)) \
+        .execute()
+
+    user = data.data[0] if data.data else None
     if user:
-        c.execute("UPDATE users SET online=TRUE, last_seen=NOW() WHERE username=%s", (username,))
-        commit_and_sync(conn)
-    conn.close()
+        supabase.table("users").update({
+            "online": True,
+            "last_seen": datetime.now().isoformat()
+        }).eq("username", username).execute()
     return user
 
+
 def logout_user(username):
-    conn, c = get_connection()
-    c.execute("UPDATE users SET online=FALSE WHERE username=%s", (username,))
-    commit_and_sync(conn)
-    conn.close()
+    supabase = get_connection()
+    supabase.table("users").update({"online": False}).eq("username", username).execute()
+
 
 
 def get_online_users():
-    conn, _ = get_connection()
-    df = pd.read_sql(
-        "SELECT username FROM users WHERE last_seen >= NOW() - INTERVAL '60 seconds'",
-        conn
-    )
-    conn.close()
-    return df
+    supabase = get_connection()
+    data = supabase.table("users").select("username, last_seen").execute()
+    df = pd.DataFrame(data.data)
+    if df.empty:
+        return df
+    now = datetime.now()
+    df["last_seen"] = pd.to_datetime(df["last_seen"])
+    return df[df["last_seen"] >= (now - timedelta(seconds=60))]
+
 
 def show_login():
     st.subheader("🔑 Đăng nhập")
