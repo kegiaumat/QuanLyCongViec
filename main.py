@@ -1,53 +1,35 @@
 import streamlit as st
 import pandas as pd
 import datetime
-from streamlit_cookies_manager import EncryptedCookieManager
 
-
-from auth import init_db, get_connection
 from admin_app import admin_app
 from project_manager_app import project_manager_app
 from user_app import user_app   # nếu vẫn muốn dùng giao diện user thường
-from auth import commit_and_sync
+from auth import init_db, get_connection, commit_and_sync, hash_password
+
 # ==================== HỖ TRỢ ====================
 
-
-def init_default_admin():
-    conn, c = get_connection()
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE,
-            display_name TEXT,
-            dob TEXT,
-            password TEXT,
-            role TEXT,
-            last_seen TEXT
-        )
-    """)
-    commit_and_sync(conn)
-    conn.close()
 
 
 def check_login(username, password):
     u = (username or "").strip().lower()
     p = password or ""
 
-    # --- Tài khoản đặc biệt TDPRO ---
     if u == "tdpro" and p == "Giadinh12":
         return (0, "tdpro", "TDPRO", None, "Giadinh12", "admin")
 
-    # --- Kiểm tra trong DB ---
     conn, c = get_connection()
-    row = c.execute(
-        "SELECT id, username, display_name, dob, password, role FROM users WHERE lower(username)=?",
+    c.execute(
+        "SELECT id, username, display_name, dob, password, role FROM users WHERE lower(username)=%s",
         (u,)
-    ).fetchone()
+    )
+    row = c.fetchone()
     conn.close()
 
-    if row and str(row[4] or "") == p:
+    if row and row[4] == hash_password(p):
         return row
     return None
+
 
 
 def logout_user():
@@ -79,7 +61,7 @@ def profile_page(user):
 
     if st.button("💾 Lưu thông tin", key="pf_save"):
         c.execute(
-            "UPDATE users SET display_name=?, dob=? WHERE lower(username)=lower(?)",
+            "UPDATE users SET display_name=%s, dob=%s WHERE lower(username)=lower(%s)",
             (new_display, new_dob.strftime("%Y-%m-%d") if new_dob else None, user[1])
         )
         commit_and_sync(conn)
@@ -97,18 +79,20 @@ def profile_page(user):
 
     if st.button("✅ Đổi mật khẩu", key="pf_change_pw"):
         db_pw = c.execute(
-            "SELECT password FROM users WHERE lower(username)=lower(?)",
+            "SELECT password FROM users WHERE lower(username)=lower(%s)",
             (user[1],)
         ).fetchone()
-        if not db_pw or db_pw[0] != old_pw:
+        if not db_pw or db_pw[0] != hash_password(old_pw):
+
             st.error("⚠️ Mật khẩu hiện tại không đúng.")
         elif new_pw != confirm_pw:
             st.error("⚠️ Mật khẩu mới và xác nhận không khớp.")
         else:
             c.execute(
-                "UPDATE users SET password=? WHERE lower(username)=lower(?)",
-                (new_pw, user[1])
+                "UPDATE users SET password=%s WHERE lower(username)=lower(%s)",
+                (hash_password(new_pw), user[1])
             )
+
             commit_and_sync(conn)
             st.success("✅ Đã đổi mật khẩu. Vui lòng đăng nhập lại.")
             logout_user()
@@ -121,13 +105,7 @@ def profile_page(user):
 
 def main():
     st.set_page_config(page_title="Quản lý công việc", layout="wide", page_icon="🔑")
-    # Cookie manager
-    cookies = EncryptedCookieManager(
-        prefix="myapp",   # prefix để phân biệt app
-        password="supersecretkey"  # bạn đổi secret key tuỳ ý
-    )
-    if not cookies.ready():
-        st.stop()
+
     st.markdown(
         """
         <style>
@@ -159,19 +137,7 @@ def main():
         """, unsafe_allow_html=True
     )
 
-    # Nếu chưa có session_state["user"] nhưng cookie có username thì tự login lại
-    if "user" not in st.session_state and "username" in cookies:
-        username = cookies["username"]
-        # Lấy lại user từ DB để khôi phục session
-        conn, c = get_connection()
-        row = c.execute(
-            "SELECT id, username, display_name, dob, password, role FROM users WHERE lower(username)=?",
-            (username.lower(),)
-        ).fetchone()
-        conn.close()
-        if row:
-            st.session_state["user"] = row
-            st.session_state["page"] = "home"
+    init_db()
 
     if "user" not in st.session_state:
         tab_login, tab_register = st.tabs(["Đăng nhập", "Đăng ký"])
@@ -184,11 +150,7 @@ def main():
                 if user:
                     st.session_state["user"] = user
                     st.session_state["page"] = "home"
-                    # Lưu username vào cookie
-                    cookies["username"] = user[1]  # user[1] là username
-                    cookies.save()
                     st.rerun()
-
                 else:
                     st.error("⚠️ Sai tên đăng nhập hoặc mật khẩu")
 
@@ -208,19 +170,19 @@ def main():
                     conn, c = get_connection()
                     try:
                         existed = c.execute(
-                            "SELECT 1 FROM users WHERE lower(username)=lower(?)",
+                            "SELECT 1 FROM users WHERE lower(username)=lower(%s)",
                             (new_user.strip(),)
                         ).fetchone()
                         if existed:
                             st.error("⚠️ Tên đăng nhập đã tồn tại.")
                         else:
                             c.execute(
-                                "INSERT INTO users (username, display_name, dob, password, role) VALUES (?,?,?,?,?)",
+                                "INSERT INTO users (username, display_name, dob, password, role) VALUES (%s, %s, %s, %s, %s)",
                                 (
                                     new_user.strip(),
                                     new_display or new_user.strip(),
                                     new_dob.strftime("%Y-%m-%d"),
-                                    new_pass,
+                                    hash_password(new_pass),  # ✅ dùng hàm hash_password
                                     "user",
                                 )
                             )
@@ -243,11 +205,7 @@ def main():
                     st.rerun()
             if st.sidebar.button("🚪 Đăng xuất", key="btn_logout"):
                 logout_user()
-                # Xoá cookie
-                cookies.pop("username")
-                cookies.save()
                 st.rerun()
-
 
         if current_page == "profile":
             profile_page(user)
