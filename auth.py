@@ -24,31 +24,6 @@ def commit_and_sync(conn):
     conn.commit()  # chỉ commit, không còn sync lên Drive
 
 
-def _get_env(name, default=None):
-    return os.environ.get(name, default)
-
-
-def get_db_path():
-    backend = _get_env("DB_BACKEND", "local").lower()
-    local_path = _get_env("DB_LOCAL_PATH", DEFAULT_LOCAL_DB)
-    if backend == "drive":
-        folder_id = _get_env("GDRIVE_FOLDER_ID")
-        sa_json = _get_env("GDRIVE_SA")
-        if not folder_id or not sa_json:
-            return local_path
-        os.makedirs(os.path.dirname(local_path) or ".", exist_ok=True)
-        try:
-            if not os.path.exists(local_path):
-                creds_info = json.loads(sa_json) if sa_json.strip().startswith("{") else None
-                if creds_info:
-                    download_db_from_drive(creds_info, folder_id, local_path)
-        except Exception as e:
-            print("⚠️ GDrive download error:", e)
-        return local_path
-    else:
-        return local_path
-
-DB_FILE = get_db_path()
 
 
 
