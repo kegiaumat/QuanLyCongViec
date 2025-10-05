@@ -11,13 +11,14 @@ from psycopg2 import sql
 
 def get_connection():
     conn = psycopg2.connect(
-        host=os.getenv("db.gvmolpovpsxvfgheoase.supabase.co"),
-        dbname=os.getenv("postgres"),
-        user=os.getenv("postgres"),
-        password=os.getenv("Taobe1201@1"),
-        port=os.getenv("SUPABASE_PORT", "5432")
+        host="db.gvmolpovpsxvfgheoase.supabase.co",
+        dbname="postgres",
+        user="postgres",
+        password="Taobe1201@1",
+        port="5432"
     )
     return conn, conn.cursor()
+
 
 
 def commit_and_sync(conn):
