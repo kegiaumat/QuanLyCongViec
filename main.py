@@ -27,8 +27,7 @@ def check_login(username, password):
         return None
 
     row = data.data[0]
-    if row["password"] == p:
-
+    if row["password"] == hash_password(p):
         return (
             row["id"],
             row["username"],
