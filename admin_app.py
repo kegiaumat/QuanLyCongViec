@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import datetime
 
-from auth import get_connection,  calc_hours
+from auth import get_connection, calc_hours
 
 st.set_page_config(layout="wide")
 
@@ -351,8 +351,12 @@ def admin_app(user):
         if not df_proj.empty:
             # Tính tổng % thanh toán của mỗi dự án
 
-            data = supabase.rpc("get_payments_summary").execute()  # hoặc tự viết hàm SQL trong Supabase
-            df_pay_total = pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["project_id", "total_paid"])
+            # 👉 Tự tính tổng % thanh toán của mỗi dự án (không cần hàm SQL trong Supabase)
+            data = supabase.table("payments").select("project_id, percent").execute()
+            df_pay_total = pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["project_id", "percent"])
+            df_pay_total = df_pay_total.groupby("project_id", as_index=False)["percent"].sum()
+            df_pay_total.rename(columns={"percent": "total_paid"}, inplace=True)
+
             df_proj = df_proj.merge(df_pay_total, how="left", left_on="id", right_on="project_id")
             df_proj["total_paid"] = df_proj["total_paid"].astype(float).fillna(0)
 
@@ -1244,4 +1248,3 @@ def admin_app(user):
                 st.markdown("### 👤 Thống kê chi tiết theo người dùng")
                 st.dataframe(styled_user, width="stretch")
         
-
