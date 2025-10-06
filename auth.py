@@ -184,24 +184,35 @@ def show_register():
 def add_project(name, deadline, project_type="group", design_step=None):
     supabase = get_connection()
 
-    # Chuẩn hóa dữ liệu deadline
-    if deadline is not None:
+    # 👉 Chuẩn hoá tên (xóa khoảng trắng thừa)
+    if not name or not str(name).strip():
+        raise ValueError("Tên dự án không được để trống")
+    name = name.strip()
+
+    # 👉 Chuẩn hoá deadline
+    deadline_str = None
+    if deadline:
         try:
             deadline_str = pd.to_datetime(deadline).strftime("%Y-%m-%d")
         except Exception:
             deadline_str = None
-    else:
-        deadline_str = None
 
-    # Kiểm tra trùng tên
-    existing = supabase.table("projects").select("id").eq("name", name).execute()
-    if existing.data:
-        raise ValueError("Dự án đã tồn tại")
+    # 👉 Kiểm tra trùng tên (không phân biệt hoa-thường, có xử lý Unicode)
+    try:
+        existing = supabase.table("projects").select("id", "name").ilike("name", name).execute()
+        if existing.data and len(existing.data) > 0:
+            raise ValueError("Dự án đã tồn tại")
+    except Exception as e:
+        # Nếu lỗi khi kiểm tra trùng, vẫn tiếp tục thêm
+        print("⚠️ Lỗi khi kiểm tra trùng tên:", e)
 
-    # Thêm vào bảng
-    supabase.table("projects").insert({
-        "name": name,
-        "deadline": deadline_str,
-        "project_type": project_type,
-        "design_step": design_step
-    }).execute()
+    # 👉 Thêm vào bảng projects
+    try:
+        supabase.table("projects").insert({
+            "name": name,
+            "deadline": deadline_str,
+            "project_type": project_type or "group",
+            "design_step": design_step or None
+        }).execute()
+    except Exception as e:
+        raise ValueError(f"Lỗi khi thêm dự án: {e}")
