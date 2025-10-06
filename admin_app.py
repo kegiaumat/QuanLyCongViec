@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import datetime
 
-from auth import get_connection, calc_hours, get_projects, add_user, add_user, add_user, hash_password
+from auth import get_connection, calc_hours, get_projects, add_user, hash_password, add_project
 
 
 st.set_page_config(layout="wide")
