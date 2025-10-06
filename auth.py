@@ -179,3 +179,29 @@ def show_register():
             else:
                 st.error(f"⚠️ Lỗi: {e}")
 
+# ==================== THÊM HÀM add_project ====================
+
+def add_project(name, deadline, project_type="group", design_step=None):
+    supabase = get_connection()
+
+    # Chuẩn hóa dữ liệu deadline
+    if deadline is not None:
+        try:
+            deadline_str = pd.to_datetime(deadline).strftime("%Y-%m-%d")
+        except Exception:
+            deadline_str = None
+    else:
+        deadline_str = None
+
+    # Kiểm tra trùng tên
+    existing = supabase.table("projects").select("id").eq("name", name).execute()
+    if existing.data:
+        raise ValueError("Dự án đã tồn tại")
+
+    # Thêm vào bảng
+    supabase.table("projects").insert({
+        "name": name,
+        "deadline": deadline_str,
+        "project_type": project_type,
+        "design_step": design_step
+    }).execute()
