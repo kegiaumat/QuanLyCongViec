@@ -152,7 +152,7 @@ def main():
     )
 
     
--
+
     if "user" not in st.session_state:
         if "username" in cookies and "password" in cookies:
             user_auto = check_login(cookies["username"], cookies["password"])
