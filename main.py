@@ -178,6 +178,9 @@ def main():
                     if data.data:
                         st.error("⚠️ Tên đăng nhập đã tồn tại.")
                     else:
+                        # Lấy id lớn nhất hiện có
+                        data = supabase.table("users").select("id").order("id", desc=True).limit(1).execute()
+                        next_id = (data.data[0]["id"] + 1) if data.data else 1
                         supabase.table("users").insert({
                             "id": None,  # ép giá trị null để Supabase tự gán id mới
                             "username": new_user.strip(),
