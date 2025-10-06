@@ -179,12 +179,14 @@ def main():
                         st.error("⚠️ Tên đăng nhập đã tồn tại.")
                     else:
                         supabase.table("users").insert({
+                            "id": None,  # ép giá trị null để Supabase tự gán id mới
                             "username": new_user.strip(),
                             "display_name": new_display or new_user.strip(),
                             "dob": new_dob.strftime("%Y-%m-%d"),
                             "password": hash_password(new_pass),
                             "role": "user"
                         }).execute()
+
                         st.success("✅ Đăng ký thành công! Hãy đăng nhập.")
     else:
         user = st.session_state["user"]
