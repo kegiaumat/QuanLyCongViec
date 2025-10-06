@@ -6,9 +6,12 @@ from admin_app import admin_app
 from project_manager_app import project_manager_app
 from user_app import user_app   # nếu vẫn muốn dùng giao diện user thường
 from auth import get_connection, hash_password
+from streamlit_cookies_manager import EncryptedCookieManager
 
 # ==================== HỖ TRỢ ====================
-
+cookies = EncryptedCookieManager(prefix="work_manager_", password="your_secret_key")
+if not cookies.ready():
+    st.stop()
 
 
 def check_login(username, password):
@@ -44,6 +47,11 @@ def check_login(username, password):
 def logout_user():
     st.session_state.pop("user", None)
     st.session_state.pop("page", None)
+    if "username" in cookies:
+        del cookies["username"]
+        del cookies["password"]
+        cookies.save()
+
 
 
 def role_display(role: str) -> str:
@@ -144,22 +152,40 @@ def main():
     )
 
     
+-
+    if "user" not in st.session_state:
+        if "username" in cookies and "password" in cookies:
+            user_auto = check_login(cookies["username"], cookies["password"])
+            if user_auto:
+                st.session_state["user"] = user_auto
+                st.session_state["page"] = "home"
 
+    # --- Nếu chưa đăng nhập thì hiển thị form ---
     if "user" not in st.session_state:
         tab_login, tab_register = st.tabs(["Đăng nhập", "Đăng ký"])
 
+        # ========== TAB ĐĂNG NHẬP ==========
         with tab_login:
             username = st.text_input("Tên đăng nhập", key="login_username")
             password = st.text_input("Mật khẩu", type="password", key="login_password")
+
             if st.button("Đăng nhập", key="btn_login"):
                 user = check_login(username, password)
                 if user:
                     st.session_state["user"] = user
                     st.session_state["page"] = "home"
+
+                    # 👉 Lưu thông tin vào cookie để tự động đăng nhập sau khi refresh
+                    cookies["username"] = user[1]
+                    cookies["password"] = password  # hoặc hash_password(password) để bảo mật hơn
+                    cookies.save()
+
+                    st.success("✅ Đăng nhập thành công! (Phiên sẽ được lưu lại)")
                     st.rerun()
                 else:
                     st.error("⚠️ Sai tên đăng nhập hoặc mật khẩu")
 
+        # ========== TAB ĐĂNG KÝ ==========
         with tab_register:
             new_user = st.text_input("Tên đăng nhập mới", key="reg_username")
             new_display = st.text_input("Tên hiển thị", key="reg_display")
@@ -191,6 +217,7 @@ def main():
                             "role": "user"
                         }).execute()
                         st.success("✅ Đăng ký thành công! Hãy đăng nhập.")
+
 
     else:
         user = st.session_state["user"]
