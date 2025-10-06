@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import datetime
 
-from auth import get_connection, add_project, calc_hours
+from auth import get_connection,  calc_hours
 
 st.set_page_config(layout="wide")
 
@@ -1244,3 +1244,4 @@ def admin_app(user):
                 st.markdown("### 👤 Thống kê chi tiết theo người dùng")
                 st.dataframe(styled_user, width="stretch")
         
+
