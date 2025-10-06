@@ -1,9 +1,9 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import psycopg2
 import datetime
-from auth import get_connection, add_project, calc_hours, commit_and_sync
+
+from auth import get_connection, add_project, calc_hours
 
 st.set_page_config(layout="wide")
 
@@ -19,20 +19,22 @@ def search_units(query: str):
     return [o for o in options if query.lower() in o.lower()]
 
 def update_last_seen(username):
-    conn, c = get_connection()
-    c.execute("UPDATE users SET last_seen=NOW() WHERE username=%s", (username,))
-    commit_and_sync(conn)
+    supabase = get_connection()
+    supabase.table("users").update({"last_seen": datetime.datetime.now().isoformat()}).eq("username", username).execute()
+
+    
 
 
 def admin_app(user):
-    conn, c = get_connection()
+    supabase = get_connection()
     # --- Map username -> display_name ---
-    df_users = pd.read_sql("SELECT username, display_name FROM users", conn)
+    data = supabase.table("users").select("username, display_name").execute(); df_users = pd.DataFrame(data.data)
     user_map = dict(zip(df_users["username"], df_users["display_name"]))
 
     # ✅ cập nhật trạng thái online (last_seen)
-    c.execute("UPDATE users SET last_seen=NOW() WHERE username=%s", (user[1],))
-    commit_and_sync(conn)
+    supabase.table("users").update({"last_seen": datetime.datetime.now().isoformat()}).eq("username", user).execute()
+
+    
 
     menu = ["Quản lý người dùng", "Mục lục công việc","Quản lý dự án", "Quản lý Giao Việc",  "Thống kê công việc"]
 
@@ -41,10 +43,10 @@ def admin_app(user):
         st.subheader("👥 Quản lý user")
 
         # Đọc danh sách user
-        df_users = pd.read_sql(
-            "SELECT id, username, display_name, dob, role, project_manager_of, project_leader_of FROM users", conn
-        )
-
+        data = supabase.table("users").select(
+            "id, username, display_name, dob, role, project_manager_of, project_leader_of"
+        ).execute()
+        df_users = pd.DataFrame(data.data)
         # Đổi tên cột
         df_users = df_users.rename(columns={
             "username": "Tên đăng nhập",
@@ -81,7 +83,7 @@ def admin_app(user):
         )
 
         # Lấy danh sách dự án
-        projects_list = pd.read_sql("SELECT name FROM projects", conn)["name"].tolist()
+        data = supabase.table("projects").select("name").execute(); projects_list = [r["name"] for r in data.data]
 
         project_manager = None
         project_leader = None
@@ -99,18 +101,19 @@ def admin_app(user):
         with col1:
             if st.button("💾 Cập nhật quyền"):
                 roles_str = ",".join(roles) if roles else "user"
-                c.execute(
-                    "UPDATE users SET role=%s, project_manager_of=%s, project_leader_of=%s WHERE username=%s",
-                    (roles_str, project_manager, project_leader, selected_user)
-                )
-                commit_and_sync(conn)
+                supabase.table("users").update({
+                    "role": roles_str,
+                    "project_manager_of": project_manager,
+                    "project_leader_of": project_leader
+                }).eq("username", selected_user).execute()
+                
                 st.success("✅ Đã cập nhật quyền")
                 st.rerun()  # refresh lại danh sách
 
         with col2:
             if st.button("❌ Xóa user"):
-                c.execute("DELETE FROM users WHERE username=%s", (selected_user,))
-                commit_and_sync(conn)
+                supabase.table("users").delete().eq("username", selected_user).execute()
+                
                 st.success("🗑️ Đã xóa user")
                 st.rerun()
 
@@ -125,16 +128,15 @@ def admin_app(user):
                 st.error("⚠️ Mật khẩu mới và xác nhận không khớp.")
             else:
                 try:
-                    c.execute(
-                        "UPDATE users SET password=%s WHERE username=%s",
-                        (new_password, selected_user)
-                    )
-                    commit_and_sync(conn)
+                    supabase.table("users").update({
+                        "password": new_password
+                    }).eq("username", selected_user).execute()
+                    
                     st.success("✅ Đã đổi mật khẩu cho người dùng.")
                     st.rerun()
                 except Exception as e:
                     st.error(f"⚠️ Lỗi khi đổi mật khẩu: {e}")
-        conn.close()
+        
 
             
     elif choice == "Mục lục công việc":
@@ -145,7 +147,7 @@ def admin_app(user):
         # =======================
         st.markdown("#### ➕ Thêm công việc mới")
 
-        jobs_all = pd.read_sql("SELECT id, name, unit, parent_id, project_type FROM job_catalog", conn)
+        data = supabase.table("job_catalog").select("id, name, unit, parent_id, project_type").execute(); jobs_all = pd.DataFrame(data.data)
         parent_jobs = jobs_all[jobs_all["parent_id"].isnull()].sort_values("name")
 
         col1, col2, col3, col4 = st.columns([2, 1, 2, 1])
@@ -164,11 +166,14 @@ def admin_app(user):
                 parent_id = None
                 if parent_choice != "— Không chọn (tạo Đầu mục công việc) —":
                     parent_id = int(parent_jobs[parent_jobs["name"] == parent_choice]["id"].iloc[0])
-                c.execute(
-                    "INSERT INTO job_catalog (name, unit, parent_id, project_type) VALUES (%s, %s, %s, %s)",
-                    (new_job.strip(), new_unit.strip() if new_unit else None, parent_id, new_project_type)
-                )
-                commit_and_sync(conn)
+                
+                supabase.table("job_catalog").insert({
+                    "name": new_job.strip(),
+                    "unit": new_unit.strip() if new_unit else None,
+                    "parent_id": parent_id,
+                    "project_type": new_project_type
+                }).execute()
+                
                 st.success(f"✅ Đã thêm: {new_job} ({new_unit}, {new_project_type})"
                            + (f" → thuộc '{parent_choice}'" if parent_id else ""))
                 st.rerun()
@@ -184,7 +189,8 @@ def admin_app(user):
         # ======================================
         # 2) HIỂN THỊ & CHỈNH SỬA CHA–CON–ĐƠN VỊ–NHÓM DỰ ÁN
         # ======================================
-        jobs = pd.read_sql("SELECT id, name, unit, parent_id, project_type FROM job_catalog", conn)
+        data = supabase.table("job_catalog").select("id, name, unit, parent_id, project_type").execute()
+        jobs = pd.DataFrame(data.data)
 
         if jobs.empty:
             st.info("⚠️ Chưa có công việc nào trong mục lục")
@@ -256,19 +262,19 @@ def admin_app(user):
                             continue
 
                         try:
-                            c.execute("""
-                                UPDATE job_catalog
-                                SET name=%s, unit=%s, project_type=%s
-                                WHERE id=%s
-                            """, (new_name, new_unit if new_unit else None, new_project_type, job_id))
+                            supabase.table("job_catalog").update({
+                                "name": new_name,
+                                "unit": new_unit if new_unit else None,
+                                "project_type": new_project_type
+                            }).eq("id", job_id).execute()
 
                             # nếu đổi tên thì đồng bộ sang tasks
                             if new_name != old_name:
-                                c.execute("UPDATE tasks SET task=%s WHERE task=%s", (new_name, old_name))
+                                supabase.table("tasks").update({"task": new_name}).eq("task", old_name).execute()
                         except Exception as e:
                             st.error(f"⚠️ Lỗi khi cập nhật {old_name}: {e}")
 
-                    commit_and_sync(conn)
+                    
                     st.success("✅ Đã cập nhật mục lục công việc")
                     st.rerun()
 
@@ -299,10 +305,10 @@ def admin_app(user):
                             job_name = row["_orig_name"]
 
                             # Xoá trong tasks
-                            c.execute("DELETE FROM tasks WHERE task=%s", (job_name,))
+                            supabase.table("tasks").delete().eq("task", job_name).execute()
                             # Xoá trong job_catalog
-                            c.execute("DELETE FROM job_catalog WHERE id=%s", (job_id,))
-                        commit_and_sync(conn)
+                            supabase.table("job_catalog").delete().eq("id", job_id).execute()
+                        
                         st.success("🗑️ Đã xoá các công việc được chọn")
                         del st.session_state["confirm_delete_jobs"]
                         st.rerun()
@@ -311,7 +317,7 @@ def admin_app(user):
                     if st.button("❌ No, huỷ"):
                         st.info("Đã huỷ thao tác xoá")
                         del st.session_state["confirm_delete_jobs"]
-        conn.close()
+        
 
     elif choice == "Quản lý dự án":
         st.subheader("🗂️ Quản lý dự án")
@@ -338,14 +344,15 @@ def admin_app(user):
 
 
         # ===== Đọc danh sách dự án và tính tổng thanh toán =====
-        df_proj = pd.read_sql("SELECT id, name, deadline, project_type, design_step FROM projects", conn)
+        data = supabase.table("projects").select("id, name, deadline, project_type, design_step").execute()
+        df_proj = pd.DataFrame(data.data)
 
 
         if not df_proj.empty:
             # Tính tổng % thanh toán của mỗi dự án
-            df_pay_total = pd.read_sql(
-                "SELECT project_id, SUM(percent) as total_paid FROM payments GROUP BY project_id", conn
-            )
+
+            data = supabase.rpc("get_payments_summary").execute()  # hoặc tự viết hàm SQL trong Supabase
+            df_pay_total = pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["project_id", "total_paid"])
             df_proj = df_proj.merge(df_pay_total, how="left", left_on="id", right_on="project_id")
             df_proj["total_paid"] = df_proj["total_paid"].astype(float).fillna(0)
 
@@ -395,20 +402,23 @@ def admin_app(user):
                             dl_str = dl_str.strftime("%Y-%m-%d") if pd.notna(dl_str) else None
 
                         # Update project
-                        c.execute("""
-                            UPDATE projects
-                            SET name=%s, deadline=%s, project_type=%s, design_step=%s
-                            WHERE id=%s
-                        """, (row["name"], dl_str, row["project_type"], row["design_step"], row_id))
+                        supabase.table("projects").update({
+                            "name": row["name"],
+                            "deadline": dl_str,
+                            "project_type": row["project_type"],
+                            "design_step": row["design_step"]
+                        }).eq("id", row_id).execute()
 
 
                         # Nếu đổi tên dự án → cập nhật tasks + users
                         if row["name"] != old_name:
-                            c.execute("UPDATE tasks SET project=%s WHERE project=%s", (row["name"], old_name))
+                            supabase.table("tasks").update({"project": row["name"]}).eq("project", old_name).execute()
                             for colu in ("project_manager_of", "project_leader_of"):
-                                cur = conn.cursor()
-                                cur.execute(f"SELECT username, {colu} FROM users WHERE {colu} IS NOT NULL")
-                                for username, csv_vals in cur.fetchall():
+                                
+                                data_users = supabase.table("users").select(f"username, {colu}").not_.is_(colu, None).execute()
+                                for user in data_users.data:
+                                    username = user["username"]
+                                    csv_vals = user.get(colu) or ""
                                     parts = [p.strip() for p in csv_vals.split(",") if p.strip()]
                                     changed = False
                                     for i, p in enumerate(parts):
@@ -417,9 +427,10 @@ def admin_app(user):
                                             changed = True
                                     if changed:
                                         new_csv = ",".join(parts) if parts else None
-                                        cur.execute(f"UPDATE users SET {colu}=%s WHERE username=%s", (new_csv, username))
+                                        supabase.table("users").update({colu: new_csv}).eq("username", username).execute()
 
-                    commit_and_sync(conn)
+
+                    
                     st.success("✅ Đã cập nhật thông tin dự án")
                     st.rerun()
 
@@ -441,17 +452,20 @@ def admin_app(user):
                 with c1:
                     if st.button("✅ Yes, xoá ngay", key="confirm_delete_yes"):
                         for proj_name in proj_list:
-                            c.execute("DELETE FROM tasks WHERE project=%s", (proj_name,))
-                            c.execute("DELETE FROM projects WHERE name=%s", (proj_name,))
+                            supabase.table("tasks").delete().eq("project", proj_name).execute()
+                            supabase.table("projects").delete().eq("name", proj_name).execute()
                             for colu in ("project_manager_of", "project_leader_of"):
-                                cur = conn.cursor()
-                                cur.execute(f"SELECT username, {colu} FROM users WHERE {colu} IS NOT NULL")
-                                for username, csv_vals in cur.fetchall():
+                                
+                                data_users = supabase.table("users").select(f"username, {colu}").not_.is_(colu, None).execute()
+                                for user in data_users.data:
+                                    username = user["username"]
+                                    csv_vals = user.get(colu) or ""
                                     parts = [p.strip() for p in csv_vals.split(",") if p.strip()]
                                     parts = [p for p in parts if p != proj_name]
                                     new_csv = ",".join(parts) if parts else None
-                                    cur.execute(f"UPDATE users SET {colu}=%s WHERE username=%s", (new_csv, username))
-                        commit_and_sync(conn)
+                                    supabase.table("users").update({colu: new_csv}).eq("username", username).execute()
+
+                        
                         st.success("🗑️ Đã xoá các dự án được chọn")
                         del st.session_state["confirm_delete"]
                         st.rerun()
@@ -472,12 +486,9 @@ def admin_app(user):
             selected_proj = st.selectbox("Chọn dự án để xem/nhập thanh toán", proj_options, key="select_proj_for_payment")
             proj_id = int(df_proj.loc[df_proj["name"] == selected_proj, "id"].iloc[0])
 
-            df_pay = pd.read_sql(
-                "SELECT id, payment_number AS 'Lần thanh toán', percent AS 'Tỉ lệ (%)', "
-                "note AS 'Ghi chú', paid_at AS 'Ngày thanh toán' "
-                "FROM payments WHERE project_id=%s ORDER BY payment_number",
-                conn, params=(proj_id,)
-            )
+            
+            data = supabase.table("payments").select("id, payment_number, percent, note, paid_at").eq("project_id", proj_id).order("payment_number").execute()
+            df_pay = pd.DataFrame(data.data)
 
             st.write("#### Danh sách thanh toán")
             if df_pay.empty:
@@ -505,23 +516,26 @@ def admin_app(user):
             if st.button("💾 Lưu lần thanh toán", key="save_payment_btn"):
                 if total_paid + pay_percent > 100:
                     st.warning("⚠️ Tổng thanh toán sẽ vượt quá 100%!")
-                c.execute("""
-                    INSERT INTO payments (project_id, payment_number, percent, note, paid_at)
-                    VALUES (%s, %s, %s, %s, %s)
-                """, (proj_id, pay_num, pay_percent, pay_note, pay_date.strftime("%Y-%m-%d")))
-                commit_and_sync(conn)
+                
+                supabase.table("payments").insert({
+                    "project_id": proj_id,
+                    "payment_number": pay_num,
+                    "percent": pay_percent,
+                    "note": pay_note,
+                    "paid_at": pay_date.strftime("%Y-%m-%d")
+                }).execute()
+                
                 st.success("✅ Đã thêm lần thanh toán mới")
                 st.rerun()
 
-        conn.close()
+        
 
     elif choice == "Quản lý Giao Việc":
         st.subheader("📝 Giao việc")
 
         # --- Lấy danh sách dự án ---
-        projects = pd.read_sql(
-            "SELECT id, name, deadline, project_type FROM projects", conn
-        )
+        data = supabase.table("projects").select("id, name, deadline, project_type").execute()
+        projects = pd.DataFrame(data.data)
         if projects.empty:
             st.info("⚠️ Chưa có dự án nào.")
             st.stop()
@@ -532,14 +546,12 @@ def admin_app(user):
         proj_type = (prow["project_type"] or "group").strip().lower()
 
         # --- Đồng bộ dữ liệu cũ: NULL -> 'group' ---
-        c.execute("UPDATE job_catalog SET project_type='group' WHERE project_type IS NULL")
-        commit_and_sync(conn)
+        supabase.table("job_catalog").update({"project_type": "group"}).is_("project_type", None).execute()
+        
 
         # --- Lọc job_catalog theo project_type ---
-        jobs = pd.read_sql(
-            "SELECT id, name, unit, parent_id FROM job_catalog WHERE project_type = %s",
-            conn, params=(proj_type,)
-        )
+        data = supabase.table("job_catalog").select("id, name, unit, parent_id").eq("project_type", proj_type).execute()
+        jobs = pd.DataFrame(data.data)
 
         users_display = df_users["display_name"].tolist()
         assignee_display = st.selectbox("Giao việc cho", users_display)
@@ -608,12 +620,15 @@ def admin_app(user):
                     note_txt = f"⏰ {s_time} - {e_time} ({s_date}→{e_date})"
                     if pub_note:
                         note_txt = f"{note_txt}\n{pub_note}"
-                    c.execute(
-                        "INSERT INTO tasks (project, task, assignee, khoi_luong, note, progress) "
-                        "VALUES (%s, %s, %s, %s, %s, %s)",
-                        (project, task, assignee, total_hours, note_txt, 0)
-                    )
-                commit_and_sync(conn)
+                    supabase.table("tasks").insert({
+                        "project": project,
+                        "task": task,
+                        "assignee": assignee,
+                        "khoi_luong": total_hours,
+                        "note": note_txt,
+                        "progress": 0
+                    }).execute()
+                
                 st.success("✅ Đã giao công nhật")
                 st.session_state.task_rows = [0]
                 st.rerun()
@@ -700,21 +715,30 @@ def admin_app(user):
                         end_time = st.session_state.get(f"end_{i}")
                         time_txt = f"⏰ {start_time} - {end_time}" if start_time and end_time else ""
                         merged_note = (group_note + ("\n" if group_note and time_txt else "") + time_txt).strip()
-                        c.execute(
-                            "INSERT INTO tasks (project, task, assignee, note, progress) VALUES (%s,%s,%s,%s,%s)",
-                            (project, task, assignee, merged_note, 0)
-                        )
+                        
+                        supabase.table("tasks").insert({
+                            "project": project,
+                            "task": task,
+                            "assignee": assignee,
+                            "note": merged_note,  # hoặc group_note
+                            "progress": 0
+                        }).execute()
                     else:
                         qty = float(st.session_state.get(f"khoi_luong_{i}", 0) or 0)
                         dl_val = st.session_state.get(f"deadline_{i}")
                         dl = pd.to_datetime(dl_val, errors="coerce")
                         dl_str = dl.strftime("%Y-%m-%d") if pd.notna(dl) else None
-                        c.execute(
-                            "INSERT INTO tasks (project, task, assignee, deadline, khoi_luong, note, progress) "
-                            "VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                            (project, task, assignee, dl_str, qty, group_note, 0)
-                        )
-                commit_and_sync(conn)
+                        
+                        supabase.table("tasks").insert({
+                            "project": project,
+                            "task": task,
+                            "assignee": assignee,
+                            "deadline": dl_str,
+                            "khoi_luong": qty,
+                            "note": group_note,
+                            "progress": 0
+                        }).execute()
+                
                 st.success("✅ Đã giao việc")
                 st.session_state.task_rows = [0]
                 st.rerun()
@@ -722,11 +746,13 @@ def admin_app(user):
         # ---------------- Danh sách công việc ----------------
         # ---------------- Danh sách công việc ----------------
         st.subheader("📋 Danh sách công việc trong dự án")
-        df_tasks = pd.read_sql("SELECT * FROM tasks WHERE project=%s", conn, params=(project,))
+        data = supabase.table("tasks").select("*").eq("project", project).execute()
+        df_tasks = pd.DataFrame(data.data)
         if df_tasks.empty:
             st.info("Chưa có công việc nào trong dự án này.")
         else:
-            jobs_units = pd.read_sql("SELECT name, unit FROM job_catalog", conn)
+            data2 = supabase.table("job_catalog").select("name, unit").execute()
+            jobs_units = pd.DataFrame(data2.data)
             df_tasks = df_tasks.merge(jobs_units, left_on="task", right_on="name", how="left")
             df_tasks["assignee"] = df_tasks["assignee"].map(user_map).fillna(df_tasks["assignee"])
 
@@ -808,8 +834,8 @@ def admin_app(user):
                                 for i, row in edited_cong.iterrows():
                                     tid = int(df_cong.iloc[i]["ID"])
                                     new_qty = float(row.get("Khối lượng (giờ)") or 0)
-                                    c.execute("UPDATE tasks SET khoi_luong=%s WHERE id=%s", (new_qty, tid))
-                                commit_and_sync(conn)
+                                    supabase.table("tasks").update({"khoi_luong": new_qty}).eq("id", tid).execute()
+                                
                                 st.success(f"✅ Đã cập nhật khối lượng công nhật của {u}")
                                 st.rerun()
 
@@ -823,8 +849,8 @@ def admin_app(user):
 
                                 if ids_to_delete:
                                     for tid in ids_to_delete:
-                                        c.execute("DELETE FROM tasks WHERE id=%s", (tid,))
-                                    commit_and_sync(conn)
+                                        supabase.table("tasks").delete().eq("id", tid).execute()
+                                    
                                     st.success(f"✅ Đã xóa {len(ids_to_delete)} dòng công nhật của {u}")
                                     st.rerun()
                                 else:
@@ -893,19 +919,15 @@ def admin_app(user):
                                     else:
                                         dl_str = None
 
-                                    c.execute(
-                                        """
-                                        UPDATE tasks
-                                        SET task=%s, khoi_luong=%s, deadline=%s, note=%s, progress=%s
-                                        WHERE id=%s
-                                        """,
-                                        (
-                                            row["Công việc"], float(row.get("Khối lượng") or 0), dl_str,
-                                            row.get("Ghi chú") or "",
-                                            int(row.get("Tiến độ (%)") or 0), tid
-                                        )
-                                    )
-                                commit_and_sync(conn)
+                                    
+                                    supabase.table("tasks").update({
+                                        "task": row["Công việc"],
+                                        "khoi_luong": float(row.get("Khối lượng") or 0),
+                                        "deadline": dl_str,
+                                        "note": row.get("Ghi chú") or "",
+                                        "progress": int(row.get("Tiến độ (%)") or 0)
+                                    }).eq("id", tid).execute()
+                                
                                 st.success(f"✅ Đã cập nhật công việc khối lượng của {u}")
                                 st.rerun()
 
@@ -918,14 +940,14 @@ def admin_app(user):
                                         ids_to_delete.append(int(df_other_show.iloc[i]["ID"]))
                                 if ids_to_delete:
                                     for tid in ids_to_delete:
-                                        c.execute("DELETE FROM tasks WHERE id=%s", (tid,))
-                                    commit_and_sync(conn)
+                                        supabase.table("tasks").delete().eq("id", tid).execute()
+                                    
                                     st.success(f"✅ Đã xóa {len(ids_to_delete)} dòng công việc của {u}")
                                     st.rerun()
                                 else:
                                     st.warning("⚠️ Chưa chọn dòng nào để xóa")
 
-        conn.close()
+        
 
 
 
@@ -933,7 +955,8 @@ def admin_app(user):
         st.subheader("📊 Thống kê công việc")
 
         # Lấy danh sách dự án
-        projects = pd.read_sql("SELECT name FROM projects", conn)["name"].tolist()
+        data = supabase.table("projects").select("name").execute()
+        projects = [r["name"] for r in data.data]
 
         # Bộ lọc dự án
         filter_mode = st.radio("Chế độ thống kê", 
@@ -945,15 +968,15 @@ def admin_app(user):
         elif filter_mode == "Tất cả":
             selected_projects = projects
         elif filter_mode == "Chỉ dự án chưa hoàn thành":
-            unfinished = pd.read_sql(
-                "SELECT DISTINCT project FROM tasks WHERE progress < 100", conn
-            )["project"].tolist()
+            data = supabase.table("tasks").select("project").lt("progress", 100).execute()
+            unfinished = list({r["project"] for r in data.data})
             selected_projects = unfinished
 
         # Lấy dữ liệu công việc
         if selected_projects:
             placeholders = ",".join(["%s"] * len(selected_projects))
-            df = pd.read_sql(f"SELECT * FROM tasks WHERE project IN ({placeholders})", conn, params=selected_projects)
+            data = supabase.table("tasks").select("*").in_("project", selected_projects).execute()
+            df = pd.DataFrame(data.data)
 
         else:
             df = pd.DataFrame()
@@ -988,7 +1011,8 @@ def admin_app(user):
 
                 # Chi tiết theo đầu mục công việc (cha)
                 # Map task -> cha
-                job_map = pd.read_sql("SELECT id, name, parent_id FROM job_catalog", conn)
+                data = supabase.table("job_catalog").select("id, name, parent_id").execute()
+                job_map = pd.DataFrame(data.data)
                 parent_lookup = {}
                 for _, row in job_map.iterrows():
                     if pd.isna(row["parent_id"]):
@@ -1026,7 +1050,8 @@ def admin_app(user):
                     st.info("⚠️ Không có dữ liệu công việc cho các dự án không Public.")
                 else:
                     # Map task -> đầu mục cha
-                    job_map = pd.read_sql("SELECT id, name, parent_id FROM job_catalog", conn)
+                    data = supabase.table("job_catalog").select("id, name, parent_id").execute()
+                    job_map = pd.DataFrame(data.data)
                     parent_lookup = {}
                     for _, row in job_map.iterrows():
                         if pd.isna(row["parent_id"]):
@@ -1182,7 +1207,8 @@ def admin_app(user):
 
 
                 # Map task -> cha
-                job_map = pd.read_sql("SELECT id, name, parent_id FROM job_catalog", conn)
+                data = supabase.table("job_catalog").select("id, name, parent_id").execute()
+                job_map = pd.DataFrame(data.data)
                 parent_lookup = {}
                 for _, row in job_map.iterrows():
                     if pd.isna(row["parent_id"]):
@@ -1217,4 +1243,4 @@ def admin_app(user):
 
                 st.markdown("### 👤 Thống kê chi tiết theo người dùng")
                 st.dataframe(styled_user, width="stretch")
-        conn.close()
+        

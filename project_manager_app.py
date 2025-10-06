@@ -3,22 +3,20 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from auth import get_connection, update_task
-import psycopg2
+
 
 from datetime import datetime, date, time, timedelta
 from auth import calc_hours
-from auth import commit_and_sync
+
 
 
 # -----------------------------
 # Helpers
 # -----------------------------
-def _load_managed_projects(conn, username: str) -> list[str]:
+def _load_managed_projects(supabase, username: str) -> list[str]:
     """Tên các dự án user là Chủ nhiệm/Chủ trì (từ bảng users)."""
-    info = pd.read_sql(
-        "SELECT project_manager_of, project_leader_of FROM users WHERE username=%s",
-        conn, params=(username,)
-    )
+    data = supabase.table("users").select("project_manager_of, project_leader_of").eq("username", username).execute()
+    info = pd.DataFrame(data.data)
     managed = []
     if not info.empty:
         for col in ["project_manager_of", "project_leader_of"]:
@@ -28,35 +26,37 @@ def _load_managed_projects(conn, username: str) -> list[str]:
     return sorted(set(managed))
 
 
-def _load_visible_projects(conn, managed: list[str], username: str) -> pd.DataFrame:
+
+def _load_visible_projects(supabase, managed: list[str], username: str) -> pd.DataFrame:
     """Dự án user có thể thấy: managed + public + dự án có task của user."""
-    public_df = pd.read_sql(
-        "SELECT id, name, deadline, project_type FROM projects WHERE project_type='public'", conn
-    )
-    managed_df = (
-        pd.read_sql(
-            f"SELECT id, name, deadline, project_type FROM projects "
-            f"WHERE name IN ({','.join(['%s']*len(managed))})",
-            conn, params=managed
-        )
-        if managed else pd.DataFrame(columns=["id", "name", "deadline", "project_type"])
-    )
-    assigned_names = pd.read_sql(
-        "SELECT DISTINCT project FROM tasks WHERE assignee=%s", conn, params=(username,)
-    )["project"].tolist()
-    assigned_df = (
-        pd.read_sql(
-            f"SELECT id, name, deadline, project_type FROM projects "
-            f"WHERE name IN ({','.join(['%s']*len(assigned_names))})",
-            conn, params=assigned_names
-        )
-        if assigned_names else pd.DataFrame(columns=["id", "name", "deadline", "project_type"])
-    )
-    all_df = pd.concat([public_df, managed_df, assigned_df], ignore_index=True)\
-               .drop_duplicates(subset=["name"])\
-               .sort_values("name")\
+
+    # Dự án public
+    data = supabase.table("projects").select("id, name, deadline, project_type").eq("project_type", "public").execute()
+    public_df = pd.DataFrame(data.data)
+
+    # Dự án do user quản lý
+    if managed:
+        data = supabase.table("projects").select("id, name, deadline, project_type").in_("name", managed).execute()
+        managed_df = pd.DataFrame(data.data)
+    else:
+        managed_df = pd.DataFrame(columns=["id", "name", "deadline", "project_type"])
+
+    # Dự án user được giao task
+    data = supabase.table("tasks").select("project").eq("assignee", username).execute()
+    assigned_names = list({r["project"] for r in data.data})
+    if assigned_names:
+        data = supabase.table("projects").select("id, name, deadline, project_type").in_("name", assigned_names).execute()
+        assigned_df = pd.DataFrame(data.data)
+    else:
+        assigned_df = pd.DataFrame(columns=["id", "name", "deadline", "project_type"])
+
+    # Gộp kết quả
+    all_df = pd.concat([public_df, managed_df, assigned_df], ignore_index=True) \
+               .drop_duplicates(subset=["name"]) \
+               .sort_values("name") \
                .reset_index(drop=True)
     return all_df
+
 
 
 # -----------------------------
@@ -70,18 +70,19 @@ def project_manager_app(user):
     - Thống kê công việc (chỉ các dự án mình quản lý)
     """
     # st.set_page_config(layout="wide")
-    conn, c = get_connection()
+    supabase = get_connection()
     try:
-        c.execute("UPDATE users SET last_seen=NOW() WHERE username=%s", (user[1],))
-        commit_and_sync(conn)
+        supabase.table("users").update({"last_seen": datetime.utcnow().isoformat()}).eq("username", user[1]).execute()
 
-        df_users = pd.read_sql("SELECT username, display_name FROM users", conn)
+        data = supabase.table("users").select("username, display_name").execute()
+        df_users = pd.DataFrame(data.data)
         user_map = dict(zip(df_users["username"], df_users["display_name"]))
 
         username = user[1]
 
-        managed = _load_managed_projects(conn, username)
-        projects_df = _load_visible_projects(conn, managed, username)
+        managed = _load_managed_projects(supabase, username)
+        projects_df = _load_visible_projects(supabase, managed, username)
+
         if projects_df.empty:
             st.warning("⚠️ Chưa có dự án nào bạn có quyền xem hoặc quản lý.")
             return
@@ -103,14 +104,11 @@ def project_manager_app(user):
             is_manager = project in managed
 
             # Chuẩn hoá job_catalog: NULL -> 'group'
-            c.execute("UPDATE job_catalog SET project_type='group' WHERE project_type IS NULL")
-            commit_and_sync(conn)
+            supabase.table("job_catalog").update({"project_type": "group"}).is_("project_type", None).execute()
 
             # Danh mục công việc cho loại dự án
-            jobs = pd.read_sql(
-                "SELECT id, name, unit, parent_id FROM job_catalog WHERE project_type=%s",
-                conn, params=(proj_type,)
-            )
+            data = supabase.table("job_catalog").select("id, name, unit, parent_id").eq("project_type", proj_type).execute()
+            jobs = pd.DataFrame(data.data)
             parent_jobs = jobs[jobs["parent_id"].isnull()].sort_values("name")
 
             # =======================================================
@@ -195,21 +193,28 @@ def project_manager_app(user):
                             etime = st.session_state.get(f"pm_end_{i}")
                             time_txt = f"⏰ {stime} - {etime}" if stime and etime else ""
                             note = (note_common + ("\n" if note_common and time_txt else "") + time_txt).strip()
-                            c.execute(
-                                "INSERT INTO tasks (project, task, assignee, note, progress) VALUES (%s, %s, %s, %s, %s)",
-                                (project, task_name, assignee, note, 0)
-                            )
+                            supabase.table("tasks").insert({
+                                "project": project,
+                                "task": task_name,
+                                "assignee": assignee,
+                                "note": note,
+                                "progress": 0
+                            }).execute()
                         else:
                             qty = float(st.session_state.get(f"pm_qty_{i}", 0) or 0)
                             dl_val = st.session_state.get(f"pm_deadline_{i}")
                             dl = pd.to_datetime(dl_val, errors="coerce")
                             dl_str = dl.strftime("%Y-%m-%d") if pd.notna(dl) else None
-                            c.execute(
-                                "INSERT INTO tasks (project, task, assignee, deadline, khoi_luong, note, progress) "
-                                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                                (project, task_name, assignee, dl_str, qty, note_common, 0)
-                            )
-                    commit_and_sync(conn)
+                            supabase.table("tasks").insert({
+                                "project": project,
+                                "task": task_name,
+                                "assignee": assignee,
+                                "deadline": dl_str,
+                                "khoi_luong": qty,
+                                "note": note_common,
+                                "progress": 0
+                            }).execute()
+                    
                     st.success("✅ Đã giao việc")
                     st.rerun()
 
@@ -217,10 +222,9 @@ def project_manager_app(user):
                 # ---- Bảng tất cả công việc: sửa & lưu tiến độ ----
                 st.subheader("📋 Tất cả công việc trong dự án")
 
-                df_all = pd.read_sql(
-                    "SELECT id, assignee, task, khoi_luong, deadline, note, progress FROM tasks WHERE project=%s",
-                    conn, params=(project,)
-                )
+                
+                data = supabase.table("tasks").select("id, assignee, task, khoi_luong, deadline, note, progress").eq("project", project).execute()
+                df_all = pd.DataFrame(data.data)
                 df_all["assignee"] = df_all["assignee"].map(user_map).fillna(df_all["assignee"])
 
                 if df_all.empty:
@@ -292,8 +296,8 @@ def project_manager_app(user):
                                     ids_to_delete.append(int(df_all.iloc[i]["ID"]))
                             if ids_to_delete:
                                 for tid in ids_to_delete:
-                                    c.execute("DELETE FROM tasks WHERE id=%s", (tid,))
-                                commit_and_sync(conn)
+                                    supabase.table("tasks").delete().eq("id", tid).execute()
+                                
                                 st.success(f"✅ Đã xóa {len(ids_to_delete)} công việc")
                                 st.rerun()
                             else:
@@ -315,11 +319,9 @@ def project_manager_app(user):
                 )
 
                 # ====== Danh sách công việc của chính user ======
-                my_tasks = pd.read_sql(
-                    "SELECT id, task, khoi_luong, deadline, note, progress "
-                    "FROM tasks WHERE project=%s AND assignee=%s",
-                    conn, params=(project, username)
-                )
+                data = supabase.table("tasks").select("id, task, khoi_luong, deadline, note, progress")\
+                    .eq("project", project).eq("assignee", username).execute()
+                my_tasks = pd.DataFrame(data.data)
 
                 if my_tasks.empty:
                     st.warning("⚠️ Bạn chưa có công việc nào trong dự án này.")
@@ -361,8 +363,8 @@ def project_manager_app(user):
                                 # Map đúng theo index gốc
                                 tid = int(my_tasks.iloc[i]["id"])
                                 new_qty = float(row.get("Khối lượng (giờ)") or 0)
-                                c.execute("UPDATE tasks SET khoi_luong=%s WHERE id=%s", (new_qty, tid))
-                            commit_and_sync(conn)
+                                supabase.table("tasks").update({"khoi_luong": new_qty}).eq("id", tid).execute()
+                            
                             st.success("✅ Đã cập nhật khối lượng")
                             st.rerun()
 
@@ -374,8 +376,8 @@ def project_manager_app(user):
                                     ids_to_delete.append(int(my_tasks.iloc[i]["id"]))
                             if ids_to_delete:
                                 for tid in ids_to_delete:
-                                    c.execute("DELETE FROM tasks WHERE id=%s", (tid,))
-                                commit_and_sync(conn)
+                                    supabase.table("tasks").delete().eq("id", tid).execute()
+                                
                                 st.success(f"✅ Đã xóa {len(ids_to_delete)} dòng")
                                 st.rerun()
                             else:
@@ -408,12 +410,15 @@ def project_manager_app(user):
                         if note:
                             note_txt += f"\n{note}"
 
-                        c.execute(
-                            "INSERT INTO tasks (project, task, assignee, khoi_luong, note, progress) "
-                            "VALUES (%s, %s, %s, %s, %s, %s)",
-                            (project, task_name, username, total_hours, note_txt, 0)
-                        )
-                        commit_and_sync(conn)
+                        supabase.table("tasks").insert({
+                            "project": project,
+                            "task": task_name,
+                            "assignee": username,
+                            "khoi_luong": total_hours,
+                            "note": note_txt,
+                            "progress": 0
+                        }).execute()
+                        
                         st.success(f"✅ Đã thêm {total_hours} giờ công cho công việc '{task_name}'")
                         st.rerun()
 
@@ -437,9 +442,9 @@ def project_manager_app(user):
                 return
 
             qmarks = ",".join(["%s"] * len(selected_projects))
-            df = pd.read_sql(
-                f"SELECT * FROM tasks WHERE project IN ({qmarks})", conn, params=selected_projects
-            )
+            
+            data = supabase.table("tasks").select("*").in_("project", selected_projects).execute()
+            df = pd.DataFrame(data.data)
             df["assignee"] = df["assignee"].map(user_map).fillna(df["assignee"])
 
             if df.empty:
@@ -480,5 +485,6 @@ def project_manager_app(user):
                     grouped.style.format({"Tiến_độ_TB": "{:.0f}%"}).bar(subset=["Tiến_độ_TB"], color="#FF9800"),
                     use_container_width=True
                 )
+
     finally:
-        conn.close()
+            pass 

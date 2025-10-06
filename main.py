@@ -5,7 +5,7 @@ import datetime
 from admin_app import admin_app
 from project_manager_app import project_manager_app
 from user_app import user_app   # nếu vẫn muốn dùng giao diện user thường
-from auth import init_db, get_connection, commit_and_sync, hash_password
+from auth import get_connection, hash_password
 
 # ==================== HỖ TRỢ ====================
 
@@ -18,16 +18,25 @@ def check_login(username, password):
     if u == "tdpro" and p == "Giadinh12":
         return (0, "tdpro", "TDPRO", None, "Giadinh12", "admin")
 
-    conn, c = get_connection()
-    c.execute(
-        "SELECT id, username, display_name, dob, password, role FROM users WHERE lower(username)=%s",
-        (u,)
-    )
-    row = c.fetchone()
-    conn.close()
+    supabase = get_connection()
+    data = supabase.table("users") \
+        .select("id, username, display_name, dob, password, role") \
+        .eq("username", u).execute()
 
-    if row and row[4] == hash_password(p):
-        return row
+    if not data.data:
+        return None
+
+    row = data.data[0]
+    if row["password"] == hash_password(p):
+        return (
+            row["id"],
+            row["username"],
+            row["display_name"],
+            row["dob"],
+            row["password"],
+            row["role"]
+        )
+
     return None
 
 
@@ -45,7 +54,7 @@ def role_display(role: str) -> str:
 
 def profile_page(user):
     st.title("👤 Hồ sơ cá nhân")
-    conn, c = get_connection()
+    supabase = get_connection()
 
     st.subheader("Thông tin cơ bản")
     new_display = st.text_input("Tên hiển thị", value=user[2] or "", key="pf_display")
@@ -53,18 +62,19 @@ def profile_page(user):
     current_dob = pd.to_datetime(user[3]) if user[3] else None
     new_dob = st.date_input(
         "Ngày sinh",
-        value=datetime.date(1985, 11, 12),
+        value=current_dob or datetime.date(1985, 12, 11),
         min_value=datetime.date(1950, 1, 1),
         max_value=datetime.date.today(),
         key="reg_dob"
     )
 
     if st.button("💾 Lưu thông tin", key="pf_save"):
-        c.execute(
-            "UPDATE users SET display_name=%s, dob=%s WHERE lower(username)=lower(%s)",
-            (new_display, new_dob.strftime("%Y-%m-%d") if new_dob else None, user[1])
-        )
-        commit_and_sync(conn)
+        
+        supabase.table("users").update({
+            "display_name": new_display,
+            "dob": new_dob.strftime("%Y-%m-%d") if new_dob else None
+        }).eq("username", user[1]).execute()
+
         st.success("✅ Đã cập nhật hồ sơ.")
         user = list(user)
         user[2] = new_display
@@ -78,27 +88,23 @@ def profile_page(user):
     confirm_pw = st.text_input("Xác nhận mật khẩu mới", type="password", key="pf_cf_pw")
 
     if st.button("✅ Đổi mật khẩu", key="pf_change_pw"):
-        db_pw = c.execute(
-            "SELECT password FROM users WHERE lower(username)=lower(%s)",
-            (user[1],)
-        ).fetchone()
-        if not db_pw or db_pw[0] != hash_password(old_pw):
+        
+        data = supabase.table("users").select("password").eq("username", user[1]).execute()
+        if not data.data or data.data[0]["password"] != hash_password(old_pw):
 
             st.error("⚠️ Mật khẩu hiện tại không đúng.")
         elif new_pw != confirm_pw:
             st.error("⚠️ Mật khẩu mới và xác nhận không khớp.")
         else:
-            c.execute(
-                "UPDATE users SET password=%s WHERE lower(username)=lower(%s)",
-                (hash_password(new_pw), user[1])
-            )
+            supabase.table("users").update({"password": hash_password(new_pw)}).eq("username", user[1]).execute()
 
-            commit_and_sync(conn)
+
+            
             st.success("✅ Đã đổi mật khẩu. Vui lòng đăng nhập lại.")
             logout_user()
             st.rerun()
 
-    conn.close()
+    
 
 
 # ==================== MAIN ====================
@@ -137,7 +143,7 @@ def main():
         """, unsafe_allow_html=True
     )
 
-    init_db()
+    
 
     if "user" not in st.session_state:
         tab_login, tab_register = st.tabs(["Đăng nhập", "Đăng ký"])
@@ -167,29 +173,19 @@ def main():
                 elif new_pass != confirm_pass:
                     st.error("⚠️ Mật khẩu nhập lại không khớp")
                 else:
-                    conn, c = get_connection()
-                    try:
-                        existed = c.execute(
-                            "SELECT 1 FROM users WHERE lower(username)=lower(%s)",
-                            (new_user.strip(),)
-                        ).fetchone()
-                        if existed:
-                            st.error("⚠️ Tên đăng nhập đã tồn tại.")
-                        else:
-                            c.execute(
-                                "INSERT INTO users (username, display_name, dob, password, role) VALUES (%s, %s, %s, %s, %s)",
-                                (
-                                    new_user.strip(),
-                                    new_display or new_user.strip(),
-                                    new_dob.strftime("%Y-%m-%d"),
-                                    hash_password(new_pass),  # ✅ dùng hàm hash_password
-                                    "user",
-                                )
-                            )
-                            commit_and_sync(conn)
-                            st.success("✅ Đăng ký thành công! Hãy đăng nhập.")
-                    finally:
-                        conn.close()
+                    supabase = get_connection()
+                    data = supabase.table("users").select("username").eq("username", new_user.strip()).execute()
+                    if data.data:
+                        st.error("⚠️ Tên đăng nhập đã tồn tại.")
+                    else:
+                        supabase.table("users").insert({
+                            "username": new_user.strip(),
+                            "display_name": new_display or new_user.strip(),
+                            "dob": new_dob.strftime("%Y-%m-%d"),
+                            "password": hash_password(new_pass),
+                            "role": "user"
+                        }).execute()
+                        st.success("✅ Đăng ký thành công! Hãy đăng nhập.")
     else:
         user = st.session_state["user"]
         role = user[5]
