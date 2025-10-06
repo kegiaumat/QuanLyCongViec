@@ -27,7 +27,8 @@ def check_login(username, password):
         return None
 
     row = data.data[0]
-    if row["password"] == hash_password(p):
+    if row["password"] == p:
+
         return (
             row["id"],
             row["username"],
@@ -178,19 +179,20 @@ def main():
                     if data.data:
                         st.error("⚠️ Tên đăng nhập đã tồn tại.")
                     else:
-                        # Lấy id lớn nhất hiện có
+                        # Lấy id cao nhất hiện có và +1
                         data = supabase.table("users").select("id").order("id", desc=True).limit(1).execute()
                         next_id = (data.data[0]["id"] + 1) if data.data else 1
+
                         supabase.table("users").insert({
-                            "id": None,  # ép giá trị null để Supabase tự gán id mới
+                            "id": next_id,
                             "username": new_user.strip(),
                             "display_name": new_display or new_user.strip(),
                             "dob": new_dob.strftime("%Y-%m-%d"),
                             "password": hash_password(new_pass),
                             "role": "user"
                         }).execute()
-
                         st.success("✅ Đăng ký thành công! Hãy đăng nhập.")
+
     else:
         user = st.session_state["user"]
         role = user[5]
