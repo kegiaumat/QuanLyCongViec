@@ -124,20 +124,21 @@ def admin_app(user):
         new_password = st.text_input("Mật khẩu mới", type="password")
         confirm_password = st.text_input("Xác nhận mật khẩu mới", type="password")
 
+
+
         if st.button("✅ Đổi mật khẩu"):
             if new_password != confirm_password:
                 st.error("⚠️ Mật khẩu mới và xác nhận không khớp.")
             else:
                 try:
                     supabase.table("users").update({
-                        "password": new_password
+                        "password": hash_password(new_password)
                     }).eq("username", selected_user).execute()
                     
                     st.success("✅ Đã đổi mật khẩu cho người dùng.")
                     st.rerun()
                 except Exception as e:
                     st.error(f"⚠️ Lỗi khi đổi mật khẩu: {e}")
-        
 
             
     elif choice == "Mục lục công việc":
