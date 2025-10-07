@@ -45,12 +45,19 @@ def check_login(username, password):
 
 
 def logout_user():
+    # Xóa session
     st.session_state.pop("user", None)
     st.session_state.pop("page", None)
-    if "username" in cookies:
-        del cookies["username"]
-        del cookies["password"]
-        cookies.save()
+
+    # Xóa cookie đăng nhập
+    cookies["username"] = ""
+    cookies["password"] = ""
+    cookies.save()
+
+    # Hiển thị thông báo và dừng để tránh auto-login lại
+    st.success("✅ Đã đăng xuất thành công! Vui lòng reload lại trang nếu chưa thấy thay đổi.")
+    st.stop()
+
 
 
 
