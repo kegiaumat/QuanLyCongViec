@@ -15,7 +15,8 @@ if not cookies.ready():
 
 
 def check_login(username, password):
-    u = (username or "").strip().lower()
+    u = (username or "").strip()
+
     p = password or ""
 
     if u == "tdpro" and p == "Giadinh12":
