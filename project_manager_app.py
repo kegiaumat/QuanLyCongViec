@@ -273,36 +273,37 @@ def project_manager_app(user):
                             for i, row in edited_df.iterrows():
                                 task_id = int(df_all.iloc[i]["ID"])
                                 update_data = {}
-                        
+
+                                # Lấy dữ liệu từ hàng (tránh lỗi tên cột rename)
+                                col_map = {c.lower().strip(): c for c in row.index}
+
                                 # Khối lượng
-                                if "Khối lượng" in row and not pd.isna(row["Khối lượng"]):
-                                    update_data["khoi_luong"] = float(row["Khối lượng"])
-                        
+                                if "khối lượng" in col_map and not pd.isna(row[col_map["khối lượng"]]):
+                                    update_data["khoi_luong"] = float(row[col_map["khối lượng"]])
+
                                 # Deadline
-                                if "Deadline" in row and pd.notna(row["Deadline"]):
-                                    update_data["deadline"] = pd.to_datetime(row["Deadline"]).strftime("%Y-%m-%d")
-                        
-                                # Ghi chú ✅ fix điều kiện ở đây
-                                if "Ghi chú" in row:
-                                    val = row["Ghi chú"]
-                        
-                                    if val is None:
-                                        update_data["note"] = ""
-                                    elif isinstance(val, float) and pd.isna(val):
+                                if "deadline" in col_map and pd.notna(row[col_map["deadline"]]):
+                                    update_data["deadline"] = pd.to_datetime(row[col_map["deadline"]]).strftime("%Y-%m-%d")
+
+                                # Ghi chú ✅ fix tại đây
+                                if "ghi chú" in col_map:
+                                    val = row[col_map["ghi chú"]]
+                                    if val is None or (isinstance(val, float) and pd.isna(val)):
                                         update_data["note"] = ""
                                     else:
                                         update_data["note"] = str(val).strip()
-                        
+
                                 # Tiến độ
-                                if "Tiến độ (%)" in row and not pd.isna(row["Tiến độ (%)"]):
-                                    update_data["progress"] = float(row["Tiến độ (%)"])
-                        
-                                # Nếu có dữ liệu cập nhật
+                                if "tiến độ (%)" in col_map and not pd.isna(row[col_map["tiến độ (%)"]]):
+                                    update_data["progress"] = float(row[col_map["tiến độ (%)"]])
+
+                                # Cập nhật DB
                                 if update_data:
                                     supabase.table("tasks").update(update_data).eq("id", task_id).execute()
-                        
+
                             st.success("✅ Đã lưu cập nhật công việc vào cơ sở dữ liệu!")
                             st.rerun()
+
 
 
 
