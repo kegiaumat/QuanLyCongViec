@@ -268,34 +268,39 @@ def project_manager_app(user):
                     col1, col2 = st.columns([1, 1])
 
                     # Nút lưu cập nhật công việc
-                    with col1:
+                    with col1:                        
                         if st.button("💾 Lưu cập nhật công việc", key=f"save_all_{project}"):
                             for i, row in edited_df.iterrows():
                                 task_id = int(df_all.iloc[i]["ID"])
                                 update_data = {}
-
+                        
                                 # Khối lượng
                                 if "Khối lượng" in row and not pd.isna(row["Khối lượng"]):
                                     update_data["khoi_luong"] = float(row["Khối lượng"])
-
+                        
                                 # Deadline
                                 if "Deadline" in row and pd.notna(row["Deadline"]):
                                     update_data["deadline"] = pd.to_datetime(row["Deadline"]).strftime("%Y-%m-%d")
-
-                                # Ghi chú
-                                if "Ghi chú" in row and isinstance(row["Ghi chú"], str):
-                                    update_data["note"] = row["Ghi chú"]
-
+                        
+                                # Ghi chú ✅ fix điều kiện ở đây
+                                if "Ghi chú" in row:
+                                    val = row["Ghi chú"]
+                                    if isinstance(val, str):
+                                        update_data["note"] = val.strip()
+                                    elif pd.notna(val):
+                                        update_data["note"] = str(val).strip()
+                        
                                 # Tiến độ
                                 if "Tiến độ (%)" in row and not pd.isna(row["Tiến độ (%)"]):
                                     update_data["progress"] = float(row["Tiến độ (%)"])
-
+                        
                                 # Nếu có dữ liệu cập nhật
                                 if update_data:
                                     supabase.table("tasks").update(update_data).eq("id", task_id).execute()
-
+                        
                             st.success("✅ Đã lưu cập nhật công việc vào cơ sở dữ liệu!")
                             st.rerun()
+
 
 
                     # Nút xóa các dòng đã chọn
@@ -503,3 +508,4 @@ def project_manager_app(user):
 
     finally:
             pass 
+
