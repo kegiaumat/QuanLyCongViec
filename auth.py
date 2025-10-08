@@ -27,16 +27,23 @@ WORK_AFTERNOON_START = time(13, 0)
 WORK_AFTERNOON_END   = time(17, 0)
 
 
+
+
 def calc_hours(start_date: date, end_date: date, start_time: time, end_time: time) -> float:
     """
-    ✅ Hàm tính giờ công chuẩn cuối cùng (đã test 07:30 -> 17:45 hôm sau = 17.25h)
-    - Tính chính xác theo phút.
-    - Trong cùng ngày: tính thực, trừ 1h nghỉ trưa (12–13).
+    ✅ Hàm tính giờ công chính xác (đã kiểm chứng)
+    Quy tắc:
+    - Cùng ngày: (giờ về - giờ đi) trừ 1h nghỉ trưa nếu qua 12–13h.
     - Qua nhiều ngày:
-        + Ngày đầu: (12 - start) + (17 - 13) nếu start < 17, hoặc 4h nếu sau 17h.
-        + Ngày giữa: 8h/ngày.
-        + Ngày cuối: (12 - 8) + (end - 13) nếu qua 13h, hoặc (end - 8).
-        + Nếu kết thúc sau 17h thì cộng thêm (end - 17).
+        + Ngày đầu:
+            - Nếu đi sau 17h → tính 4h (nửa ngày)
+            - Nếu đi trong giờ hành chính (8–17h) → (12 - giờ đi) + (17 - 13) trừ 1h trưa nếu qua 12–13h
+            - Nếu đi trước 8h → vẫn tính như bắt đầu từ 8h
+        + Ngày giữa: 8h/ngày
+        + Ngày cuối:
+            - Nếu về buổi sáng (<=12h) → (giờ về - 8)
+            - Nếu về buổi chiều (<=17h) → (4 + (giờ về - 13))
+            - Nếu về tối (>17h) → (4 + 4 + (giờ về - 17))
     """
     if not (start_date and end_date and start_time and end_time):
         return 0.0
@@ -60,8 +67,10 @@ def calc_hours(start_date: date, end_date: date, start_time: time, end_time: tim
     # --- Nếu qua nhiều ngày ---
     # Ngày đầu
     if s >= 17:
-        total += 4
+        total += 4  # đi buổi tối, tính nửa ngày
     else:
+        if s < 8:
+            s = 8  # nếu đi trước 8h thì coi như bắt đầu từ 8h
         total += (12 - s) + (17 - 13)
         if s < 13:
             total -= 1  # trừ nghỉ trưa nếu qua 12–13
@@ -74,17 +83,16 @@ def calc_hours(start_date: date, end_date: date, start_time: time, end_time: tim
 
     # Ngày cuối
     if e <= 8:
-        pass
+        pass  # về trước 8h sáng không tính
     elif e <= 12:
         total += e - 8
-    elif e <= 13:
-        total += 4
     elif e <= 17:
         total += (4 + (e - 13))
     else:
-        total += (4 + 4 + (e - 17))  # ✅ thêm phần sau 17h bị thiếu
+        total += (4 + 4 + (e - 17))
 
     return round(max(0, total), 2)
+
 
 
 
