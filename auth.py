@@ -72,7 +72,7 @@ def calc_hours(start_date: date, end_date: date, start_time: time, end_time: tim
         total += 4
     else:
         total += (12 - s) + (17 - 13)
-        if s < 13 and 12 < 13:
+        if s < 12:
             total -= 1  # chỉ trừ khi thật sự đi qua 12–13
 
     # Ngày giữa
@@ -85,12 +85,14 @@ def calc_hours(start_date: date, end_date: date, start_time: time, end_time: tim
     # --- Ngày cuối ---
     if e <= 8:
         pass  # chưa đến giờ làm
-    elif e <= 12:
-        total += e - 8
-    elif e <= 17:
-        total += (4 + (e - 13))
+    # elif e <= 12:
+        # total += e - 8
+    # elif e <= 17:
+        # total += (4 + (e - 13))
     else:
-        total += (8 + (e - 17))  # ✅ cộng thêm phần sau 17h để đủ 17.25h
+        total += (e - 8)
+        if e > 13:
+            total -= 1  # chỉ trừ khi thật sự đi qua 12–13
 
 
     return round(max(0, total), 2)
