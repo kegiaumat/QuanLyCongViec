@@ -193,14 +193,31 @@ def project_manager_app(user):
                             etime = st.session_state.get(f"pm_end_{i}")
                             time_txt = f"⏰ {stime} - {etime}" if stime and etime else ""
                             note = (note_common + ("\n" if note_common and time_txt else "") + time_txt).strip()
-                            "progress": int(0)
+
+                            supabase.table("tasks").insert({
+                                "project": project,
+                                "task": task_name,
+                                "assignee": assignee,
+                                "note": note,
+                                "progress": int(0)
+                            }).execute()
 
                         else:
                             qty = float(st.session_state.get(f"pm_qty_{i}", 0) or 0)
                             dl_val = st.session_state.get(f"pm_deadline_{i}")
                             dl = pd.to_datetime(dl_val, errors="coerce")
                             dl_str = dl.strftime("%Y-%m-%d") if pd.notna(dl) else None
-                            "progress": int(0)
+
+                            supabase.table("tasks").insert({
+                                "project": project,
+                                "task": task_name,
+                                "assignee": assignee,
+                                "khoi_luong": qty,
+                                "deadline": dl_str,
+                                "note": note_common,
+                                "progress": int(0)
+                            }).execute()
+
 
                     
                     st.success("✅ Đã giao việc")
