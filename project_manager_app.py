@@ -285,9 +285,12 @@ def project_manager_app(user):
                                 # Ghi chú ✅ fix điều kiện ở đây
                                 if "Ghi chú" in row:
                                     val = row["Ghi chú"]
-                                    if isinstance(val, str):
-                                        update_data["note"] = val.strip()
-                                    elif pd.notna(val):
+                        
+                                    if val is None:
+                                        update_data["note"] = ""
+                                    elif isinstance(val, float) and pd.isna(val):
+                                        update_data["note"] = ""
+                                    else:
                                         update_data["note"] = str(val).strip()
                         
                                 # Tiến độ
@@ -508,4 +511,5 @@ def project_manager_app(user):
 
     finally:
             pass 
+
 
