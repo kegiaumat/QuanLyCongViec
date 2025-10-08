@@ -451,8 +451,7 @@ def project_manager_app(user):
                             "assignee": username,
                             "khoi_luong": total_hours,
                             "note": note_txt,
-                            "progress": int(0)
-
+                            "progress": 0
                         }).execute()
                         
                         st.success(f"✅ Đã thêm {total_hours} giờ công cho công việc '{task_name}'")
