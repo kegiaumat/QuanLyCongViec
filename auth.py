@@ -29,40 +29,62 @@ WORK_MORNING_END   = time(12, 0)
 WORK_AFTERNOON_START = time(13, 0)
 WORK_AFTERNOON_END   = time(17, 0)
 
+# ==================== GIỜ LÀM MỚI (TÍNH CẢ TỐI & QUA NGÀY) ====================
+
+WORK_MORNING_START = time(8, 0)
+WORK_MORNING_END   = time(12, 0)
+WORK_AFTERNOON_START = time(13, 0)
+WORK_AFTERNOON_END   = time(17, 0)
+
 def _calc_hours_one_day(start_dt: datetime, end_dt: datetime) -> float:
+    """Tính số giờ làm trong cùng 1 ngày (bao gồm giờ tối nếu có)."""
     if end_dt <= start_dt:
         return 0
-    day = start_dt.date()
-    ms, me = datetime.combine(day, WORK_MORNING_START), datetime.combine(day, WORK_MORNING_END)
-    as_, ae = datetime.combine(day, WORK_AFTERNOON_START), datetime.combine(day, WORK_AFTERNOON_END)
-    total = 0.0
-    if start_dt < me and end_dt > ms:
-        s, e = max(start_dt, ms), min(end_dt, me)
-        if e > s:
-            total += (e - s).total_seconds() / 3600
-    if end_dt > as_ and start_dt < ae:
-        s, e = max(start_dt, as_), min(end_dt, ae)
-        if e > s:
-            total += (e - s).total_seconds() / 3600
-    return total
+    return round((end_dt - start_dt).total_seconds() / 3600, 2)
 
 def calc_hours(start_date: date, end_date: date, start_time: time, end_time: time) -> float:
+    """Tính số giờ làm việc giữa 2 mốc thời gian có thể qua đêm, qua ngày."""
     if not (start_date and end_date and start_time and end_time):
         return 0
+
     start_dt = datetime.combine(start_date, start_time)
-    end_dt   = datetime.combine(end_date, end_time)
-    if end_dt < start_dt:
+    end_dt = datetime.combine(end_date, end_time)
+
+    # Nếu kết thúc trước bắt đầu
+    if end_dt <= start_dt:
         return 0
+
+    # Nếu cùng 1 ngày -> chỉ lấy chênh lệch thực tế
     if start_dt.date() == end_dt.date():
-        return round(_calc_hours_one_day(start_dt, end_dt), 2)
+        return round((end_dt - start_dt).total_seconds() / 3600, 2)
+
     total = 0.0
-    total += _calc_hours_one_day(start_dt, datetime.combine(start_dt.date(), WORK_AFTERNOON_END))
+
+    # ===== Ngày đầu =====
+    # Nếu làm từ 8h → 20h: tính (12-8) + (20-13)
+    if start_time < WORK_MORNING_END:
+        total += (WORK_MORNING_END.hour - max(start_time.hour, WORK_MORNING_START.hour))
+    if start_time < WORK_AFTERNOON_END:
+        total += max(0, min(WORK_AFTERNOON_END.hour, 20) - max(start_time.hour, WORK_AFTERNOON_START.hour))
+
+    # ===== Các ngày giữa (full) =====
     d = start_dt.date() + timedelta(days=1)
     while d < end_dt.date():
-        total += 8
+        total += 8  # full day
         d += timedelta(days=1)
-    total += _calc_hours_one_day(datetime.combine(end_dt.date(), WORK_MORNING_START), end_dt)
+
+    # ===== Ngày cuối =====
+    if end_time <= WORK_MORNING_END:
+        total += end_time.hour - WORK_MORNING_START.hour
+    elif end_time <= WORK_AFTERNOON_END:
+        total += (WORK_MORNING_END.hour - WORK_MORNING_START.hour) + (end_time.hour - WORK_AFTERNOON_START.hour)
+    else:
+        # Nếu làm thêm tối -> cộng cả tối
+        total += (WORK_MORNING_END.hour - WORK_MORNING_START.hour) + (WORK_AFTERNOON_END.hour - WORK_AFTERNOON_START.hour)
+        total += end_time.hour - 17  # từ 17h đến end_time
+
     return round(total, 2)
+
 
 def update_task(task_id, **kwargs):
     supabase = get_connection()
