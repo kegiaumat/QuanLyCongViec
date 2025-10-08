@@ -32,7 +32,8 @@ WORK_AFTERNOON_END   = time(17, 0)
 
 
 def calc_hours(start_date: date, end_date: date, start_time: time, end_time: time) -> float:
-    print(">>> DEBUG calc_hours from", __file__)
+    st.warning("🔥 calc_hours from QuanLyCongViec/auth.py loaded!")
+
     """
     ✅ Hàm tính giờ công chuẩn thực tế
     - Nếu cùng ngày: (giờ về - giờ đi), trừ 1h nghỉ trưa nếu qua 12–13h.
