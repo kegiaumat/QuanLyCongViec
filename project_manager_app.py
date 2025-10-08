@@ -2,7 +2,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from auth import get_connection, update_task
+from auth import get_connection
 
 
 from datetime import datetime, date, time, timedelta
@@ -272,20 +272,31 @@ def project_manager_app(user):
                         if st.button("💾 Lưu cập nhật công việc", key=f"save_all_{project}"):
                             for i, row in edited_df.iterrows():
                                 task_id = int(df_all.iloc[i]["ID"])
-                                dl_str = (
-                                    pd.to_datetime(row.get("Deadline")).strftime("%Y-%m-%d")
-                                    if pd.notna(row.get("Deadline")) else None
-                                )
-                                update_task(
-                                    task_id=task_id,
-                                    task_name=row.get("Công việc"),
-                                    khoi_luong=float(row.get("Khối lượng") or 0),
-                                    deadline=dl_str,
-                                    note=row.get("Ghi chú") or "",
-                                    progress=int(row.get("Tiến độ (%)", 0)),
-                                )
-                            st.success("✅ Đã lưu cập nhật công việc")
+                                update_data = {}
+
+                                # Khối lượng
+                                if "Khối lượng" in row and not pd.isna(row["Khối lượng"]):
+                                    update_data["khoi_luong"] = float(row["Khối lượng"])
+
+                                # Deadline
+                                if "Deadline" in row and pd.notna(row["Deadline"]):
+                                    update_data["deadline"] = pd.to_datetime(row["Deadline"]).strftime("%Y-%m-%d")
+
+                                # Ghi chú
+                                if "Ghi chú" in row and isinstance(row["Ghi chú"], str):
+                                    update_data["note"] = row["Ghi chú"]
+
+                                # Tiến độ
+                                if "Tiến độ (%)" in row and not pd.isna(row["Tiến độ (%)"]):
+                                    update_data["progress"] = float(row["Tiến độ (%)"])
+
+                                # Nếu có dữ liệu cập nhật
+                                if update_data:
+                                    supabase.table("tasks").update(update_data).eq("id", task_id).execute()
+
+                            st.success("✅ Đã lưu cập nhật công việc vào cơ sở dữ liệu!")
                             st.rerun()
+
 
                     # Nút xóa các dòng đã chọn
                     with col2:
@@ -351,7 +362,8 @@ def project_manager_app(user):
                         hide_index=True,
                         column_config={
                             "Công việc": st.column_config.TextColumn(disabled=True),
-                            "Ghi chú": st.column_config.TextColumn(disabled=True),
+                            "Ghi chú": st.column_config.TextColumn(),
+
                             "Chọn": st.column_config.CheckboxColumn("Xóa?", help="Tick để xóa dòng này")
                         }
                     )
