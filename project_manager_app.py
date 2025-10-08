@@ -286,12 +286,16 @@ def project_manager_app(user):
                                     update_data["deadline"] = pd.to_datetime(row[col_map["deadline"]]).strftime("%Y-%m-%d")
 
                                 # Ghi chú ✅ fix tại đây
-                                if "ghi chú" in col_map:
-                                    val = row[col_map["ghi chú"]]
-                                    if val is None or (isinstance(val, float) and pd.isna(val)):
-                                        update_data["note"] = ""
-                                    else:
-                                        update_data["note"] = str(val).strip()
+                                # Ghi chú ✅ fix chắc chắn
+                                for cname in row.index:
+                                    if cname.strip().lower() == "ghi chú":
+                                        val = row[cname]
+                                        if val is None or (isinstance(val, float) and pd.isna(val)):
+                                            update_data["note"] = ""
+                                        else:
+                                            update_data["note"] = str(val).strip()
+                                        break
+
 
                                 # Tiến độ
                                 if "tiến độ (%)" in col_map and not pd.isna(row[col_map["tiến độ (%)"]]):
