@@ -92,7 +92,8 @@ def user_app(user):
                 hide_index=True,
                 column_config={
                     "Công việc": st.column_config.TextColumn(disabled=True),
-                    "Ghi chú": st.column_config.TextColumn(disabled=True),
+                    "Ghi chú": st.column_config.TextColumn(),
+
                     "Chọn": st.column_config.CheckboxColumn("Xóa?", help="Tick để xóa dòng này"),
                 },
             )
@@ -195,12 +196,10 @@ def user_app(user):
 
                 if st.button("➕ Thêm công nhật cho tôi", key="add_self_cong_btn"):
                     hours = calc_hours(start_date, end_date, start_time, end_time)
-                    note_txt = f"⏰ {start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')} ({start_date} - {end_date}) {note}"
-
-
-
+                    note_txt = f"⏰ {start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')} ({start_date} - {end_date})"
                     if note:
-                        note_txt += f"\n{note}"
+                        note_txt += f" {note}"
+
                     
                     supabase.table("tasks").insert({
                         "project": project,
