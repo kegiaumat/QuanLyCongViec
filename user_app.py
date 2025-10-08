@@ -100,21 +100,28 @@ def user_app(user):
 
             col1, col2 = st.columns([2, 1])
             with col1:
-                if st.button("💾 Lưu thay đổi", key="save_my_task_btn"):
-                    for i, row in edited.iterrows():
-                        tid = int(df_tasks.iloc[i]["id"])
-                        new_qty = float(
-                            row.get("Khối lượng (giờ)" if is_public else "Khối lượng") or 0
-                        )
-                        if is_public:
-                            supabase.table("tasks").update({"khoi_luong": new_qty}).eq("id", tid).execute()
-                        else:
-                            new_prog = int(row.get("Tiến độ (%)") or 0)
-                            supabase.table("tasks").update({"khoi_luong": new_qty, "progress": new_prog}).eq("id", tid).execute()
+                if st.button("💾 Lưu thay đổi"):
+                    for i, row in df_user_edit.iterrows():
+                        update_data = {}
 
-                    
-                    st.success("✅ Đã cập nhật công việc")
+                        # Cập nhật khối lượng (nếu có)
+                        if "Khối lượng (giờ)" in row and not pd.isna(row["Khối lượng (giờ)"]):
+                            update_data["khoi_luong"] = row["Khối lượng (giờ)"]
+
+                        # Cập nhật ghi chú (nếu có)
+                        if "Ghi chú" in row and isinstance(row["Ghi chú"], str):
+                            update_data["note"] = row["Ghi chú"]
+
+                        # Cập nhật tiến độ (nếu có)
+                        if "Tiến độ" in row and not pd.isna(row["Tiến độ"]):
+                            update_data["progress"] = row["Tiến độ"]
+
+                        if update_data:
+                            supabase.table("tasks").update(update_data).eq("id", row["id"]).execute()
+
+                    st.success("✅ Đã lưu thay đổi vào cơ sở dữ liệu!")
                     st.rerun()
+
 
             with col2:
                 if st.button("🗑️ Xóa các dòng đã chọn", key="delete_my_tasks_btn"):
