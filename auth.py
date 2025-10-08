@@ -30,12 +30,13 @@ WORK_AFTERNOON_END   = time(17, 0)
 
 def calc_hours(start_date: date, end_date: date, start_time: time, end_time: time) -> float:
     """
-    ✅ Hàm tính giờ công chính xác:
-    - Trong ngày: tính thực, trừ 12–13h.
+    ✅ Hàm tính giờ công chính xác theo quy tắc thực tế:
+    - Trong cùng ngày: tính thực, trừ 12–13h nghỉ trưa nếu qua trưa.
     - Qua nhiều ngày:
         + Ngày đầu: (12 - start) + (17 - 13) nếu start < 17, hoặc 4h nếu sau 17h.
-        + Ngày giữa: 8h (4 + 4).
-        + Ngày cuối: (12 - 8) + (end - 13) nếu qua 13h, hoặc chỉ (end - 8) nếu không.
+        + Ngày giữa: 8h/ngày.
+        + Ngày cuối: (12 - 8) + (end - 13) nếu qua 13h, hoặc (end - 8) nếu không.
+    - Tính theo phút chính xác (VD 07:30 = 7.5h, 17:45 = 17.75h).
     """
     if not (start_date and end_date and start_time and end_time):
         return 0.0
@@ -56,16 +57,14 @@ def calc_hours(start_date: date, end_date: date, start_time: time, end_time: tim
             total -= 1
         return round(max(0, total), 2)
 
-    # --- Nếu qua nhiều ngày ---
+    # --- Qua nhiều ngày ---
     # Ngày đầu
     if s >= 17:
         total += 4
     else:
-        # (12 - s) + (17 - 13)
         total += (12 - s) + (17 - 13)
-        # Trừ nghỉ trưa nếu cắt qua 12–13
         if s < 13:
-            total -= 1
+            total -= 1  # trừ nghỉ trưa nếu cắt qua 12–13
 
     # Ngày giữa
     d = start_dt.date() + timedelta(days=1)
@@ -83,9 +82,10 @@ def calc_hours(start_date: date, end_date: date, start_time: time, end_time: tim
     elif e <= 17:
         total += (4 + (e - 13))
     else:
-        total += (4 + 4 + (e - 17))
+        total += (4 + 4 + (e - 17))  # ✅ thêm phần sau 17h
 
     return round(max(0, total), 2)
+
 
 
 
