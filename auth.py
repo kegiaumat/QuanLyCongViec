@@ -32,7 +32,6 @@ WORK_AFTERNOON_END   = time(17, 0)
 
 
 def calc_hours(start_date: date, end_date: date, start_time: time, end_time: time) -> float:
-
     """
     ✅ Hàm tính giờ công chuẩn thực tế
     - Nếu cùng ngày: (giờ về - giờ đi), trừ 1h nghỉ trưa nếu qua 12–13h.
@@ -85,7 +84,6 @@ def calc_hours(start_date: date, end_date: date, start_time: time, end_time: tim
     if e <= 8:
         pass  
     else:
-        st.warning(e)
         total += (e - 8)
         if e > 13:
             total -= 1  # chỉ trừ khi thật sự đi qua 12–13
