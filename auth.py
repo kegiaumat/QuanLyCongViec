@@ -91,7 +91,7 @@ def calc_hours(start_date: date, end_date: date, start_time: time, end_time: tim
     else:
         total += 8 + (e - 17)               # ✅ cộng thêm phần sau 17h
 
-    return round(max(0, total), 2)
+    return total
 
 
 
