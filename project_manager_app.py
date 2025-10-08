@@ -193,27 +193,15 @@ def project_manager_app(user):
                             etime = st.session_state.get(f"pm_end_{i}")
                             time_txt = f"⏰ {stime} - {etime}" if stime and etime else ""
                             note = (note_common + ("\n" if note_common and time_txt else "") + time_txt).strip()
-                            supabase.table("tasks").insert({
-                                "project": project,
-                                "task": task_name,
-                                "assignee": assignee,
-                                "note": note,
-                                "progress": 0
-                            }).execute()
+                            "progress": int(0)
+
                         else:
                             qty = float(st.session_state.get(f"pm_qty_{i}", 0) or 0)
                             dl_val = st.session_state.get(f"pm_deadline_{i}")
                             dl = pd.to_datetime(dl_val, errors="coerce")
                             dl_str = dl.strftime("%Y-%m-%d") if pd.notna(dl) else None
-                            supabase.table("tasks").insert({
-                                "project": project,
-                                "task": task_name,
-                                "assignee": assignee,
-                                "deadline": dl_str,
-                                "khoi_luong": qty,
-                                "note": note_common,
-                                "progress": 0
-                            }).execute()
+                            "progress": int(0)
+
                     
                     st.success("✅ Đã giao việc")
                     st.rerun()
@@ -297,7 +285,8 @@ def project_manager_app(user):
                         
                                 # Tiến độ
                                 if "Tiến độ (%)" in row and not pd.isna(row["Tiến độ (%)"]):
-                                    update_data["progress"] = float(row["Tiến độ (%)"])
+                                    update_data["progress"] = int(row["Tiến độ (%)"])
+
                         
                                 # ✅ Nếu có thay đổi thì update
                                 if update_data:
@@ -462,7 +451,8 @@ def project_manager_app(user):
                             "assignee": username,
                             "khoi_luong": total_hours,
                             "note": note_txt,
-                            "progress": 0
+                            "progress": int(0)
+
                         }).execute()
                         
                         st.success(f"✅ Đã thêm {total_hours} giờ công cho công việc '{task_name}'")
