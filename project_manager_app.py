@@ -303,6 +303,7 @@ def project_manager_app(user):
 
                                 # Cập nhật DB
                                 if update_data:
+                                    update_data["updated_at"] = datetime.utcnow().isoformat()
                                     supabase.table("tasks").update(update_data).eq("id", task_id).execute()
 
                             st.success("✅ Đã lưu cập nhật công việc vào cơ sở dữ liệu!")
@@ -516,5 +517,6 @@ def project_manager_app(user):
 
     finally:
             pass 
+
 
 
