@@ -613,7 +613,6 @@ def admin_app(user):
             pub_note = st.text_area("📝 Ghi chú chung", key="pub_note")
 
             if st.button("✅ Giao việc", key="pub_assign_btn"):
-                # tính giờ công & lưu
                 for i in range(len(st.session_state.task_rows)):
                     task = st.session_state.get(f"pub_task_{i}")
                     if not task:
@@ -623,14 +622,12 @@ def admin_app(user):
                     s_time = st.session_state.get(f"pub_start_time_{i}")
                     e_time = st.session_state.get(f"pub_end_time_{i}")
                     total_hours = calc_hours(s_date, e_date, s_time, e_time)
-                    # Tạo ghi chú chuẩn định dạng
-                    # note_txt = f"⏰ {start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')} ({start_date} - {end_date}) {note}"
-                    note_txt = f"⏰ {s_time} - {e_time} ({s_date}→{e_date})"
 
-
-
+                    # ✅ Ghi chú chuẩn định dạng, dùng biến pub_note
+                    note_txt = f"⏰ {s_time.strftime('%H:%M')} - {e_time.strftime('%H:%M')} ({s_date} - {e_date})"
                     if pub_note:
-                        note_txt = f"{note_txt}\n{pub_note}"
+                        note_txt += f" {pub_note}"
+
                     supabase.table("tasks").insert({
                         "project": project,
                         "task": task,
@@ -639,10 +636,11 @@ def admin_app(user):
                         "note": note_txt,
                         "progress": 0
                     }).execute()
-                
+
                 st.success("✅ Đã giao công nhật")
                 st.session_state.task_rows = [0]
                 st.rerun()
+
 
         else:
             # -------- Form cũ cho dự án KHÔNG phải public --------
