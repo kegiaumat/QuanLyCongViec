@@ -21,10 +21,12 @@ def commit_and_sync(conn=None):
 
 
 
+
 WORK_MORNING_START = time(8, 0)
 WORK_MORNING_END   = time(12, 0)
 WORK_AFTERNOON_START = time(13, 0)
 WORK_AFTERNOON_END   = time(17, 0)
+
 
 def calc_hours(start_date: date, end_date: date, start_time: time, end_time: time) -> float:
     """
@@ -87,7 +89,6 @@ def calc_hours(start_date: date, end_date: date, start_time: time, end_time: tim
             total -= 1
 
     return round(max(0, total), 2)
-
 
 
 def update_task(task_id, **kwargs):
