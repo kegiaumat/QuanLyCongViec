@@ -623,7 +623,8 @@ def admin_app(user):
                     s_time = st.session_state.get(f"pub_start_time_{i}")
                     e_time = st.session_state.get(f"pub_end_time_{i}")
                     total_hours = calc_hours(s_date, e_date, s_time, e_time)
-                    note_txt = f"⏰ {s_time.strftime('%H:%M')} - {e_time.strftime('%H:%M')} ({s_date}→{e_date})"
+                    note_txt = f"⏰ {start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')} ({start_date} - {end_date}) {ghi_chu}"
+
 
                     if pub_note:
                         note_txt = f"{note_txt}\n{pub_note}"
