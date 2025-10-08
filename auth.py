@@ -25,20 +25,21 @@ WORK_MORNING_START = time(8, 0)
 WORK_MORNING_END   = time(12, 0)
 WORK_AFTERNOON_START = time(13, 0)
 WORK_AFTERNOON_END   = time(17, 0)
-
 def calc_hours(start_date: date, end_date: date, start_time: time, end_time: time) -> float:
     """
-    Tính tổng số giờ công tác chính xác theo thực tế:
-    - Trong giờ hành chính (8–12, 13–17): tính đúng, trừ 12–13h.
-    - Sau 17h: tính nửa ngày = 4h.
-    - Nếu qua ngày: hôm sau bắt đầu tính từ 8h.
-    - Tính cả phút (đơn vị giờ thập phân).
+    ✅ Hàm tính giờ công chính xác nhất (theo quy tắc bạn mô tả):
+    - Nếu trong cùng ngày: tính thực tế, trừ 12–13h nghỉ trưa.
+    - Nếu qua ngày: 
+        + Ngày đầu tính đúng từ giờ thực tế đến 17h (hoặc sau 17h tính 4h nửa ngày).
+        + Giữa các ngày = 8h/ngày.
+        + Ngày cuối tính từ 8h đến giờ kết thúc, trừ 12–13h nếu qua trưa.
+    - Tính chính xác theo phút.
     """
     if not (start_date and end_date and start_time and end_time):
         return 0.0
 
     start_dt = datetime.combine(start_date, start_time)
-    end_dt = datetime.combine(end_date, end_time)
+    end_dt   = datetime.combine(end_date, end_time)
     if end_dt <= start_dt:
         return 0.0
 
@@ -46,35 +47,29 @@ def calc_hours(start_date: date, end_date: date, start_time: time, end_time: tim
     s = start_dt.hour + start_dt.minute / 60
     e = end_dt.hour + end_dt.minute / 60
 
-    # --- Nếu cùng ngày ---
+    # ----------- Nếu cùng ngày -----------
     if start_dt.date() == end_dt.date():
-        # Trong giờ hành chính
-        if s < 17 and e <= 17:
-            total = e - s
-            # trừ 1h nghỉ trưa nếu cắt qua 12–13h
-            if s < 13 and e > 12:
-                total -= 1
-        # Sau 17h
-        elif s >= 17:
-            total = 4
-        # Trước 8h
-        elif s < 8:
-            total = (12 - 8) + (17 - 13)
+        total = e - s
+        # Trừ giờ nghỉ trưa nếu trong khoảng 12–13
+        if s < 13 and e > 12:
+            total -= 1
         return round(max(0, total), 2)
 
-    # --- Nếu qua nhiều ngày ---
+    # ----------- Nếu qua nhiều ngày -----------
     # Ngày đầu
     if s >= 17:
         total += 4
-    elif s < 8:
-        total += (12 - 8) + (17 - 13)
     else:
-        # Trong giờ hành chính
+        # Tính phần còn lại của ngày đầu
         total += (17 - s)
+        # Nếu trước 8h, cộng thêm phần sớm hơn
+        if s < 8:
+            total += 8 - s
+        # Trừ nghỉ trưa nếu có
         if s < 13:
             total -= 1
 
-    # Các ngày giữa
+    # Các ngày giữa (full)
     d = start_dt.date() + timedelta(days=1)
     while d < end_dt.date():
         total += 8
@@ -82,18 +77,17 @@ def calc_hours(start_date: date, end_date: date, start_time: time, end_time: tim
 
     # Ngày cuối
     if e <= 8:
-        pass  # về trước 8h không tính
+        pass  # về trước 8h sáng -> không tính
     elif e <= 12:
         total += e - 8
     elif e <= 13:
-        total += 4  # sáng đủ 8–12
+        total += 4
     elif e <= 17:
         total += (4 + (e - 13))
     else:
-        total += (4 + 4 + (e - 17))  # sáng + chiều + buổi tối nếu có
+        total += (4 + 4 + (e - 17))
 
     return round(max(0, total), 2)
-
 def update_task(task_id, **kwargs):
     supabase = get_connection()
     supabase.table("tasks").update(kwargs).eq("id", task_id).execute()
