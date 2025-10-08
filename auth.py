@@ -21,23 +21,24 @@ def commit_and_sync(conn=None):
 
 
 
-
 WORK_MORNING_START = time(8, 0)
 WORK_MORNING_END   = time(12, 0)
 WORK_AFTERNOON_START = time(13, 0)
 WORK_AFTERNOON_END   = time(17, 0)
 
 def calc_hours(start_date: date, end_date: date, start_time: time, end_time: time) -> float:
-    """Tính giờ công tác thực tế:
-       - Trong giờ hành chính → tính thực, trừ 12–13h
-       - Sau 17h → tính nửa ngày = 4h
-       - Nếu qua ngày → hôm sau bắt đầu từ 8h, về trước 8h không tính
+    """
+    Tính tổng số giờ công tác theo quy tắc:
+    - Trong giờ hành chính tính đúng thực tế, trừ 12–13h.
+    - Sau 17h tính nửa ngày = 4h.
+    - Nếu qua ngày: hôm sau bắt đầu từ 8h sáng.
+    - Tính chính xác theo phút (giờ thập phân).
     """
     if not (start_date and end_date and start_time and end_time):
         return 0.0
 
     start_dt = datetime.combine(start_date, start_time)
-    end_dt   = datetime.combine(end_date, end_time)
+    end_dt = datetime.combine(end_date, end_time)
     if end_dt <= start_dt:
         return 0.0
 
@@ -45,7 +46,8 @@ def calc_hours(start_date: date, end_date: date, start_time: time, end_time: tim
 
     # --- Nếu cùng 1 ngày ---
     if start_dt.date() == end_dt.date():
-        s, e = start_dt.hour + start_dt.minute/60, end_dt.hour + end_dt.minute/60
+        s = start_dt.hour + start_dt.minute / 60
+        e = end_dt.hour + end_dt.minute / 60
         if s < 17 and e <= 17:
             total = e - s
             if s < 13 and e > 12:
@@ -54,10 +56,11 @@ def calc_hours(start_date: date, end_date: date, start_time: time, end_time: tim
             total = 4
         elif s < 8:
             total = (12 - 8) + (17 - 13)
-        return max(0, round(total, 2))
+        return round(max(0, total), 2)
 
     # --- Nếu qua nhiều ngày ---
-    s, e = start_dt.hour + start_dt.minute/60, end_dt.hour + end_dt.minute/60
+    s = start_dt.hour + start_dt.minute / 60
+    e = end_dt.hour + end_dt.minute / 60
 
     # Ngày đầu
     if s >= 17:
@@ -69,7 +72,7 @@ def calc_hours(start_date: date, end_date: date, start_time: time, end_time: tim
         if s < 13:
             total -= 1
 
-    # Các ngày giữa
+    # Ngày giữa
     d = start_dt.date() + timedelta(days=1)
     while d < end_dt.date():
         total += 8
@@ -77,13 +80,14 @@ def calc_hours(start_date: date, end_date: date, start_time: time, end_time: tim
 
     # Ngày cuối
     if e <= 8:
-        total += 0
+        pass
     else:
-        total += max(0, e - 8)
+        total += e - 8
         if e > 13:
             total -= 1
 
-    return round(total, 2)
+    return round(max(0, total), 2)
+
 
 
 def update_task(task_id, **kwargs):
