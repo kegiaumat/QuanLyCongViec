@@ -29,72 +29,70 @@ WORK_MORNING_END   = time(12, 0)
 WORK_AFTERNOON_START = time(13, 0)
 WORK_AFTERNOON_END   = time(17, 0)
 
-# ==================== GIỜ LÀM MỚI (TÍNH CẢ TỐI & QUA NGÀY) ====================
 
-WORK_MORNING_START = time(8, 0)
-WORK_MORNING_END   = time(12, 0)
-WORK_AFTERNOON_START = time(13, 0)
-WORK_AFTERNOON_END   = time(17, 0)
-
-def _calc_hours_one_day(start_dt: datetime, end_dt: datetime) -> float:
-    """Tính số giờ làm trong cùng 1 ngày (bao gồm giờ tối nếu có)."""
-    if end_dt <= start_dt:
-        return 0
-    return round((end_dt - start_dt).total_seconds() / 3600, 2)
 
 def calc_hours(start_date: date, end_date: date, start_time: time, end_time: time) -> float:
-    """Tính số giờ làm việc giữa 2 mốc thời gian có thể qua đêm, qua ngày."""
+    """Tính giờ công tác thực tế theo quy tắc:
+       - Trong giờ hành chính → tính thực, trừ 12–13h
+       - Sau 17h → tính nửa ngày = 4h
+       - Nếu qua ngày → hôm sau bắt đầu từ 8h, về trước 8h không tính
+    """
     if not (start_date and end_date and start_time and end_time):
-        return 0
+        return 0.0
 
     start_dt = datetime.combine(start_date, start_time)
-    end_dt = datetime.combine(end_date, end_time)
-
-    # Nếu kết thúc trước bắt đầu
+    end_dt   = datetime.combine(end_date, end_time)
     if end_dt <= start_dt:
-        return 0
-
-    # Nếu cùng 1 ngày -> chỉ lấy chênh lệch thực tế
-    if start_dt.date() == end_dt.date():
-        return round((end_dt - start_dt).total_seconds() / 3600, 2)
+        return 0.0
 
     total = 0.0
 
-    # ===== Ngày đầu =====
-    # Nếu làm từ 8h → 20h: tính (12-8) + (20-13)
-    if start_time < WORK_MORNING_END:
-        total += (WORK_MORNING_END.hour - max(start_time.hour, WORK_MORNING_START.hour))
-    if start_time < WORK_AFTERNOON_END:
-        total += max(0, min(WORK_AFTERNOON_END.hour, 20) - max(start_time.hour, WORK_AFTERNOON_START.hour))
+    # --- Nếu cùng 1 ngày ---
+    if start_dt.date() == end_dt.date():
+        s, e = start_dt.hour + start_dt.minute/60, end_dt.hour + end_dt.minute/60
+        # Nếu cả ngày trong giờ hành chính
+        if s < 17 and e <= 17:
+            total = e - s
+            # trừ 1h nghỉ trưa nếu cắt qua 12–13h
+            if s < 13 and e > 12:
+                total -= 1
+        # Nếu đi sau 17h
+        elif s >= 17:
+            total = 4  # nửa ngày
+        # Nếu đi trước 8h sáng → tính giờ thực đến 17h (trừ trưa)
+        elif s < 8:
+            total = (12 - 8) + (17 - 13)
+        return max(0, round(total, 2))
 
-    # ===== Các ngày giữa (full) =====
+    # --- Nếu qua nhiều ngày ---
+    s, e = start_dt.hour + start_dt.minute/60, end_dt.hour + end_dt.minute/60
+
+    # Ngày đầu:
+    if s >= 17:
+        total += 4  # nửa ngày
+    elif s < 8:
+        total += (12 - 8) + (17 - 13)
+    else:
+        # Làm trong giờ hành chính -> tính đúng phần còn lại của ngày
+        total += (17 - s)
+        if s < 13:
+            total -= 1  # trừ nghỉ trưa nếu cắt qua 12–13h
+
+    # Các ngày giữa (nếu có)
     d = start_dt.date() + timedelta(days=1)
     while d < end_dt.date():
-        total += 8  # full day
+        total += 8  # full ngày = 8 tiếng
         d += timedelta(days=1)
 
-    # ===== Ngày cuối =====
-    if end_time <= WORK_MORNING_END:
-        total += end_time.hour - WORK_MORNING_START.hour
-    elif end_time <= WORK_AFTERNOON_END:
-        total += (WORK_MORNING_END.hour - WORK_MORNING_START.hour) + (end_time.hour - WORK_AFTERNOON_START.hour)
+    # Ngày cuối:
+    if e <= 8:
+        total += 0  # về trước 8h
     else:
-        # Nếu làm thêm tối -> cộng cả tối
-        total += (WORK_MORNING_END.hour - WORK_MORNING_START.hour) + (WORK_AFTERNOON_END.hour - WORK_AFTERNOON_START.hour)
-        total += end_time.hour - 17  # từ 17h đến end_time
+        total += max(0, e - 8)
+        if e > 13:
+            total -= 1  # trừ trưa nếu làm sau 13h
 
     return round(total, 2)
-
-
-def update_task(task_id, **kwargs):
-    supabase = get_connection()
-    supabase.table("tasks").update(kwargs).eq("id", task_id).execute()
-
-def get_all_projects():
-    supabase = get_connection()
-    data = supabase.table("projects").select("id, name, deadline, project_type").execute()
-    return pd.DataFrame(data.data)
-
 
 
 
