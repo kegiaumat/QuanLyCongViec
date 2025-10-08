@@ -193,32 +193,27 @@ def project_manager_app(user):
                             etime = st.session_state.get(f"pm_end_{i}")
                             time_txt = f"⏰ {stime} - {etime}" if stime and etime else ""
                             note = (note_common + ("\n" if note_common and time_txt else "") + time_txt).strip()
-
                             supabase.table("tasks").insert({
                                 "project": project,
                                 "task": task_name,
                                 "assignee": assignee,
                                 "note": note,
-                                "progress": int(0)
+                                "progress": 0
                             }).execute()
-
                         else:
                             qty = float(st.session_state.get(f"pm_qty_{i}", 0) or 0)
                             dl_val = st.session_state.get(f"pm_deadline_{i}")
                             dl = pd.to_datetime(dl_val, errors="coerce")
                             dl_str = dl.strftime("%Y-%m-%d") if pd.notna(dl) else None
-
                             supabase.table("tasks").insert({
                                 "project": project,
                                 "task": task_name,
                                 "assignee": assignee,
-                                "khoi_luong": qty,
                                 "deadline": dl_str,
+                                "khoi_luong": qty,
                                 "note": note_common,
-                                "progress": int(0)
+                                "progress": 0
                             }).execute()
-
-
                     
                     st.success("✅ Đã giao việc")
                     st.rerun()
@@ -294,16 +289,12 @@ def project_manager_app(user):
                                     val = row["Ghi chú"]
                                     if val is None or (isinstance(val, float) and pd.isna(val)):
                                         update_data["note"] = ""
-                                    elif str(val).strip().lower() == "nan":
-                                        update_data["note"] = ""
                                     else:
                                         update_data["note"] = str(val).strip()
-
                         
                                 # Tiến độ
                                 if "Tiến độ (%)" in row and not pd.isna(row["Tiến độ (%)"]):
-                                    update_data["progress"] = int(row["Tiến độ (%)"])
-
+                                    update_data["progress"] = float(row["Tiến độ (%)"])
                         
                                 # ✅ Nếu có thay đổi thì update
                                 if update_data:
@@ -391,31 +382,16 @@ def project_manager_app(user):
                     )
 
                     col1, col2 = st.columns([2, 1])
-                    with col1:                        
+                    with col1:
                         if st.button("💾 Lưu khối lượng của tôi", key="save_my_qty_btn"):
-                            supabase = get_connection()  # tạo kết nối mới để đảm bảo update
                             for i, row in edited.iterrows():
+                                # Map đúng theo index gốc
                                 tid = int(my_tasks.iloc[i]["id"])
-                                update_data = {}
-
-                                # Khối lượng
-                                if "Khối lượng (giờ)" in row and not pd.isna(row["Khối lượng (giờ)"]):
-                                    update_data["khoi_luong"] = float(row["Khối lượng (giờ)"])
-
-                                # Ghi chú ✅
-                                if "Ghi chú" in row:
-                                    val = row["Ghi chú"]
-                                    if val is None or (isinstance(val, float) and pd.isna(val)):
-                                        update_data["note"] = ""
-                                    else:
-                                        update_data["note"] = str(val).strip()
-
-                                if update_data:
-                                    supabase.table("tasks").update(update_data).eq("id", tid).execute()
-
-                            st.success("✅ Đã cập nhật khối lượng và ghi chú!")
+                                new_qty = float(row.get("Khối lượng (giờ)") or 0)
+                                supabase.table("tasks").update({"khoi_luong": new_qty}).eq("id", tid).execute()
+                            
+                            st.success("✅ Đã cập nhật khối lượng")
                             st.rerun()
-
 
                     with col2:
                         if st.button("🗑️ Xóa các dòng đã chọn", key="delete_my_tasks_btn"):
