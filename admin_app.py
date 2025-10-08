@@ -624,7 +624,8 @@ def admin_app(user):
                     e_time = st.session_state.get(f"pub_end_time_{i}")
                     total_hours = calc_hours(s_date, e_date, s_time, e_time)
                     # Tạo ghi chú chuẩn định dạng
-                    note_txt = f"⏰ {start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')} ({start_date} - {end_date}) {note}"
+                    # note_txt = f"⏰ {start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')} ({start_date} - {end_date}) {note}"
+                    note_txt = f"⏰ {s_time} - {e_time} ({s_date}→{e_date})"
 
 
 
