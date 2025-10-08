@@ -101,23 +101,25 @@ def user_app(user):
             col1, col2 = st.columns([2, 1])
             with col1:
                 if st.button("💾 Lưu thay đổi"):
-                    for i, row in df_user_edit.iterrows():
+                    for i, row in edited.iterrows():   # ✅ dùng đúng biến 'edited'
+                        task_id = int(df_tasks.iloc[i]["id"])
                         update_data = {}
 
                         # Cập nhật khối lượng (nếu có)
                         if "Khối lượng (giờ)" in row and not pd.isna(row["Khối lượng (giờ)"]):
-                            update_data["khoi_luong"] = row["Khối lượng (giờ)"]
+                            update_data["khoi_luong"] = float(row["Khối lượng (giờ)"])
 
                         # Cập nhật ghi chú (nếu có)
                         if "Ghi chú" in row and isinstance(row["Ghi chú"], str):
                             update_data["note"] = row["Ghi chú"]
 
                         # Cập nhật tiến độ (nếu có)
-                        if "Tiến độ" in row and not pd.isna(row["Tiến độ"]):
-                            update_data["progress"] = row["Tiến độ"]
+                        if "Tiến độ (%)" in row and not pd.isna(row["Tiến độ (%)"]):
+                            update_data["progress"] = float(row["Tiến độ (%)"])
 
+                        # Ghi thay đổi vào database
                         if update_data:
-                            supabase.table("tasks").update(update_data).eq("id", row["id"]).execute()
+                            supabase.table("tasks").update(update_data).eq("id", task_id).execute()
 
                     st.success("✅ Đã lưu thay đổi vào cơ sở dữ liệu!")
                     st.rerun()
