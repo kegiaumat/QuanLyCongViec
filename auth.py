@@ -82,6 +82,7 @@ def calc_hours(start_date: date, end_date: date, start_time: time, end_time: tim
         d += timedelta(days=1)
 
     # Ngày cuối
+    # --- Ngày cuối ---
     if e <= 8:
         pass  # chưa đến giờ làm
     elif e <= 12:
@@ -89,7 +90,8 @@ def calc_hours(start_date: date, end_date: date, start_time: time, end_time: tim
     elif e <= 17:
         total += (4 + (e - 13))
     else:
-        total += (4 + 4 + (e - 17))
+        total += (8 + (e - 17))  # ✅ cộng thêm phần sau 17h để đủ 17.25h
+
 
     return round(max(0, total), 2)
 
