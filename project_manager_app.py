@@ -406,7 +406,8 @@ def project_manager_app(user):
                     if st.button("➕ Thêm công nhật cho tôi", key="add_self_cong_btn"):
                         total_hours = calc_hours(start_date, end_date, start_time, end_time)
 
-                        note_txt = f"⏰ {start_time} - {end_time} ({start_date}→{end_date})"
+                        note_txt = f"⏰ {start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')} ({start_date}→{end_date})"
+
                         if note:
                             note_txt += f"\n{note}"
 
