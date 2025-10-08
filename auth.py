@@ -90,6 +90,7 @@ def calc_hours(start_date: date, end_date: date, start_time: time, end_time: tim
     # elif e <= 17:
         # total += (4 + (e - 13))
     else:
+        st.warning(e)
         total += (e - 8)
         if e > 13:
             total -= 1  # chỉ trừ khi thật sự đi qua 12–13
