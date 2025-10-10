@@ -941,15 +941,17 @@ def admin_app(user):
                        
                         # ✅ Thêm ID vào dữ liệu hiển thị (ẩn cột khi render)
                         df_other_show["Xóa?"] = False
-                        df_other_display = df_other_show.copy()  # giữ lại cả ID
+                        df_other_display = df_other_show.copy()
+                        df_other_display["Xóa?"] = False  # thêm cột xóa mặc định False
 
+                        # Hiển thị DataEditor
                         edited_other = st.data_editor(
                             df_other_display,
                             width="stretch",
                             key=f"editor_other_{u}",
                             hide_index=True,
                             column_config={
-                                "ID": st.column_config.NumberColumn("ID", disabled=True, visible=False),
+                                "ID": st.column_config.NumberColumn("ID", disabled=True),
                                 "Đơn vị": st.column_config.TextColumn(disabled=True),
                                 "Deadline": st.column_config.DateColumn("Deadline", format="YYYY-MM-DD"),
                                 "Tiến độ (%)": st.column_config.NumberColumn(
@@ -959,42 +961,60 @@ def admin_app(user):
                             }
                         )
 
-
-                        col1, col2 = st.columns([1,1])
+                        # Hai nút song song (Cập nhật & Xoá)
+                        col1, col2 = st.columns([1, 1])
 
                         # ===== Nút cập nhật =====
                         with col1:
-                            
-                            
-                            
                             if st.button(f"💾 Cập nhật khối lượng của {u}", key=f"save_other_{u}"):
-
                                 for i, row in edited_other.iterrows():
-                                    # Lấy id thật từ df_other_show (cùng vị trí)
-                                    tid = int(df_other_show.iloc[i]["ID"])
+                                    try:
+                                        # Lấy id thật từ bản hiển thị
+                                        tid = int(row.get("ID", 0))
+                                        if not tid:
+                                            continue
 
-                                    new_qty = float(row.get("Khối lượng") or 0)
-                                    note_val = str(row.get("Ghi chú") or "").strip()
-                                    progress_val = float(row.get("Tiến độ (%)") or 0)
+                                        # Lấy giá trị đã chỉnh sửa
+                                        new_qty = float(row.get("Khối lượng") or 0)
+                                        note_val = str(row.get("Ghi chú") or "").strip()
+                                        progress_val = float(row.get("Tiến độ (%)") or 0)
 
-                                    dl = row.get("Deadline")
-                                    if isinstance(dl, (datetime.date, pd.Timestamp)):
-                                        dl_str = pd.to_datetime(dl).strftime("%Y-%m-%d")
-                                    elif isinstance(dl, str) and dl.strip():
-                                        parsed = pd.to_datetime(dl, errors="coerce")
-                                        dl_str = parsed.strftime("%Y-%m-%d") if pd.notna(parsed) else None
-                                    else:
-                                        dl_str = None
+                                        # Chuẩn hóa Deadline
+                                        dl = row.get("Deadline")
+                                        if isinstance(dl, (datetime.date, pd.Timestamp)):
+                                            dl_str = pd.to_datetime(dl).strftime("%Y-%m-%d")
+                                        elif isinstance(dl, str) and dl.strip():
+                                            parsed = pd.to_datetime(dl, errors="coerce")
+                                            dl_str = parsed.strftime("%Y-%m-%d") if pd.notna(parsed) else None
+                                        else:
+                                            dl_str = None
 
-                                    supabase.table("tasks").update({
-                                        "khoi_luong": new_qty,
-                                        "note": note_val,
-                                        "progress": progress_val,
-                                        "deadline": dl_str
-                                    }).eq("id", tid).execute()
+                                        # Cập nhật thật vào Supabase
+                                        supabase.table("tasks").update({
+                                            "khoi_luong": new_qty,
+                                            "note": note_val,
+                                            "progress": progress_val,
+                                            "deadline": dl_str
+                                        }).eq("id", tid).execute()
+
+                                    except Exception as e:
+                                        st.error(f"⚠️ Lỗi cập nhật dòng {i+1}: {e}")
 
                                 st.success(f"✅ Đã cập nhật công việc khối lượng của {u}")
                                 st.rerun()
+
+                        # ===== Nút xóa =====
+                        with col2:
+                            if st.button(f"🗑️ Xoá dòng đã chọn của {u}", key=f"delete_other_{u}"):
+                                selected_ids = df_other_display.loc[edited_other["Xóa?"] == True, "ID"].tolist()
+                                if selected_ids:
+                                    for tid in selected_ids:
+                                        supabase.table("tasks").delete().eq("id", tid).execute()
+                                    st.success(f"🗑️ Đã xoá {len(selected_ids)} công việc.")
+                                    st.rerun()
+                                else:
+                                    st.info("⚠️ Bạn chưa tick dòng nào để xoá.")
+
 
 
 
