@@ -938,9 +938,10 @@ def admin_app(user):
                         
                         st.markdown("**📦 Công việc theo khối lượng**")
 
-                        # 👉 Thêm cột Xóa? và ẩn ID
+                       
+                        # ✅ Thêm ID vào dữ liệu hiển thị (ẩn cột khi render)
                         df_other_show["Xóa?"] = False
-                        df_other_display = df_other_show.drop(columns=["ID"], errors="ignore")
+                        df_other_display = df_other_show.copy()  # giữ lại cả ID
 
                         edited_other = st.data_editor(
                             df_other_display,
@@ -948,6 +949,7 @@ def admin_app(user):
                             key=f"editor_other_{u}",
                             hide_index=True,
                             column_config={
+                                "ID": st.column_config.NumberColumn("ID", disabled=True, visible=False),
                                 "Đơn vị": st.column_config.TextColumn(disabled=True),
                                 "Deadline": st.column_config.DateColumn("Deadline", format="YYYY-MM-DD"),
                                 "Tiến độ (%)": st.column_config.NumberColumn(
@@ -956,6 +958,7 @@ def admin_app(user):
                                 "Xóa?": st.column_config.CheckboxColumn("Xóa?", help="Tick để xoá dòng này"),
                             }
                         )
+
 
                         col1, col2 = st.columns([1,1])
 
