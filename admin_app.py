@@ -965,7 +965,7 @@ def admin_app(user):
                         col1, col2 = st.columns([1, 1])
 
                         # ===== Nút cập nhật =====
-                        with col1:
+                        with col1:                            
                             if st.button(f"💾 Cập nhật khối lượng của {u}", key=f"save_other_{u}"):
                                 for i, row in edited_other.iterrows():
                                     try:
@@ -977,7 +977,7 @@ def admin_app(user):
                                         # Lấy giá trị đã chỉnh sửa
                                         new_qty = float(row.get("Khối lượng") or 0)
                                         note_val = str(row.get("Ghi chú") or "").strip()
-                                        progress_val = float(row.get("Tiến độ (%)") or 0)
+                                        progress_val = int(float(row.get("Tiến độ (%)") or 0))  # ✅ ép kiểu int để không bị lỗi "0.0"
 
                                         # Chuẩn hóa Deadline
                                         dl = row.get("Deadline")
@@ -998,10 +998,11 @@ def admin_app(user):
                                         }).eq("id", tid).execute()
 
                                     except Exception as e:
-                                        st.error(f"⚠️ Lỗi cập nhật dòng {i+1}: {e}")
+                                        st.warning(f"⚠️ Lỗi cập nhật dòng {i+1}: {e}")
 
                                 st.success(f"✅ Đã cập nhật công việc khối lượng của {u}")
                                 st.rerun()
+
 
                         # ===== Nút xóa =====
                         with col2:
