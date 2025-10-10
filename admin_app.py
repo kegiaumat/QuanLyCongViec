@@ -828,8 +828,8 @@ def admin_app(user):
                             hide_index=True,
                             column_config={
                                 "Công việc": st.column_config.TextColumn(disabled=True),
-                                "Giờ bắt đầu": st.column_config.TextColumn("Giờ bắt đầu (HH:MM)", help="Nhập giờ theo định dạng 08:00"),
-                                "Giờ kết thúc": st.column_config.TextColumn("Giờ kết thúc (HH:MM)", help="Nhập giờ theo định dạng 17:00"),
+                                "Giờ bắt đầu": st.column_config.TimeColumn("Giờ bắt đầu"),
+                                "Giờ kết thúc": st.column_config.TimeColumn("Giờ kết thúc"),
                                 "Khối lượng (giờ)": st.column_config.NumberColumn("Khối lượng (giờ)", min_value=0, step=0.25),
                                 "Ghi chú": st.column_config.TextColumn("Ghi chú"),
                                 "Xóa?": st.column_config.CheckboxColumn("Xóa?", help="Tick để xóa dòng này")
@@ -842,25 +842,27 @@ def admin_app(user):
                         with col1:
                             
                             
+                            
                             if st.button(f"💾 Lưu cập nhật công nhật của {u}", key=f"save_cong_{u}"):
-                                import re
                                 for i, row in edited_cong.iterrows():
-                                    # Lấy id thật từ df_cong (dùng 'id' chứ không phải 'ID')
                                     tid = int(df_cong.iloc[i]["id"])
 
-                                    # Lấy giá trị mới từ bảng chỉnh sửa
-                                    start_str = str(row.get("Giờ bắt đầu") or "").strip()
-                                    end_str = str(row.get("Giờ kết thúc") or "").strip()
+                                    start_val = row.get("Giờ bắt đầu")
+                                    end_val = row.get("Giờ kết thúc")
                                     note_txt = str(row.get("Ghi chú") or "").strip()
                                     new_qty = float(row.get("Khối lượng (giờ)") or 0)
 
-                                    # Chuẩn hóa ghi chú (ghi rõ giờ + nội dung)
                                     time_part = ""
-                                    if re.match(r"^\d{1,2}:\d{2}$", start_str) and re.match(r"^\d{1,2}:\d{2}$", end_str):
-                                        time_part = f"⏰ {start_str} - {end_str}"
+                                    if start_val and end_val:
+                                        try:
+                                            s_str = start_val.strftime("%H:%M")
+                                            e_str = end_val.strftime("%H:%M")
+                                            time_part = f"⏰ {s_str} - {e_str}"
+                                        except Exception:
+                                            pass
+
                                     full_note = (time_part + (" " if time_part and note_txt else "") + note_txt).strip()
 
-                                    # Ghi lại vào Supabase
                                     supabase.table("tasks").update({
                                         "khoi_luong": new_qty,
                                         "note": full_note
@@ -868,6 +870,7 @@ def admin_app(user):
 
                                 st.success(f"✅ Đã cập nhật công nhật của {u}")
                                 st.rerun()
+
 
 
 
