@@ -392,15 +392,30 @@ def project_manager_app(user):
 
                     col1, col2 = st.columns([2, 1])
                     with col1:
+                        
                         if st.button("💾 Lưu khối lượng của tôi", key="save_my_qty_btn"):
                             for i, row in edited.iterrows():
-                                # Map đúng theo index gốc
                                 tid = int(my_tasks.iloc[i]["id"])
-                                new_qty = float(row.get("Khối lượng (giờ)") or 0)
+
+                                # Tùy loại dự án mà lấy cột khối lượng phù hợp
+                                if is_public:
+                                    qty_val = row.get("Khối lượng (giờ)")
+                                else:
+                                    qty_val = row.get("Khối lượng")
+
+                                try:
+                                    new_qty = float(qty_val or 0)
+                                    if new_qty.is_integer():
+                                        new_qty = int(new_qty)
+                                except Exception:
+                                    new_qty = 0
+
+                                # Cập nhật vào Supabase
                                 supabase.table("tasks").update({"khoi_luong": new_qty}).eq("id", tid).execute()
-                            
+
                             st.success("✅ Đã cập nhật khối lượng")
                             st.rerun()
+
 
                     with col2:
                         if st.button("🗑️ Xóa các dòng đã chọn", key="delete_my_tasks_btn"):
