@@ -4,6 +4,31 @@ import plotly.express as px
 import datetime
 
 from auth import get_connection, calc_hours, get_projects, add_user, hash_password, add_project
+# ====== CACHE DỮ LIỆU TỪ SUPABASE ======
+@st.cache_data(ttl=15)
+def load_users_cached():
+    supabase = get_connection()
+    data = supabase.table("users").select("id, username, display_name, dob, role, project_manager_of, project_leader_of").execute()
+    return pd.DataFrame(data.data)
+
+@st.cache_data(ttl=15)
+def load_projects_cached():
+    supabase = get_connection()
+    data = supabase.table("projects").select("id, name, deadline, project_type, design_step").execute()
+    return pd.DataFrame(data.data)
+
+@st.cache_data(ttl=30)
+def load_job_catalog_cached():
+    supabase = get_connection()
+    data = supabase.table("job_catalog").select("id, name, unit, parent_id, project_type").execute()
+    return pd.DataFrame(data.data)
+
+def refresh_all_cache():
+    """Xóa cache và session_state khi có cập nhật thêm/xóa"""
+    st.cache_data.clear()
+    for k in ["users_df", "projects_df", "jobs_df"]:
+        st.session_state.pop(k, None)
+    refresh_all_cache()
 
 
 st.set_page_config(layout="wide")
@@ -28,9 +53,21 @@ def update_last_seen(username):
 
 def admin_app(user):
     supabase = get_connection()
+    # 🔹 Tải dữ liệu có cache
+    if "df_users" not in st.session_state:
+        st.session_state["df_users"] = load_users_cached()
+    if "df_projects" not in st.session_state:
+        st.session_state["df_projects"] = load_projects_cached()
+    if "df_jobs" not in st.session_state:
+        st.session_state["df_jobs"] = load_job_catalog_cached()
+
+    df_users = st.session_state["df_users"]
+    df_projects = st.session_state["df_projects"]
+    df_jobs = st.session_state["df_jobs"]
+
     # --- Map username -> display_name ---
-    data = supabase.table("users").select("username, display_name").execute(); df_users = pd.DataFrame(data.data)
     user_map = dict(zip(df_users["username"], df_users["display_name"]))
+
 
     # ✅ cập nhật trạng thái online (last_seen)
     supabase.table("users").update({"last_seen": datetime.datetime.now().isoformat()}).eq("username", user).execute()
@@ -44,10 +81,8 @@ def admin_app(user):
         st.subheader("👥 Quản lý user")
 
         # Đọc danh sách user
-        data = supabase.table("users").select(
-            "id, username, display_name, dob, role, project_manager_of, project_leader_of"
-        ).execute()
-        df_users = pd.DataFrame(data.data)
+        df_users = st.session_state["df_users"]
+
         # Đổi tên cột
         df_users = df_users.rename(columns={
             "username": "Tên đăng nhập",
@@ -84,7 +119,8 @@ def admin_app(user):
         )
 
         # Lấy danh sách dự án
-        data = supabase.table("projects").select("name").execute(); projects_list = [r["name"] for r in data.data]
+        projects_list = df_projects["name"].dropna().tolist()
+
 
         project_manager = None
         project_leader = None
@@ -109,14 +145,14 @@ def admin_app(user):
                 }).eq("username", selected_user).execute()
                 
                 st.success("✅ Đã cập nhật quyền")
-                st.rerun()  # refresh lại danh sách
+                refresh_all_cache()  # refresh lại danh sách
 
         with col2:
             if st.button("❌ Xóa user"):
                 supabase.table("users").delete().eq("username", selected_user).execute()
-                
                 st.success("🗑️ Đã xóa user")
-                st.rerun()
+                refresh_all_cache()
+
 
         # === Thêm chức năng đổi mật khẩu cho người dùng ===
         st.subheader("🔑 Đổi mật khẩu cho người dùng")
@@ -149,7 +185,8 @@ def admin_app(user):
         # =======================
         st.markdown("#### ➕ Thêm công việc mới")
 
-        data = supabase.table("job_catalog").select("id, name, unit, parent_id, project_type").execute(); jobs_all = pd.DataFrame(data.data)
+        jobs_all = df_jobs.copy()
+
         parent_jobs = jobs_all[jobs_all["parent_id"].isnull()].sort_values("name")
 
         col1, col2, col3, col4 = st.columns([2, 1, 2, 1])
@@ -178,7 +215,7 @@ def admin_app(user):
                 
                 st.success(f"✅ Đã thêm: {new_job} ({new_unit}, {new_project_type})"
                            + (f" → thuộc '{parent_choice}'" if parent_id else ""))
-                st.rerun()
+                refresh_all_cache()
             except Exception as e:
                 if "duplicate key" in str(e).lower():
                     st.error(f"⚠️ Công việc '{new_job}' đã tồn tại")
@@ -191,8 +228,8 @@ def admin_app(user):
         # ======================================
         # 2) HIỂN THỊ & CHỈNH SỬA CHA–CON–ĐƠN VỊ–NHÓM DỰ ÁN
         # ======================================
-        data = supabase.table("job_catalog").select("id, name, unit, parent_id, project_type").execute()
-        jobs = pd.DataFrame(data.data)
+        jobs = df_jobs.copy()
+
 
         if jobs.empty:
             st.info("⚠️ Chưa có công việc nào trong mục lục")
@@ -278,7 +315,7 @@ def admin_app(user):
 
                     
                     st.success("✅ Đã cập nhật mục lục công việc")
-                    st.rerun()
+                    refresh_all_cache()
 
             with col2:
                 if st.button("❌ Xóa"):
@@ -313,7 +350,7 @@ def admin_app(user):
                         
                         st.success("🗑️ Đã xoá các công việc được chọn")
                         del st.session_state["confirm_delete_jobs"]
-                        st.rerun()
+                        refresh_all_cache()
 
                 with c2:
                     if st.button("❌ No, huỷ"):
@@ -337,7 +374,7 @@ def admin_app(user):
             try:
                 add_project(project_name, project_deadline, project_type, design_step)
                 st.success(f"✅ Đã thêm dự án: {project_name}")
-                st.rerun()
+                refresh_all_cache()
             except Exception as e:
                 if "duplicate key" in str(e).lower():
                     st.error("⚠️ Dự án đã tồn tại")
@@ -346,8 +383,8 @@ def admin_app(user):
 
 
         # ===== Đọc danh sách dự án và tính tổng thanh toán =====
-        data = supabase.table("projects").select("id, name, deadline, project_type, design_step").execute()
-        df_proj = pd.DataFrame(data.data)
+        df_proj = df_projects.copy()
+
 
 
         if not df_proj.empty:
@@ -438,7 +475,7 @@ def admin_app(user):
 
                     
                     st.success("✅ Đã cập nhật thông tin dự án")
-                    st.rerun()
+                    refresh_all_cache()
 
             # ===== Xóa =====
             with col2:
@@ -474,7 +511,7 @@ def admin_app(user):
                         
                         st.success("🗑️ Đã xoá các dự án được chọn")
                         del st.session_state["confirm_delete"]
-                        st.rerun()
+                        refresh_all_cache()
 
                 with c2:
                     if st.button("❌ No, huỷ", key="confirm_delete_no"):
@@ -540,8 +577,8 @@ def admin_app(user):
         st.subheader("📝 Giao việc")
 
         # --- Lấy danh sách dự án ---
-        data = supabase.table("projects").select("id, name, deadline, project_type").execute()
-        projects = pd.DataFrame(data.data)
+        projects = df_projects[["id", "name", "deadline", "project_type"]].copy()
+
         if projects.empty:
             st.info("⚠️ Chưa có dự án nào.")
             st.stop()
@@ -556,8 +593,8 @@ def admin_app(user):
         
 
         # --- Lọc job_catalog theo project_type ---
-        data = supabase.table("job_catalog").select("id, name, unit, parent_id").eq("project_type", proj_type).execute()
-        jobs = pd.DataFrame(data.data)
+        jobs = df_jobs[df_jobs["project_type"] == proj_type][["id", "name", "unit", "parent_id"]].copy()
+
 
         users_display = df_users["display_name"].tolist()
         assignee_display = st.selectbox("Giao việc cho", users_display)
@@ -908,6 +945,7 @@ def admin_app(user):
                                     
                                     st.success(f"✅ Đã xóa {len(ids_to_delete)} dòng công nhật của {u}")
                                     st.rerun()
+
                                 else:
                                     st.warning("⚠️ Chưa chọn dòng nào để xóa")
 
@@ -1013,6 +1051,7 @@ def admin_app(user):
                                         supabase.table("tasks").delete().eq("id", tid).execute()
                                     st.success(f"🗑️ Đã xoá {len(selected_ids)} công việc.")
                                     st.rerun()
+
                                 else:
                                     st.info("⚠️ Bạn chưa tick dòng nào để xoá.")
 
@@ -1025,8 +1064,8 @@ def admin_app(user):
         st.subheader("📊 Thống kê công việc")
 
         # Lấy danh sách dự án
-        data = supabase.table("projects").select("name").execute()
-        projects = [r["name"] for r in data.data]
+        projects = df_projects["name"].dropna().tolist()
+
 
         # Bộ lọc dự án
         filter_mode = st.radio("Chế độ thống kê", 
@@ -1081,8 +1120,8 @@ def admin_app(user):
 
                 # Chi tiết theo đầu mục công việc (cha)
                 # Map task -> cha
-                data = supabase.table("job_catalog").select("id, name, parent_id").execute()
-                job_map = pd.DataFrame(data.data)
+                job_map = df_jobs[["id", "name", "parent_id"]].copy()
+
                 parent_lookup = {}
                 for _, row in job_map.iterrows():
                     if pd.isna(row["parent_id"]):
@@ -1120,8 +1159,8 @@ def admin_app(user):
                     st.info("⚠️ Không có dữ liệu công việc cho các dự án không Public.")
                 else:
                     # Map task -> đầu mục cha
-                    data = supabase.table("job_catalog").select("id, name, parent_id").execute()
-                    job_map = pd.DataFrame(data.data)
+                    job_map = df_jobs[["id", "name", "parent_id"]].copy()
+
                     parent_lookup = {}
                     for _, row in job_map.iterrows():
                         if pd.isna(row["parent_id"]):
@@ -1277,8 +1316,8 @@ def admin_app(user):
 
 
                 # Map task -> cha
-                data = supabase.table("job_catalog").select("id, name, parent_id").execute()
-                job_map = pd.DataFrame(data.data)
+                job_map = df_jobs[["id", "name", "parent_id"]].copy()
+
                 parent_lookup = {}
                 for _, row in job_map.iterrows():
                     if pd.isna(row["parent_id"]):
