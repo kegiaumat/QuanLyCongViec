@@ -276,10 +276,22 @@ def project_manager_app(user):
                                 task_id = int(df_all.iloc[i]["ID"])
                                 update_data = {}
                         
-                                # Khối lượng
+                                # Khối lượng# Khối lượng
                                 if "Khối lượng" in row and not pd.isna(row["Khối lượng"]):
-                                    update_data["khoi_luong"] = float(row["Khối lượng"])
-                        
+                                    try:
+                                        val = float(row["Khối lượng"])
+                                        update_data["khoi_luong"] = int(val) if val.is_integer() else round(val, 2)
+                                    except Exception:
+                                        update_data["khoi_luong"] = 0
+
+                                # Tiến độ
+                                if "Tiến độ (%)" in row and not pd.isna(row["Tiến độ (%)"]):
+                                    try:
+                                        val = float(row["Tiến độ (%)"])
+                                        update_data["progress"] = int(val) if val.is_integer() else round(val, 2)
+                                    except Exception:
+                                        update_data["progress"] = 0
+
                                 # Deadline
                                 if "Deadline" in row and pd.notna(row["Deadline"]):
                                     update_data["deadline"] = pd.to_datetime(row["Deadline"]).strftime("%Y-%m-%d")
@@ -291,10 +303,6 @@ def project_manager_app(user):
                                         update_data["note"] = ""
                                     else:
                                         update_data["note"] = str(val).strip()
-                        
-                                # Tiến độ
-                                if "Tiến độ (%)" in row and not pd.isna(row["Tiến độ (%)"]):
-                                    update_data["progress"] = float(row["Tiến độ (%)"])
                         
                                 # ✅ Nếu có thay đổi thì update
                                 if update_data:
