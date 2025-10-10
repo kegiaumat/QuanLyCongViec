@@ -841,23 +841,26 @@ def admin_app(user):
 
                         with col1:
                             
+                            
                             if st.button(f"💾 Lưu cập nhật công nhật của {u}", key=f"save_cong_{u}"):
                                 import re
                                 for i, row in edited_cong.iterrows():
-                                    tid = int(df_cong.iloc[i]["ID"])
+                                    # Lấy id thật từ df_cong (dùng 'id' chứ không phải 'ID')
+                                    tid = int(df_cong.iloc[i]["id"])
 
-                                    # Lấy giá trị mới
+                                    # Lấy giá trị mới từ bảng chỉnh sửa
                                     start_str = str(row.get("Giờ bắt đầu") or "").strip()
                                     end_str = str(row.get("Giờ kết thúc") or "").strip()
                                     note_txt = str(row.get("Ghi chú") or "").strip()
                                     new_qty = float(row.get("Khối lượng (giờ)") or 0)
 
-                                    # Chuẩn hóa note: có phần giờ đầu-cuối + ghi chú
+                                    # Chuẩn hóa ghi chú (ghi rõ giờ + nội dung)
                                     time_part = ""
                                     if re.match(r"^\d{1,2}:\d{2}$", start_str) and re.match(r"^\d{1,2}:\d{2}$", end_str):
                                         time_part = f"⏰ {start_str} - {end_str}"
                                     full_note = (time_part + (" " if time_part and note_txt else "") + note_txt).strip()
 
+                                    # Ghi lại vào Supabase
                                     supabase.table("tasks").update({
                                         "khoi_luong": new_qty,
                                         "note": full_note
@@ -865,6 +868,7 @@ def admin_app(user):
 
                                 st.success(f"✅ Đã cập nhật công nhật của {u}")
                                 st.rerun()
+
 
 
                         with col2:
