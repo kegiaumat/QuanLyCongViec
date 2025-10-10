@@ -843,8 +843,8 @@ def admin_app(user):
                             hide_index=True,
                             column_config={
                                 "Công việc": st.column_config.TextColumn(disabled=True),
-                                "Giờ bắt đầu": st.column_config.TimeColumn("Giờ bắt đầu", format="HH:mm"),
-                                "Giờ kết thúc": st.column_config.TimeColumn("Giờ kết thúc", format="HH:mm"),
+                                "Giờ bắt đầu": st.column_config.TimeColumn("Giờ bắt đầu", format="HH:mm", step=300, time_format="24h"),
+                                "Giờ kết thúc": st.column_config.TimeColumn("Giờ kết thúc", format="HH:mm", step=300, time_format="24h"),
                                 "Khối lượng (giờ)": st.column_config.NumberColumn("Khối lượng (giờ)", min_value=0, step=0.25),
                                 "Ghi chú": st.column_config.TextColumn("Ghi chú"),
                                 "Xóa?": st.column_config.CheckboxColumn("Xóa?", help="Tick để xóa dòng này")
