@@ -963,19 +963,17 @@ def admin_app(user):
                         with col1:
                             
                             
+                            
                             if st.button(f"💾 Cập nhật khối lượng của {u}", key=f"save_other_{u}"):
-                                for i, row in edited_other.iterrows():
-                                    # Lấy id thật của task
-                                    tid = int(row.get("ID", 0))
-                                    if not tid:
-                                        continue
 
-                                    # Lấy dữ liệu đã sửa
+                                for i, row in edited_other.iterrows():
+                                    # Lấy id thật từ df_other_show (cùng vị trí)
+                                    tid = int(df_other_show.iloc[i]["ID"])
+
                                     new_qty = float(row.get("Khối lượng") or 0)
                                     note_val = str(row.get("Ghi chú") or "").strip()
                                     progress_val = float(row.get("Tiến độ (%)") or 0)
 
-                                    # Chuẩn hóa deadline
                                     dl = row.get("Deadline")
                                     if isinstance(dl, (datetime.date, pd.Timestamp)):
                                         dl_str = pd.to_datetime(dl).strftime("%Y-%m-%d")
@@ -985,7 +983,6 @@ def admin_app(user):
                                     else:
                                         dl_str = None
 
-                                    # Ghi vào Supabase
                                     supabase.table("tasks").update({
                                         "khoi_luong": new_qty,
                                         "note": note_val,
@@ -995,6 +992,7 @@ def admin_app(user):
 
                                 st.success(f"✅ Đã cập nhật công việc khối lượng của {u}")
                                 st.rerun()
+
 
 
 
