@@ -275,8 +275,8 @@ def project_manager_app(user):
                             for i, row in edited_df.iterrows():
                                 task_id = int(df_all.iloc[i]["ID"])
                                 update_data = {}
-                        
-                                # Khối lượng# Khối lượng
+
+                                # --- Khối lượng ---
                                 if "Khối lượng" in row and not pd.isna(row["Khối lượng"]):
                                     try:
                                         val = float(row["Khối lượng"])
@@ -284,7 +284,7 @@ def project_manager_app(user):
                                     except Exception:
                                         update_data["khoi_luong"] = 0
 
-                                # Tiến độ
+                                # --- Tiến độ ---
                                 if "Tiến độ (%)" in row and not pd.isna(row["Tiến độ (%)"]):
                                     try:
                                         val = float(row["Tiến độ (%)"])
@@ -292,25 +292,26 @@ def project_manager_app(user):
                                     except Exception:
                                         update_data["progress"] = 0
 
-                                # Deadline
+                                # --- Deadline ---
                                 if "Deadline" in row and pd.notna(row["Deadline"]):
                                     update_data["deadline"] = pd.to_datetime(row["Deadline"]).strftime("%Y-%m-%d")
-                        
-                                # Ghi chú ✅
+
+                                # --- Ghi chú ---
                                 if "Ghi chú" in row:
                                     val = row["Ghi chú"]
                                     if val is None or (isinstance(val, float) and pd.isna(val)):
-                                        update_data["note"] = ""
+                                        val = ""
                                     else:
-                                        update_data["note"] = str(val).strip()
-                        
-                                # ✅ Nếu có thay đổi thì update
+                                        val = str(val).strip()
+                                    update_data["note"] = val
+
+                                # --- Nếu có dữ liệu để cập nhật ---
                                 if update_data:
                                     try:
-                                        response = supabase.table("tasks").update(update_data).eq("id", task_id).execute()
-                                        st.write("📦 DEBUG:", response)
+                                        supabase.table("tasks").update(update_data).eq("id", task_id).execute()
                                     except Exception as e:
                                         st.error(f"❌ Lỗi khi cập nhật task {task_id}: {e}")
+
                         
                             st.success("✅ Đã lưu cập nhật công việc vào cơ sở dữ liệu!")
                             st.rerun()
