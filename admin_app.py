@@ -949,7 +949,7 @@ def admin_app(user):
                             df_other_display,
                             width="stretch",
                             key=f"editor_other_{u}",
-                            hide_index=True,
+                            # hide_index=True,
                             column_config={
                                 "ID": st.column_config.NumberColumn("ID", disabled=True),
                                 "Đơn vị": st.column_config.TextColumn(disabled=True),
