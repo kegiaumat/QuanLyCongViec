@@ -50,9 +50,13 @@ def update_last_seen(username):
 
     
 
+@st.cache_resource
+def get_supabase_client():
+    return get_connection()
 
 def admin_app(user):
-    supabase = get_connection()
+    supabase = get_supabase_client()
+
     # 🔹 Tải dữ liệu có cache
     if "df_users" not in st.session_state:
         st.session_state["df_users"] = load_users_cached()
@@ -589,7 +593,10 @@ def admin_app(user):
         proj_type = (prow["project_type"] or "group").strip().lower()
 
         # --- Đồng bộ dữ liệu cũ: NULL -> 'group' ---
-        supabase.table("job_catalog").update({"project_type": "group"}).is_("project_type", None).execute()
+        
+        if "fixed_job_catalog" not in st.session_state:
+            supabase.table("job_catalog").update({"project_type": "group"}).is_("project_type", None).execute()
+            st.session_state["fixed_job_catalog"] = True
         
 
         # --- Lọc job_catalog theo project_type ---
@@ -792,13 +799,25 @@ def admin_app(user):
         # ---------------- Danh sách công việc ----------------
         # ---------------- Danh sách công việc ----------------
         st.subheader("📋 Danh sách công việc trong dự án")
-        data = supabase.table("tasks").select("*").eq("project", project).execute()
-        df_tasks = pd.DataFrame(data.data)
+        @st.cache_data(ttl=10)
+        def load_tasks_by_project(project_name):
+            supabase = get_supabase_client()
+            data = supabase.table("tasks").select("*").eq("project", project_name).execute()
+            return pd.DataFrame(data.data)
+
+        df_tasks = load_tasks_by_project(project)
+
         if df_tasks.empty:
             st.info("Chưa có công việc nào trong dự án này.")
         else:
-            data2 = supabase.table("job_catalog").select("name, unit").execute()
-            jobs_units = pd.DataFrame(data2.data)
+            @st.cache_data(ttl=30)
+            def load_job_units():
+                supabase = get_supabase_client()
+                data2 = supabase.table("job_catalog").select("name, unit").execute()
+                return pd.DataFrame(data2.data)
+
+            jobs_units = load_job_units()
+
             df_tasks = df_tasks.merge(jobs_units, left_on="task", right_on="name", how="left")
             df_tasks["assignee"] = df_tasks["assignee"].map(user_map).fillna(df_tasks["assignee"])
 
