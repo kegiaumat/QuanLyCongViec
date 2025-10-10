@@ -1016,25 +1016,6 @@ def admin_app(user):
                                     st.info("⚠️ Bạn chưa tick dòng nào để xoá.")
 
 
-
-
-
-                        # ===== Nút xóa =====
-                        with col2:
-                            if st.button(f"🗑️ Xóa dòng đã chọn của {u}", key=f"delete_other_{u}"):
-                                ids_to_delete = []
-                                for i, row in edited_other.iterrows():
-                                    if row.get("Xóa?"):
-                                        ids_to_delete.append(int(df_other_show.iloc[i]["ID"]))
-                                if ids_to_delete:
-                                    for tid in ids_to_delete:
-                                        supabase.table("tasks").delete().eq("id", tid).execute()
-                                    
-                                    st.success(f"✅ Đã xóa {len(ids_to_delete)} dòng công việc của {u}")
-                                    st.rerun()
-                                else:
-                                    st.warning("⚠️ Chưa chọn dòng nào để xóa")
-
         
 
 
