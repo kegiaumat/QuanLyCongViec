@@ -962,14 +962,21 @@ def admin_app(user):
                         # ===== Nút cập nhật =====
                         with col1:
                             
+                            
                             if st.button(f"💾 Cập nhật khối lượng của {u}", key=f"save_other_{u}"):
                                 for i, row in edited_other.iterrows():
-                                    # Lấy ID trực tiếp thay vì dựa vào index
-                                    tid = int(row["ID"]) if "ID" in row else None
-                                    if tid is None:
+                                    # Lấy id thật của task
+                                    tid = int(row.get("ID", 0))
+                                    if not tid:
                                         continue
 
-                                    dl = row["Deadline"]
+                                    # Lấy dữ liệu đã sửa
+                                    new_qty = float(row.get("Khối lượng") or 0)
+                                    note_val = str(row.get("Ghi chú") or "").strip()
+                                    progress_val = float(row.get("Tiến độ (%)") or 0)
+
+                                    # Chuẩn hóa deadline
+                                    dl = row.get("Deadline")
                                     if isinstance(dl, (datetime.date, pd.Timestamp)):
                                         dl_str = pd.to_datetime(dl).strftime("%Y-%m-%d")
                                     elif isinstance(dl, str) and dl.strip():
@@ -978,16 +985,17 @@ def admin_app(user):
                                     else:
                                         dl_str = None
 
+                                    # Ghi vào Supabase
                                     supabase.table("tasks").update({
-                                        "task": row.get("Công việc"),
-                                        "khoi_luong": float(row.get("Khối lượng") or 0),
-                                        "deadline": dl_str,
-                                        "note": row.get("Ghi chú") or "",
-                                        "progress": int(row.get("Tiến độ (%)") or 0)
+                                        "khoi_luong": new_qty,
+                                        "note": note_val,
+                                        "progress": progress_val,
+                                        "deadline": dl_str
                                     }).eq("id", tid).execute()
 
                                 st.success(f"✅ Đã cập nhật công việc khối lượng của {u}")
                                 st.rerun()
+
 
 
                         # ===== Nút xóa =====
