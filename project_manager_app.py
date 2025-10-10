@@ -393,16 +393,13 @@ def project_manager_app(user):
                     col1, col2 = st.columns([2, 1])
                     with col1:
                         
+                        
                         if st.button("💾 Lưu khối lượng của tôi", key="save_my_qty_btn"):
                             for i, row in edited.iterrows():
                                 tid = int(my_tasks.iloc[i]["id"])
 
-                                # Tùy loại dự án mà lấy cột khối lượng phù hợp
-                                if is_public:
-                                    qty_val = row.get("Khối lượng (giờ)")
-                                else:
-                                    qty_val = row.get("Khối lượng")
-
+                                # Lấy khối lượng tùy theo loại dự án
+                                qty_val = row.get("Khối lượng (giờ)") if is_public else row.get("Khối lượng")
                                 try:
                                     new_qty = float(qty_val or 0)
                                     if new_qty.is_integer():
@@ -410,11 +407,21 @@ def project_manager_app(user):
                                 except Exception:
                                     new_qty = 0
 
-                                # Cập nhật vào Supabase
-                                supabase.table("tasks").update({"khoi_luong": new_qty}).eq("id", tid).execute()
+                                # Lấy ghi chú (note)
+                                note_val = row.get("Ghi chú")
+                                if note_val is None or (isinstance(note_val, float) and pd.isna(note_val)):
+                                    note_val = ""
+                                else:
+                                    note_val = str(note_val).strip()
 
-                            st.success("✅ Đã cập nhật khối lượng")
+                                # Cập nhật cả khối lượng + ghi chú
+                                update_data = {"khoi_luong": new_qty, "note": note_val}
+
+                                supabase.table("tasks").update(update_data).eq("id", tid).execute()
+
+                            st.success("✅ Đã cập nhật khối lượng & ghi chú")
                             st.rerun()
+
 
 
                     with col2:
