@@ -817,6 +817,21 @@ def admin_app(user):
                         df_cong_show_display = df_cong_show.drop(columns=["ID"], errors="ignore")
                         df_cong_show_display["Xóa?"] = False
 
+                        # ✅ Chuyển chuỗi "HH:MM" sang kiểu datetime.time để tương thích với TimeColumn
+                        def to_time(x):
+                            if isinstance(x, datetime.time):
+                                return x
+                            if isinstance(x, str) and x.strip():
+                                try:
+                                    h, m = map(int, x.split(":"))
+                                    return datetime.time(h, m)
+                                except Exception:
+                                    return None
+                            return None
+
+                        df_cong_show_display["Giờ bắt đầu"] = df_cong_show_display["Giờ bắt đầu"].apply(to_time)
+                        df_cong_show_display["Giờ kết thúc"] = df_cong_show_display["Giờ kết thúc"].apply(to_time)
+
                         # 👉 Sắp xếp thứ tự cột: Công việc | Giờ bắt đầu | Giờ kết thúc | Khối lượng (giờ) | Ghi chú | Xóa?
                         cols_order = [c for c in ["Công việc","Giờ bắt đầu","Giờ kết thúc","Khối lượng (giờ)","Ghi chú","Xóa?"] if c in df_cong_show_display.columns]
                         df_cong_show_display = df_cong_show_display[cols_order]
@@ -843,26 +858,31 @@ def admin_app(user):
                             
                             
                             
+                            
                             if st.button(f"💾 Lưu cập nhật công nhật của {u}", key=f"save_cong_{u}"):
                                 for i, row in edited_cong.iterrows():
                                     tid = int(df_cong.iloc[i]["id"])
 
+                                    # Lấy dữ liệu từ bảng
                                     start_val = row.get("Giờ bắt đầu")
                                     end_val = row.get("Giờ kết thúc")
                                     note_txt = str(row.get("Ghi chú") or "").strip()
                                     new_qty = float(row.get("Khối lượng (giờ)") or 0)
 
+                                    # Nếu là datetime.time thì format sang HH:MM
                                     time_part = ""
-                                    if start_val and end_val:
-                                        try:
-                                            s_str = start_val.strftime("%H:%M")
-                                            e_str = end_val.strftime("%H:%M")
-                                            time_part = f"⏰ {s_str} - {e_str}"
-                                        except Exception:
-                                            pass
+                                    if isinstance(start_val, datetime.time) and isinstance(end_val, datetime.time):
+                                        s_str = start_val.strftime("%H:%M")
+                                        e_str = end_val.strftime("%H:%M")
+                                        time_part = f"⏰ {s_str} - {e_str}"
+                                    elif isinstance(start_val, str) and isinstance(end_val, str):
+                                        # fallback nếu TimeColumn trả về string (trường hợp hiếm)
+                                        time_part = f"⏰ {start_val} - {end_val}"
 
+                                    # Gộp giờ + ghi chú
                                     full_note = (time_part + (" " if time_part and note_txt else "") + note_txt).strip()
 
+                                    # Update Supabase
                                     supabase.table("tasks").update({
                                         "khoi_luong": new_qty,
                                         "note": full_note
@@ -870,6 +890,7 @@ def admin_app(user):
 
                                 st.success(f"✅ Đã cập nhật công nhật của {u}")
                                 st.rerun()
+
 
 
 
