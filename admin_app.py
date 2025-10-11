@@ -1093,6 +1093,11 @@ def admin_app(user):
                                     st.info("⚠️ Bạn chưa tick dòng nào để xoá.")
 
     elif choice == "Chấm công – Nghỉ phép":
+        import datetime as dt
+        import json
+        import pandas as pd
+        from auth import get_connection
+
         st.subheader("🕒 Quản lý chấm công & nghỉ phép")
 
         # ==== KẾT NỐI SUPABASE ====
@@ -1113,7 +1118,6 @@ def admin_app(user):
         res = supabase.table("attendance_monthly").select("*").eq("month", month_str).execute()
         df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["user_id", "month", "work_days", "half_days", "off_days"])
 
-        # Chuyển JSON string thành list
         for col in ["work_days", "half_days", "off_days"]:
             if col in df_att.columns:
                 df_att[col] = df_att[col].apply(lambda x: json.loads(x) if isinstance(x, str) else (x or []))
@@ -1175,28 +1179,22 @@ def admin_app(user):
             + [f"{d.strftime('%d/%m')} ({['T2','T3','T4','T5','T6','T7','CN'][d.weekday()]})" for d in days]
         ]
 
-        # ==== KHỞI TẠO SESSION_STATE ====
         if f"{session_key}_display" not in st.session_state:
             st.session_state[f"{session_key}_display"] = df_display.copy()
         else:
             df_display = st.session_state[f"{session_key}_display"]
 
-        # ==== CẤU HÌNH MÀU EMOJI ====
-        color_icon = {
-            "work": "🟩 work",
-            "half": "🟨 half",
-            "off": "🟥 off",
-        }
-
-        st.write("### 🎨 Bảng chấm công (1 bảng duy nhất, có màu & chỉnh trực tiếp):")
-
-        # Tạo bản hiển thị có emoji màu
+        # ==== CỘT MÀU EMOJI ====
+        color_icon = {"work": "🟩", "half": "🟨", "off": "🟥", "": ""}
         display_df = df_display.copy()
-        for col in display_df.columns:
-            if "/" in col:
-                display_df[col] = display_df[col].replace(color_icon)
 
-        # ==== HIỂN THỊ VÀ CHO PHÉP CHỌN ====
+        for col in df_display.columns:
+            if "/" in col:
+                display_df[f"🎨 {col}"] = df_display[col].map(color_icon)
+
+        st.write("### 🎨 Bảng chấm công (có cột màu emoji và chỉnh trực tiếp):")
+
+        # ==== HIỂN THỊ BẢNG ====
         edited_df = st.data_editor(
             display_df,
             column_config={
@@ -1210,7 +1208,7 @@ def admin_app(user):
             hide_index=True,
             use_container_width=True,
             key=f"editor_{month_str}",
-            height=650,
+            height=700,
         )
 
         # ==== TÍNH LẠI SỐ NGÀY ====
@@ -1228,7 +1226,7 @@ def admin_app(user):
 
         st.session_state[f"{session_key}_display"] = edited_df.copy()
 
-        # ==== NÚT CẬP NHẬT DỮ LIỆU ====
+        # ==== CẬP NHẬT DỮ LIỆU ====
         if st.button("💾 Cập nhật thay đổi"):
             with st.spinner("Đang ghi dữ liệu lên Supabase..."):
                 for _, row in edited_df.iterrows():
@@ -1254,6 +1252,7 @@ def admin_app(user):
                     }).execute()
 
             st.success("✅ Dữ liệu chấm công đã được lưu thành công!")
+
 
 
     elif choice == "Thống kê công việc":
