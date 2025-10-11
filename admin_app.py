@@ -959,43 +959,43 @@ def admin_app(user):
 
         # ===== XỬ LÝ LỰA CHỌN Ô =====
         # ===== XỬ LÝ LỰA CHỌN Ô =====
-        sel_info = None
-
-        # Một số version của st-aggrid trả object, cần truy cập .grid_response
-        raw_response = getattr(grid_response, "grid_response", None)
-        if raw_response and isinstance(raw_response, dict):
-            for key in ["selected_cells", "selected_rows", "selected", "selection"]:
-                if key in raw_response and raw_response[key]:
-                    sel_info = raw_response[key][0]
-                    break
-
         selected_user = None
         selected_col = None
 
-        if sel_info:
-            try:
-                row_index = sel_info.get("rowIndex", None)
-                col_id = sel_info.get("colId", None)
+        try:
+            # Một số version st-aggrid trả kiểu object, cần truy cập đúng thuộc tính
+            if hasattr(grid_response, "selected_rows") and grid_response.selected_rows:
+                # Khi chọn dòng (singleRow hoặc singleCell vẫn có selected_rows)
+                selected_user = grid_response.selected_rows[0].get("User")
+                selected_col = None
+            elif hasattr(grid_response, "selected_cells") and grid_response.selected_cells:
+                # Khi chọn đúng một ô (một số version mới)
+                cell = grid_response.selected_cells[0]
+                selected_user = df_display.iloc[cell["rowIndex"]]["User"]
+                selected_col = cell.get("colId")
+            elif hasattr(grid_response, "grid_response"):
+                raw = grid_response.grid_response
+                if isinstance(raw, dict):
+                    for key in ["selected_cells", "selection"]:
+                        if key in raw and raw[key]:
+                            cell = raw[key][0]
+                            selected_user = df_display.iloc[cell["rowIndex"]]["User"]
+                            selected_col = cell.get("colId")
+                            break
 
-                if row_index is not None and col_id:
-                    selected_user = df_display.iloc[row_index]["User"]
-                    selected_col = col_id
-                    if selected_col not in ["User", "Số ngày đi làm"]:
-                        st.session_state["selected_user"] = selected_user
-                        st.session_state["selected_col"] = selected_col
-            except Exception as e:
-                st.warning(f"⚠️ Lỗi khi xác định ô: {e}")
+            # Ghi nhớ trạng thái chọn để không mất khi rerun
+            if selected_user:
+                st.session_state["selected_user"] = selected_user
+            if selected_col:
+                st.session_state["selected_col"] = selected_col
 
-        # Nếu chưa chọn gì thì dùng session trước đó
-        if not selected_user:
-            selected_user = st.session_state.get("selected_user")
-        if not selected_col:
-            selected_col = st.session_state.get("selected_col")
+        except Exception as e:
+            st.warning(f"⚠️ Lỗi khi xác định ô được chọn: {e}")
 
-            if not selected_user:
-                selected_user = st.session_state.get("selected_user")
-            if not selected_col:
-                selected_col = st.session_state.get("selected_col")
+        # Nếu chưa chọn gì thì lấy lại từ session
+        selected_user = st.session_state.get("selected_user")
+        selected_col = st.session_state.get("selected_col")
+
 
 
 
