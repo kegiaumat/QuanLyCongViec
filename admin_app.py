@@ -884,9 +884,7 @@ def admin_app(user):
         import json
 
         # --- KẾT NỐI SUPABASE ---
-        url = st.secrets["supabase"]["url"]
-        key = st.secrets["supabase"]["key"]
-        supabase = create_client(url, key)
+        supabase = get_connection()
 
         # --- LẤY DANH SÁCH USER ---
         users_data = supabase.table("users").select("username").execute()
