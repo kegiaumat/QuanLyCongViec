@@ -1097,7 +1097,6 @@ def admin_app(user):
         st.subheader("🕒 Quản lý chấm công & nghỉ phép")
 
         # ==== KẾT NỐI SUPABASE ====
-        supabase = get_connection()
         df_users = load_users_cached()
 
         # ==== CHỌN THÁNG ====
