@@ -1109,7 +1109,8 @@ def admin_app(user):
         days = pd.date_range(first_day, next_month - dt.timedelta(days=1))
 
         # ==== LẤY DỮ LIỆU ====
-        res = supabase.table("attendance_users").select("*").execute()
+        res = supabase.table("attendance_monthly").select("*").execute()
+
         df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["user_id", "months"])
 
         # Giải mã JSON
