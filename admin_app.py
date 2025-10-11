@@ -1137,7 +1137,8 @@ def admin_app(user):
         )
 
 
-        selected = grid_response["selected_cells"]
+        selected = grid_response.get("selected", [])
+
 
         # === Nếu có chọn ô, lấy user và ngày ===
         selected_user = None
