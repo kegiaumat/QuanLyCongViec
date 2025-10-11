@@ -1083,19 +1083,18 @@ def admin_app(user):
         supabase = get_supabase_client()
         df_users = load_users_cached()
 
-        # === Tạo dữ liệu tháng ===
+        # === Chuẩn bị dữ liệu ===
         today = datetime.date.today()
         selected_month = st.date_input("Chọn tháng", datetime.date(today.year, today.month, 1))
         first_day = selected_month.replace(day=1)
         next_month = (first_day + datetime.timedelta(days=32)).replace(day=1)
         days = pd.date_range(first_day, min(today, next_month - datetime.timedelta(days=1)))
 
-        # === Lấy dữ liệu chấm công ===
         data = supabase.table("attendance").select("user_id, date, status").execute()
         df_att = pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["user_id", "date", "status"])
-        df_att["date"] = pd.to_datetime(df_att["date"]).dt.date
+        df_att["date"] = pd.to_datetime(df_att["date"], errors="coerce").dt.date
 
-        # === Tạo bảng hiển thị ===
+        # === Tạo bảng chấm công ===
         user_rows = []
         for _, u in df_users.iterrows():
             row = {"User": u["display_name"]}
@@ -1121,60 +1120,62 @@ def admin_app(user):
         df_display = df_display[cols]
 
         # === Hiển thị bằng AgGrid ===
-        st.markdown("### 📅 Bảng chấm công tương tác")
-
         gb = GridOptionsBuilder.from_dataframe(df_display)
-        gb.configure_selection(selection_mode="multiple", use_checkbox=True)
+        gb.configure_selection("single")  # chỉ chọn 1 ô
         gb.configure_default_column(editable=False)
+        gb.configure_grid_options(enableRangeSelection=True)
         grid_options = gb.build()
 
         grid_response = AgGrid(
             df_display,
             gridOptions=grid_options,
+            update_mode=GridUpdateMode.SINGLE,
             fit_columns_on_grid_load=True,
-            update_mode=GridUpdateMode.SELECTION_CHANGED,
-            theme="alpine",
+            theme="material",
             height=500,
+            allow_unsafe_jscode=True,
         )
 
-        selected = grid_response["selected_rows"]
+        selected = grid_response["selected_cells"]
 
-        st.markdown("#### 🎨 Thay đổi trạng thái")
+        # === Nếu có chọn ô, lấy user và ngày ===
+        selected_user = None
+        selected_day = None
+        if selected:
+            cell = selected[0]
+            selected_user = cell["row"]["User"]
+            selected_col = cell["colId"]
+            if "/" in selected_col:
+                selected_day = selected_col.split(" ")[0]
+                st.info(f"🔹 Đang chọn: {selected_user} – Ngày {selected_day}")
+
+        # === Các nút cập nhật nhanh ===
         col1, col2, col3 = st.columns(3)
         with col1:
-            if st.button("🟩 Đi làm (work)"):
-                status_change = "work"
+            if st.button("🟩 Đi làm (work)") and selected_user and selected_day:
+                new_status = "work"
         with col2:
-            if st.button("🟨 Nửa ngày (half)"):
-                status_change = "half"
+            if st.button("🟨 Nửa ngày (half)") and selected_user and selected_day:
+                new_status = "half"
         with col3:
-            if st.button("🟥 Nghỉ (off)"):
-                status_change = "off"
+            if st.button("🟥 Nghỉ (off)") and selected_user and selected_day:
+                new_status = "off"
 
-        # === Khi chọn ô và ấn nút, cập nhật DB ===
-        if selected and "status_change" in locals():
-            st.info(f"Đang cập nhật {len(selected)} dòng thành '{status_change}' ...")
+        # === Cập nhật vào database nếu có thay đổi ===
+        if "new_status" in locals() and selected_user and selected_day:
+            username = df_users.loc[df_users["display_name"] == selected_user, "username"].iloc[0]
+            date_val = datetime.datetime.strptime(selected_day + f"/{selected_month.year}", "%d/%m/%Y").date()
 
-            for row in selected:
-                user_display = row["User"]
-                username = df_users.loc[df_users["display_name"] == user_display, "username"].iloc[0]
+            supabase.table("attendance").delete().eq("user_id", username).eq("date", date_val.isoformat()).execute()
+            supabase.table("attendance").insert({
+                "user_id": username,
+                "date": date_val.isoformat(),
+                "status": new_status
+            }).execute()
 
-                for col in [c for c in df_display.columns if "/" in c]:
-                    val = row[col]
-                    if col in selected[0] and val is not None:
-                        # Xác định ngày từ cột
-                        date_str = col.split(" ")[0]
-                        date_val = datetime.datetime.strptime(date_str + f"/{selected_month.year}", "%d/%m/%Y").date()
-                        # Ghi vào Supabase
-                        supabase.table("attendance").delete().eq("user_id", username).eq("date", date_val.isoformat()).execute()
-                        supabase.table("attendance").insert({
-                            "user_id": username,
-                            "date": date_val.isoformat(),
-                            "status": status_change
-                        }).execute()
-
-            st.success(f"✅ Đã cập nhật {len(selected)} dòng thành '{status_change}'!")
+            st.success(f"✅ Đã cập nhật {selected_user} – {selected_day}: {new_status}")
             st.rerun()
+
 
     elif choice == "Thống kê công việc":
         st.subheader("📊 Thống kê công việc")
