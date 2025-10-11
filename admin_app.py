@@ -888,18 +888,18 @@ def admin_app(user):
         today = dt.date.today()
         selected_month = st.date_input("📅 Chọn tháng", dt.date(today.year, today.month, 1))
 
-        # Lấy danh sách ngày trong tháng
+        # ==== LẤY DANH SÁCH NGÀY TRONG THÁNG ====
         first_day = selected_month.replace(day=1)
         next_month = (first_day + dt.timedelta(days=32)).replace(day=1)
         days = pd.date_range(first_day, next_month - dt.timedelta(days=1))
 
-        # Lấy dữ liệu chấm công
+        # ==== DỮ LIỆU TỪ SUPABASE ====
         data = supabase.table("attendance").select("*").execute()
         df_att = pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["user_id", "date", "status"])
         if not df_att.empty:
             df_att["date"] = pd.to_datetime(df_att["date"]).dt.date
 
-        # ===== TẠO DỮ LIỆU BẢNG =====
+        # ==== TẠO BẢNG DỮ LIỆU ====
         user_rows = []
         for _, u in df_users.iterrows():
             row = {"User": u["display_name"], "Số ngày đi làm": 0}
@@ -926,7 +926,7 @@ def admin_app(user):
 
         df_display = pd.DataFrame(user_rows)
 
-        # ===== TÔ MÀU TRẠNG THÁI =====
+        # ==== CẤU HÌNH BẢNG ====
         color_js = JsCode("""
             function(params) {
                 if (params.value === 'work') {
@@ -940,7 +940,6 @@ def admin_app(user):
             }
         """)
 
-        # ===== CẤU HÌNH LƯỚI =====
         gb = GridOptionsBuilder.from_dataframe(df_display)
         gb.configure_default_column(editable=True, resizable=True)
         gb.configure_column("User", editable=False, width=180)
@@ -969,40 +968,60 @@ def admin_app(user):
 
         updated_df = pd.DataFrame(grid_response["data"])
 
-        # ===== CẬP NHẬT DATABASE NGAY KHI THAY ĐỔI =====
-        if grid_response["data"] != df_display.to_dict(orient="records"):
-            changed = grid_response["data"]
-            st.toast("🔄 Đang cập nhật dữ liệu...", icon="🔁")
+        # ==== XÁC ĐỊNH NHỮNG Ô THAY ĐỔI ====
+        changed_cells = []
+        for i, row in updated_df.iterrows():
+            old_row = df_display.iloc[i]
+            for col in df_display.columns[2:]:
+                if row[col] != old_row[col]:
+                    changed_cells.append({
+                        "user": row["User"],
+                        "date_col": col,
+                        "new_status": row[col]
+                    })
 
-            for _, row in updated_df.iterrows():
-                username = df_users[df_users["display_name"] == row["User"]]["username"].iloc[0]
-                total_days = 0
-                for col in df_display.columns[2:]:
-                    status = row[col]
-                    if status == "work":
-                        total_days += 1
-                    elif status == "half":
-                        total_days += 0.5
+        # ==== NÚT CẬP NHẬT ====
+        if st.button("💾 Cập nhật thay đổi"):
+            if not changed_cells:
+                st.info("⚠️ Chưa có thay đổi nào để cập nhật.")
+            else:
+                try:
+                    with st.spinner("Đang cập nhật dữ liệu..."):
+                        for change in changed_cells:
+                            username = df_users[df_users["display_name"] == change["user"]]["username"].iloc[0]
+                            date_str = f"{change['date_col']}/{selected_month.year}"
+                            date_obj = dt.datetime.strptime(date_str, "%d/%m/%Y").date()
 
-                    date_str = f"{col}/{selected_month.year}"
-                    date_obj = dt.datetime.strptime(date_str, "%d/%m/%Y").date()
+                            supabase.table("attendance").delete().eq("user_id", username).eq("date", date_obj.isoformat()).execute()
+                            supabase.table("attendance").insert({
+                                "user_id": username,
+                                "date": date_obj.isoformat(),
+                                "status": change["new_status"]
+                            }).execute()
 
-                    supabase.table("attendance").delete().eq("user_id", username).eq("date", date_obj.isoformat()).execute()
-                    supabase.table("attendance").insert({
-                        "user_id": username,
-                        "date": date_obj.isoformat(),
-                        "status": status
-                    }).execute()
+                        # ==== TÍNH LẠI TỔNG CÔNG ====
+                        for _, row in updated_df.iterrows():
+                            username = df_users[df_users["display_name"] == row["User"]]["username"].iloc[0]
+                            total_days = 0
+                            for col in df_display.columns[2:]:
+                                status = row[col]
+                                if status == "work":
+                                    total_days += 1
+                                elif status == "half":
+                                    total_days += 0.5
+                            supabase.table("attendance_summary").upsert({
+                                "user_id": username,
+                                "month": selected_month.strftime("%Y-%m"),
+                                "total_days": total_days
+                            }).execute()
 
-                supabase.table("attendance_summary").upsert({
-                    "user_id": username,
-                    "month": selected_month.strftime("%Y-%m"),
-                    "total_days": total_days
-                }).execute()
+                    st.success("✅ Đã cập nhật tất cả thay đổi thành công!")
+                    st.rerun()
 
-            st.success("✅ Đã cập nhật dữ liệu và tổng công!")
+                except Exception as e:
+                    st.error(f"❌ Lỗi khi cập nhật: {e}")
 
-        # ===== HIỂN THỊ CHÚ GIẢI =====
+        # ==== CHÚ GIẢI ====
         st.markdown("""
             <div style='margin-top:10px;'>
                 <span style='background-color:#b6f5b6;padding:4px 8px;border-radius:4px;'>🟢 work</span>
