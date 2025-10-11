@@ -454,13 +454,23 @@ def admin_app(user):
         selected = grid_response.get("selected_cells", [])
 
         # ========== XỬ LÝ CHỌN Ô VÀ CẬP NHẬT ==========
-        if selected and len(selected) == 1:
-            sel = selected[0]
+        # ========== XỬ LÝ CHỌN Ô VÀ CẬP NHẬT ==========
+        # Đọc dữ liệu cell đang chọn từ AgGrid
+        selected_cell = grid_response.get("selected_cells", None)
+
+        if selected_cell and isinstance(selected_cell, list) and len(selected_cell) == 1:
+            sel = selected_cell[0]
             selected_user = df_display.iloc[sel["rowIndex"]]["User"]
             selected_col = sel["colId"]
+
+            # Chặn chọn vào cột tổng
+            if selected_col == "Số ngày đi làm":
+                st.warning("⚠️ Không thể chỉnh cột 'Số ngày đi làm'.")
+                st.stop()
+
             st.info(f"🔹 Đang chọn: **{selected_user}** – **{selected_col}**")
 
-            # Lấy trạng thái được click nút
+            # Kiểm tra trạng thái nút bấm
             new_status = None
             if st.session_state.get("set_work"):
                 new_status = "work"
@@ -469,6 +479,7 @@ def admin_app(user):
             elif st.session_state.get("set_off"):
                 new_status = "off"
 
+            # Nếu có chọn trạng thái mới thì cập nhật
             if new_status:
                 username = df_users[df_users["display_name"] == selected_user]["username"].iloc[0]
                 date_str = selected_col.split()[0] + f"/{selected_month.year}"
@@ -478,7 +489,7 @@ def admin_app(user):
                     st.error(f"❌ Không xác định được ngày từ cột: {selected_col}")
                     st.stop()
 
-                # Xóa dữ liệu cũ và ghi mới
+                # Cập nhật database
                 supabase.table("attendance").delete().eq("user_id", username).eq("date", date_obj.isoformat()).execute()
                 supabase.table("attendance").insert({
                     "user_id": username,
@@ -486,11 +497,14 @@ def admin_app(user):
                     "status": new_status
                 }).execute()
 
-                st.success(f"✅ Đã cập nhật {selected_user} – {selected_col} thành **{new_status}**!")
+                # Cập nhật trên bảng hiển thị (không cần reload toàn trang)
+                df_display.at[sel["rowIndex"], selected_col] = new_status
+                st.toast(f"✅ Đã cập nhật {selected_user} – {selected_col} thành {new_status}!", icon="✅")
                 st.rerun()
 
         else:
             st.warning("🟡 Chọn đúng **một ô** để cập nhật (hiện đang chọn cả hàng hoặc chưa chọn gì).")
+
 
 
     elif choice == "Quản lý Giao Việc":
