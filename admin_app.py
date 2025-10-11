@@ -1191,7 +1191,7 @@ def admin_app(user):
             submit = st.form_submit_button("💾 Cập nhật thay đổi")  # Thêm nút submit
 
         # ======= Cập nhật số ngày đi làm khi thay đổi ô trong bảng =======
-        if edited_df['data']:
+        if 'data' in edited_df and edited_df['data'] is not None:  # Kiểm tra nếu 'data' tồn tại và không phải None
             for index, row in edited_df['data'].iterrows():
                 total_days = 0
                 # Cập nhật số ngày đi làm khi có thay đổi trong bảng
