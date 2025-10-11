@@ -1122,8 +1122,13 @@ def admin_app(user):
             else:
                 df_att[col] = [[] for _ in range(len(df_att))]
 
-        # Ghép tên người dùng
+        # Ép kiểu về chuỗi để merge an toàn
+        df_att["user_id"] = df_att["user_id"].astype(str)
+        df_users["id"] = df_users["id"].astype(str)
+
         df_att = df_att.merge(df_users[["id", "display_name"]], left_on="user_id", right_on="id", how="left")
+        df_att.rename(columns={"display_name": "User"}, inplace=True)
+
         df_att.rename(columns={"display_name": "User"}, inplace=True)
 
         # === TẠO DỮ LIỆU HIỂN THỊ ===
