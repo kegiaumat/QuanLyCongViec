@@ -1149,12 +1149,21 @@ def admin_app(user):
             allow_unsafe_jscode=True,
         )
 
-        selected = grid_response.get("selected_rows") or []
+        selected = grid_response.get("selected_rows")
+        if selected is None:
+            selected = []
+        elif not isinstance(selected, list):
+            try:
+                # Nếu trả về DataFrame hoặc object khác, chuyển thành list rỗng
+                selected = selected.to_dict("records")
+            except Exception:
+                selected = []
 
         # === Xác định ô được chọn ===
         selected_user = None
         selected_day = None
-        if selected is not None and len(selected) > 0:
+        if isinstance(selected, list) and len(selected) > 0:
+
 
             selected_user = selected[0]["User"]
             st.info(f"🔹 Đang chọn: {selected_user}")
