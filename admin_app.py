@@ -377,9 +377,6 @@ def admin_app(user):
         
 
     elif choice == "Chấm công – Nghỉ phép":
-        from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
-        import datetime as dt
-        import pandas as pd
 
         st.subheader("🕓 Quản lý chấm công và nghỉ phép")
 
