@@ -878,7 +878,6 @@ def admin_app(user):
                                     st.info("⚠️ Bạn chưa tick dòng nào để xoá.")
 
     elif choice == "Chấm công – Nghỉ phép":
-
         st.subheader("🕓 Quản lý chấm công và nghỉ phép")
 
         supabase = get_supabase_client()
@@ -887,22 +886,27 @@ def admin_app(user):
         today = dt.date.today()
         selected_month = st.date_input("📅 Chọn tháng", dt.date(today.year, today.month, 1))
 
+        # Lấy danh sách ngày trong tháng
         first_day = selected_month.replace(day=1)
         next_month = (first_day + dt.timedelta(days=32)).replace(day=1)
         days = pd.date_range(first_day, next_month - dt.timedelta(days=1))
 
+        # Lấy dữ liệu chấm công
         data = supabase.table("attendance").select("*").execute()
         df_att = pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["user_id", "date", "status"])
         if not df_att.empty:
             df_att["date"] = pd.to_datetime(df_att["date"]).dt.date
 
-        # --- Tạo bảng chấm công ---
+        # ===== TẠO BẢNG HIỂN THỊ =====
         user_rows = []
         for _, u in df_users.iterrows():
             row = {"User": u["display_name"]}
             total_days = 0
             for d in days:
                 wd = d.weekday()
+                if d.date() > today:
+                    row[d.strftime("%d/%m")] = None
+                    continue
                 record = df_att[(df_att["user_id"] == u["username"]) & (df_att["date"] == d.date())]
                 if not record.empty:
                     status = record["status"].iloc[0]
@@ -918,7 +922,7 @@ def admin_app(user):
 
         df_display = pd.DataFrame(user_rows)
 
-        # --- Tô màu ô ---
+        # ===== TÔ MÀU Ô =====
         cell_style_js = JsCode("""
             function(params) {
                 if (params.value === 'work') {
@@ -938,11 +942,10 @@ def admin_app(user):
 
         for c in df_display.columns[1:]:
             gb.configure_column(c, cellStyle=cell_style_js, width=85)
-        gb.configure_column("User", width=180)
+        gb.configure_column("User", width=200)
 
         grid_options = gb.build()
 
-        # --- Hiển thị bảng ---
         grid_response = AgGrid(
             df_display,
             gridOptions=grid_options,
@@ -953,20 +956,12 @@ def admin_app(user):
             theme="streamlit",
         )
 
-        # --- Xử lý lựa chọn ô ---
-        # --- Xử lý lựa chọn ô (tương thích với mọi bản st-aggrid) ---
-        # --- Xử lý lựa chọn ô (tương thích với tất cả phiên bản st-aggrid) ---
+        # ===== XỬ LÝ LỰA CHỌN Ô =====
         sel_info = None
-
-        # 1️⃣ Ưu tiên lấy từ grid_response["selected"], vì đây là key phổ biến nhất
-        if "selected" in grid_response and grid_response["selected"]:
-            sel_info = grid_response["selected"][0]
-
-        # 2️⃣ Nếu không có, thử selected_cells hoặc selected_rows
-        elif "selected_cells" in grid_response and grid_response["selected_cells"]:
-            sel_info = grid_response["selected_cells"][0]
-        elif "selected_rows" in grid_response and grid_response["selected_rows"]:
-            sel_info = grid_response["selected_rows"][0]
+        for key in ["selected", "selected_cells", "selected_rows"]:
+            if key in grid_response and grid_response[key]:
+                sel_info = grid_response[key][0]
+                break
 
         if sel_info:
             try:
@@ -982,42 +977,22 @@ def admin_app(user):
             selected_user = st.session_state.get("selected_user")
             selected_col = st.session_state.get("selected_col")
 
+        # ===== THANH CÔNG CỤ CỐ ĐỊNH =====
+        fixed_bar = st.container()
+        with fixed_bar:
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                btn_work = st.button("🟢 Đi làm (work)")
+            with c2:
+                btn_half = st.button("🟡 Nửa ngày (half)")
+            with c3:
+                btn_off = st.button("🔴 Nghỉ (off)")
 
-        if selected_cells:
-            sel_info = selected_cells[0]
-        elif selected_rows:
-            sel_info = selected_rows[0]
-
-        if sel_info:
-            try:
-                row_index = sel_info.get("rowIndex", 0)
-                selected_user = df_display.iloc[row_index]["User"]
-                selected_col = sel_info.get("colId")
-                if selected_col and selected_col not in ["User", "Số ngày đi làm"]:
-                    st.session_state["selected_user"] = selected_user
-                    st.session_state["selected_col"] = selected_col
-            except Exception as e:
-                st.warning(f"Lỗi khi xác định ô: {e}")
-        else:
-            selected_user = st.session_state.get("selected_user")
-            selected_col = st.session_state.get("selected_col")
-
-
-
+        # ===== CẬP NHẬT KHI ẤN NÚT =====
         selected_user = st.session_state.get("selected_user")
         selected_col = st.session_state.get("selected_col")
 
-        fixed_bar = st.container()
-        with fixed_bar:
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                btn_work = st.button("🟢 Đi làm (work)")
-            with col2:
-                btn_half = st.button("🟡 Nửa ngày (half)")
-            with col3:
-                btn_off = st.button("🔴 Nghỉ (off)")
-
-        if selected_user and selected_col and selected_col != "Số ngày đi làm":
+        if selected_user and selected_col:
             st.info(f"🔹 Đang chọn: **{selected_user}** – **{selected_col}**")
 
             if btn_work or btn_half or btn_off:
@@ -1038,16 +1013,16 @@ def admin_app(user):
                 st.session_state.pop("selected_col", None)
                 st.rerun()
         else:
-            st.warning("🟡 Chọn đúng **một ô** để cập nhật (hiện đang chọn cả hàng hoặc chưa chọn gì).")
+            st.warning("🟡 Chọn đúng **một ô** để cập nhật trạng thái.")
 
         st.markdown("""
-        <div style='margin-top:10px;'>
-        <span style='background-color:#b6f5b6;padding:4px 8px;border-radius:4px;'>🟢 Đi làm</span>
-        &nbsp;&nbsp;
-        <span style='background-color:#ffe97f;padding:4px 8px;border-radius:4px;'>🟡 Nửa ngày</span>
-        &nbsp;&nbsp;
-        <span style='background-color:#ff9999;padding:4px 8px;border-radius:4px;'>🔴 Nghỉ</span>
-        </div>
+            <div style='margin-top:10px;'>
+                <span style='background-color:#b6f5b6;padding:4px 8px;border-radius:4px;'>🟢 Đi làm</span>
+                &nbsp;&nbsp;
+                <span style='background-color:#ffe97f;padding:4px 8px;border-radius:4px;'>🟡 Nửa ngày</span>
+                &nbsp;&nbsp;
+                <span style='background-color:#ff9999;padding:4px 8px;border-radius:4px;'>🔴 Nghỉ</span>
+            </div>
         """, unsafe_allow_html=True)
 
     elif choice == "Thống kê công việc":
