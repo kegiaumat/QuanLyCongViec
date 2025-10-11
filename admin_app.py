@@ -1093,7 +1093,6 @@ def admin_app(user):
                                     st.info("⚠️ Bạn chưa tick dòng nào để xoá.")
 
     elif choice == "Chấm công – Nghỉ phép":
-
         st.subheader("🕒 Quản lý chấm công & nghỉ phép (mỗi user 1 dòng JSON)")
 
         supabase = get_connection()
@@ -1167,10 +1166,7 @@ def admin_app(user):
             rows.append(row)
 
         df_display = pd.DataFrame(rows)
-        df_display = df_display[
-            ["User", "Số ngày đi làm"]
-            + [f"{d.strftime('%d/%m')} ({['T2','T3','T4','T5','T6','T7','CN'][d.weekday()]})" for d in days]
-        ]
+        df_display = df_display[["User", "Số ngày đi làm"] + [f"{d.strftime('%d/%m')} ({['T2','T3','T4','T5','T6','T7','CN'][d.weekday()]})" for d in days]]
 
         # ======= Không rerun khi chọn cell =======
         with st.form("attendance_form", clear_on_submit=False):
@@ -1231,7 +1227,7 @@ def admin_app(user):
                             "off_days": off_days
                         }).execute()
 
-            st.success("✅ Dữ liệu đã được lưu thành công!")
+                st.success("✅ Dữ liệu đã được lưu thành công!")
 
 
     elif choice == "Thống kê công việc":
