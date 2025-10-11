@@ -1161,6 +1161,22 @@ def admin_app(user):
         editable_cols = [c for c in df_display.columns if "/" in c]
         # Tính lại tổng ngày đi làm mỗi khi user sửa trạng thái
 
+        def recalc_total(df):
+            for idx, row in df.iterrows():
+                total = 0
+                for col in [c for c in df.columns if "/" in c]:
+                    val = row[col]
+                    if val == "work":
+                        total += 1
+                    elif val == "half":
+                        total += 0.5
+                df.at[idx, "Số ngày đi làm"] = total
+            return df
+
+        # 👉 Tính lại ngay trước hiển thị
+        df_display = recalc_total(df_display)
+
+        editable_cols = [c for c in df_display.columns if "/" in c]
         edited_df = st.data_editor(
             df_display,
             key="attendance_editor",
@@ -1169,53 +1185,45 @@ def admin_app(user):
                 col: st.column_config.SelectboxColumn(
                     col,
                     options=["work", "half", "off"],
-                    required=True,
                     help="Chọn trạng thái làm việc",
                 )
                 for col in editable_cols
             },
-            disabled=["User", "Số ngày đi làm"],  # không cho sửa 2 cột này
+            disabled=["User"],
             hide_index=True,
         )
-        def recalc_total(df):
-            for idx, row in df.iterrows():
-                total = 0
-                for col in [c for c in df.columns if "/" in c]:
-                    val = row[col]
-                    if val == "work": total += 1
-                    elif val == "half": total += 0.5
-                df.at[idx, "Số ngày đi làm"] = total
-            return df
-
         edited_df = recalc_total(edited_df)
+
         # Thêm màu nền theo trạng thái
+        
         st.markdown("""
-            <style>
-            [data-testid="stDataEditor"] [data-testid="cell-container"] div:has(span:contains("work")) {
-                background-color: #b9f6ca !important;
-            }
-            [data-testid="stDataEditor"] [data-testid="cell-container"] div:has(span:contains("half")) {
-                background-color: #fff59d !important;
-            }
-            [data-testid="stDataEditor"] [data-testid="cell-container"] div:has(span:contains("off")) {
-                background-color: #ff8a80 !important;
-            }
-            </style>
+        <style>
+        /* Áp dụng màu nền cho cell hiển thị text cụ thể */
+        [data-testid="stDataEditorCell"] div[role="button"]:has(span:contains("work")) {
+            background-color: #b9f6ca !important;
+        }
+        [data-testid="stDataEditorCell"] div[role="button"]:has(span:contains("half")) {
+            background-color: #fff59d !important;
+        }
+        [data-testid="stDataEditorCell"] div[role="button"]:has(span:contains("off")) {
+            background-color: #ff8a80 !important;
+        }
+        </style>
         """, unsafe_allow_html=True)
 
 
 
 
 
-       
+
         if st.button("💾 Cập nhật chấm công"):
-            for _, row in df_display.iterrows():
+            for _, row in edited_df.iterrows():
                 username = df_users.loc[df_users["display_name"] == row["User"], "username"].iloc[0]
-                for col in df_display.columns[2:]:
+                for col in [c for c in edited_df.columns if "/" in c]:
                     date_str = col.split(" ")[0]
                     date_val = datetime.datetime.strptime(date_str + f"/{selected_month.year}", "%d/%m/%Y").date()
                     if date_val > today:
-                        continue  # bỏ qua ngày tương lai
+                        continue
                     status_val = row[col]
                     supabase.table("attendance").delete().eq("user_id", username).eq("date", date_val.isoformat()).execute()
                     supabase.table("attendance").insert({
