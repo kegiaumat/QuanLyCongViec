@@ -1153,33 +1153,7 @@ def admin_app(user):
 
 
 
-        # Cho phép chọn người dùng để chỉnh sửa chi tiết
-        selected_user = st.selectbox("Chọn người để hiệu chỉnh", df_users["display_name"])
-        urow = df_users[df_users["display_name"] == selected_user].iloc[0]
 
-        # Tạo bảng chỉnh sửa trạng thái từng ngày
-        st.write(f"Chấm công tháng {selected_month.month}/{selected_month.year} cho **{selected_user}**:")
-
-        status_options = {"Đi làm": "work", "Nửa ngày": "half", "Nghỉ": "off"}
-        edit_data = []
-        for d in days:
-            wd = d.weekday()
-            default_status = "off" if wd >= 5 else "work"
-            old = df_att[(df_att["user_id"] == urow["username"]) & (df_att["date"] == d.date())]
-            status = old["status"].iloc[0] if not old.empty else default_status
-
-            col1, col2 = st.columns([1, 3])
-            with col1:
-                st.markdown(f"**{d.strftime('%d/%m (%a)')}**")
-            with col2:
-                new_status = st.radio(
-                    "", list(status_options.keys()),
-                    index=list(status_options.values()).index(status),
-                    key=f"{urow['username']}_{d}"
-                )
-            edit_data.append({"date": d.date(), "status": status_options[new_status]})
-
-        # Nút cập nhật
        
         if st.button("💾 Cập nhật chấm công"):
             for _, row in df_display.iterrows():
