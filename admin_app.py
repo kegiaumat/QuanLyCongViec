@@ -1132,7 +1132,6 @@ def admin_app(user):
                 half_days = record["half_days"].iloc[0] or []
                 off_days = record["off_days"].iloc[0] or []
             else:
-                # Nếu chưa có dữ liệu thì tự tạo mặc định
                 work_days, half_days, off_days = [], [], []
                 for d in days:
                     if d.date() > today.date():
@@ -1172,6 +1171,7 @@ def admin_app(user):
         with st.form("attendance_form", clear_on_submit=False):
             st.markdown("### 🎨 Bảng chấm công (mỗi user 1 dòng, có emoji màu)")
 
+            # Sử dụng st.data_editor trong form để tránh rerun khi sửa cell
             edited_df = st.data_editor(
                 df_display,
                 column_config={
