@@ -1154,7 +1154,8 @@ def admin_app(user):
         # === Xác định ô được chọn ===
         selected_user = None
         selected_day = None
-        if selected:
+        if selected is not None and len(selected) > 0:
+
             selected_user = selected[0]["User"]
             st.info(f"🔹 Đang chọn: {selected_user}")
             # Xác định cột theo click
