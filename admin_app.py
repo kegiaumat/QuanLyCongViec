@@ -914,7 +914,7 @@ def admin_app(user):
                 # Tạo mới mặc định: T2-6 đi làm, T7-CN nghỉ
                 work_days, half_days, off_days = [], [], []
                 for d in days:
-                    if d > today:
+                    if d.date() > today:
                         continue  # tương lai
                     elif d.weekday() < 5:  # T2–T6
                         work_days.append(d.day)
