@@ -879,100 +879,126 @@ def admin_app(user):
     elif choice == "Chấm công – Nghỉ phép":
         st.subheader("🕒 Quản lý chấm công và nghỉ phép")
 
-        import datetime
-        today = datetime.date.today()
-        this_month = today.strftime("%Y/%m")
+        import datetime as dt
+        from st_aggrid import GridOptionsBuilder, AgGrid, GridUpdateMode, JsCode
 
-        # ===== LẤY DỮ LIỆU TỪ SUPABASE =====
-        try:
-            df_display = supabase.table("attendance").select("*").eq("month", this_month).execute()
-            df_display = pd.DataFrame(df_display.data)
-        except Exception:
-            # Nếu chưa có bảng thật thì tạo dữ liệu mẫu
-            df_display = pd.DataFrame({
-                "User": ["Đông", "Dũng", "Bình"],
-                "01/10": ["work", "off", "work"],
-                "02/10": ["work", "work", "off"],
-                "03/10": ["off", "work", "work"]
-            })
+        supabase = get_supabase_client()
+        df_users = load_users_cached()
 
-        # ===== CHỌN THÁNG =====
-        st.markdown("#### 📅 Chọn tháng để cập nhật:")
-        selected_month = st.date_input("Tháng", today)
-        month_str = selected_month.strftime("%Y/%m")
+        today = dt.date.today()
+        selected_month = st.date_input("📅 Chọn tháng", dt.date(today.year, today.month, 1))
 
-        st.markdown("---")
+        # Lấy danh sách ngày trong tháng
+        first_day = selected_month.replace(day=1)
+        next_month = (first_day + dt.timedelta(days=32)).replace(day=1)
+        days = pd.date_range(first_day, next_month - dt.timedelta(days=1))
 
-        # ===== XỬ LÝ LỰA CHỌN Ô =====
-        if "selected_cell" not in st.session_state:
-            st.session_state["selected_cell"] = None
+        # Lấy dữ liệu chấm công
+        data = supabase.table("attendance").select("*").execute()
+        df_att = pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["user_id", "date", "status"])
+        if not df_att.empty:
+            df_att["date"] = pd.to_datetime(df_att["date"]).dt.date
 
-        st.markdown("### 🗓️ Bảng chấm công")
+        # ===== TẠO BẢNG HIỂN THỊ =====
+        user_rows = []
+        for _, u in df_users.iterrows():
+            row = {"User": u["display_name"]}
+            total_days = 0
+            for d in days:
+                wd = d.weekday()
+                if d.date() > today:
+                    row[d.strftime("%d/%m")] = None
+                    continue
 
-        for i in range(len(df_display)):
-            cols = st.columns(len(df_display.columns))
-            for j, col_name in enumerate(df_display.columns):
-                cell_value = str(df_display.iloc[i, j])
-
-                # Style: vàng nếu đang chọn
-                if st.session_state["selected_cell"] == (i, col_name):
-                    button_style = "background-color: yellow; color: black; font-weight: bold; border: 2px solid orange;"
+                record = df_att[(df_att["user_id"] == u["username"]) & (df_att["date"] == d.date())]
+                if not record.empty:
+                    status = record["status"].iloc[0]
                 else:
-                    button_style = "background-color: #eee; border-radius: 4px; padding: 5px;"
+                    status = "work" if wd < 5 else "off"
 
-                # Hiển thị nút cho từng ô
-                with cols[j]:
-                    clicked = st.button(cell_value, key=f"{i}-{col_name}")
-                    if clicked:
-                        # Nếu click lại chính ô đang chọn → bỏ chọn
-                        if st.session_state["selected_cell"] == (i, col_name):
-                            st.session_state["selected_cell"] = None
-                        else:
-                            st.session_state["selected_cell"] = (i, col_name)
+                row[d.strftime("%d/%m")] = status
+                if status == "work":
+                    total_days += 1
+                elif status == "half":
+                    total_days += 0.5
+            row["Số ngày đi làm"] = total_days
+            user_rows.append(row)
 
-        # ===== TRẠNG THÁI HIỆN TẠI =====
-        st.markdown("---")
-        selected = st.session_state["selected_cell"]
+        df_display = pd.DataFrame(user_rows)
 
-        if selected:
-            i, col_name = selected
-            selected_user = df_display.iloc[i, 0]
-            st.info(f"✅ Đang chọn: {selected_user} - {col_name}")
-        else:
-            st.warning("🟡 Chọn đúng 1 ô để cập nhật trạng thái.")
-            selected_user = None
-            col_name = None
+        # ===== AgGrid hiển thị với Selectbox trong từng cell =====
+        color_js = JsCode("""
+            function(params) {
+                if (params.value === 'work') {
+                    return {'backgroundColor': '#b6f5b6', 'textAlign': 'center'};
+                } else if (params.value === 'half') {
+                    return {'backgroundColor': '#ffe97f', 'textAlign': 'center'};
+                } else if (params.value === 'off') {
+                    return {'backgroundColor': '#ff9999', 'textAlign': 'center'};
+                }
+                return {'textAlign': 'center'};
+            }
+        """)
 
-        # ===== NÚT CẬP NHẬT TRẠNG THÁI =====
-        col1, col2, col3 = st.columns(3)
-        status_to_set = None
+        gb = GridOptionsBuilder.from_dataframe(df_display)
+        gb.configure_default_column(editable=True, resizable=True)
+        gb.configure_column("User", editable=False, width=180)
+        gb.configure_column("Số ngày đi làm", editable=False, width=150)
 
-        with col1:
-            if st.button("🟢 Đi làm (work)"):
-                status_to_set = "work"
-        with col2:
-            if st.button("🟡 Nửa ngày (half)"):
-                status_to_set = "half"
-        with col3:
-            if st.button("🔴 Nghỉ (off)"):
-                status_to_set = "off"
+        # Các cột ngày có selectbox
+        for col in df_display.columns[1:-1]:
+            gb.configure_column(
+                col,
+                cellEditor='agSelectCellEditor',
+                cellEditorParams={'values': ['work', 'half', 'off']},
+                cellStyle=color_js,
+                width=90
+            )
 
-        # ===== CẬP NHẬT GIÁ TRỊ =====
-        if selected_user and col_name and status_to_set:
-            df_display.at[i, col_name] = status_to_set
+        grid_options = gb.build()
 
+        grid_response = AgGrid(
+            df_display,
+            gridOptions=grid_options,
+            update_mode=GridUpdateMode.VALUE_CHANGED,
+            allow_unsafe_jscode=True,
+            fit_columns_on_grid_load=True,
+            height=550,
+            theme="streamlit"
+        )
+
+        updated_df = pd.DataFrame(grid_response["data"])
+
+        # ===== NÚT CẬP NHẬT =====
+        if st.button("💾 Cập nhật chấm công"):
             try:
-                # Nếu có DB thật → cập nhật luôn
-                supabase.table("attendance").update({
-                    col_name: status_to_set
-                }).eq("User", selected_user).eq("month", month_str).execute()
+                for _, row in updated_df.iterrows():
+                    username = df_users[df_users["display_name"] == row["User"]]["username"].iloc[0]
+                    for col in df_display.columns[1:-1]:
+                        date_str = f"{col}/{selected_month.year}"
+                        date_obj = dt.datetime.strptime(date_str, "%d/%m/%Y").date()
+                        status = row[col]
 
-                st.success(f"✅ Đã cập nhật {selected_user} - {col_name} = {status_to_set}")
-            except Exception:
-                st.info(f"📝 (Demo) Đã cập nhật {selected_user} - {col_name} = {status_to_set}")
+                        supabase.table("attendance").delete().eq("user_id", username).eq("date", date_obj.isoformat()).execute()
+                        supabase.table("attendance").insert({
+                            "user_id": username,
+                            "date": date_obj.isoformat(),
+                            "status": status
+                        }).execute()
 
-        # ===== HIỂN THỊ BẢNG SAU CẬP NHẬT =====
-        st.dataframe(df_display, use_container_width=True)
+                st.success("✅ Đã cập nhật chấm công thành công!")
+            except Exception as e:
+                st.error(f"❌ Lỗi khi cập nhật: {e}")
+
+        st.markdown("""
+            <div style='margin-top:10px;'>
+                <span style='background-color:#b6f5b6;padding:4px 8px;border-radius:4px;'>🟢 work</span>
+                &nbsp;&nbsp;
+                <span style='background-color:#ffe97f;padding:4px 8px;border-radius:4px;'>🟡 half</span>
+                &nbsp;&nbsp;
+                <span style='background-color:#ff9999;padding:4px 8px;border-radius:4px;'>🔴 off</span>
+            </div>
+        """, unsafe_allow_html=True)
 
     elif choice == "Thống kê công việc":
         st.subheader("📊 Thống kê công việc")
