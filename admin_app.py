@@ -1093,6 +1093,11 @@ def admin_app(user):
                                     st.info("⚠️ Bạn chưa tick dòng nào để xoá.")
 
     elif choice == "Chấm công – Nghỉ phép":
+        import datetime as dt
+        import json
+        import pandas as pd
+        from st_aggrid import GridOptionsBuilder, AgGrid, JsCode
+        from auth import get_connection
 
         st.subheader("🕒 Quản lý chấm công và nghỉ phép")
 
@@ -1115,11 +1120,16 @@ def admin_app(user):
             "user_id", "month", "work_days", "half_days", "off_days"
         ])
 
+        # Chuyển JSON string -> list
         for col in ["work_days", "half_days", "off_days"]:
             if col in df_att.columns:
                 df_att[col] = df_att[col].apply(lambda x: json.loads(x) if isinstance(x, str) else (x or []))
             else:
                 df_att[col] = [[] for _ in range(len(df_att))]
+
+        # Ghép tên người dùng
+        df_att = df_att.merge(df_users[["id", "display_name"]], left_on="user_id", right_on="id", how="left")
+        df_att.rename(columns={"display_name": "User"}, inplace=True)
 
         # === TẠO DỮ LIỆU HIỂN THỊ ===
         rows = []
@@ -1165,7 +1175,7 @@ def admin_app(user):
         df_display = pd.DataFrame(rows)
         df_display = df_display[
             ["User", "Số ngày đi làm"]
-            + [f"{d.strftime('%d/%m')} ({['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'][d.weekday()]})" for d in days]
+            + [f"{d.strftime('%d/%m')} ({['T2','T3','T4','T5','T6','T7','CN'][d.weekday()]})" for d in days]
         ]
 
         # === LƯU SESSION (CHỈ 1 LẦN) ===
@@ -1173,7 +1183,7 @@ def admin_app(user):
             st.session_state[f"{session_key}_display"] = df_display.copy()
             st.session_state[f"{session_key}_changed"] = set()
 
-        # === MÀU NỀN CHO GRID ===
+        # === MÀU Ô ===
         color_js = JsCode("""
             function(params) {
                 let s = {'textAlign':'center','whiteSpace':'normal','lineHeight':'22px'};
@@ -1208,8 +1218,10 @@ def admin_app(user):
             height=650,
         )
 
-        # === TÍNH LẠI “SỐ NGÀY ĐI LÀM” (chưa ghi DB) ===
+        # === CẬP NHẬT TẠM TRONG SESSION (chưa ghi DB) ===
         updated_df = pd.DataFrame(grid_response["data"])
+
+        # Tính lại số ngày đi làm
         for i in range(len(updated_df)):
             total = 0
             for col in updated_df.columns:
@@ -1222,7 +1234,7 @@ def admin_app(user):
                     total += 0.5
             updated_df.at[i, "Số ngày đi làm"] = total
 
-        # === PHÁT HIỆN DÒNG THAY ĐỔI ===
+        # So sánh thay đổi
         old_df = st.session_state[f"{session_key}_display"]
         diff_rows = []
         for i in range(len(updated_df)):
@@ -1234,9 +1246,9 @@ def admin_app(user):
 
         st.info(f"🔸 Có {len(st.session_state[f'{session_key}_changed'])} dòng đã chỉnh (chưa ghi DB).")
 
-        # === GHI DỮ LIỆU LÊN SUPABASE ===
+        # === NÚT GHI DỮ LIỆU ===
         if st.button("💾 Cập nhật thay đổi"):
-            with st.spinner("Đang ghi vào Supabase..."):
+            with st.spinner("Đang ghi dữ liệu lên Supabase..."):
                 for i in st.session_state[f"{session_key}_changed"]:
                     row = st.session_state[f"{session_key}_display"].iloc[i]
                     work_days, half_days, off_days = [], [], []
@@ -1253,7 +1265,7 @@ def admin_app(user):
                             off_days.append(day)
 
                     supabase.table("attendance_monthly").upsert({
-                        "user_id": df_users.loc[df_users["display_name"] == row["User"], "id"].iloc[0],
+                        "user_id": str(df_users.loc[df_users["display_name"] == row["User"], "id"].iloc[0]),
                         "month": month_str,
                         "work_days": json.dumps(work_days),
                         "half_days": json.dumps(half_days),
@@ -1261,8 +1273,7 @@ def admin_app(user):
                     }).execute()
 
                 st.session_state[f"{session_key}_changed"].clear()
-            st.success("✅ Đã cập nhật dữ liệu chấm công thành công!")
-
+            st.success("✅ Dữ liệu chấm công đã được cập nhật thành công!")
 
     elif choice == "Thống kê công việc":
         st.subheader("📊 Thống kê công việc")
