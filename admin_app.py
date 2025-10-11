@@ -1075,9 +1075,8 @@ def admin_app(user):
                                 else:
                                     st.info("⚠️ Bạn chưa tick dòng nào để xoá.")
 
- 
     elif choice == "Chấm công – Nghỉ phép":
-        from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
+        from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
         st.subheader("🕓 Quản lý chấm công và nghỉ phép")
 
         supabase = get_supabase_client()
@@ -1094,7 +1093,7 @@ def admin_app(user):
         df_att = pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["user_id", "date", "status"])
         df_att["date"] = pd.to_datetime(df_att["date"], errors="coerce").dt.date
 
-        # === Tạo bảng chấm công ===
+        # === Tạo bảng dữ liệu ===
         user_rows = []
         for _, u in df_users.iterrows():
             row = {"User": u["display_name"]}
@@ -1119,11 +1118,25 @@ def admin_app(user):
         cols = ["User", "Số ngày đi làm"] + [c for c in df_display.columns if "/" in c]
         df_display = df_display[cols]
 
-        # === Hiển thị bằng AgGrid ===
+        # === Cấu hình màu cell ===
+        cell_style_jscode = JsCode("""
+        function(params) {
+            if (params.value == 'work') {
+                return { 'backgroundColor': '#b9f6ca', 'color': 'black', 'textAlign': 'center' };
+            } else if (params.value == 'half') {
+                return { 'backgroundColor': '#fff59d', 'color': 'black', 'textAlign': 'center' };
+            } else if (params.value == 'off') {
+                return { 'backgroundColor': '#ff8a80', 'color': 'black', 'textAlign': 'center' };
+            } else {
+                return { 'backgroundColor': 'white', 'color': 'black', 'textAlign': 'center' };
+            }
+        };
+        """)
+
+        # === Cấu hình AgGrid ===
         gb = GridOptionsBuilder.from_dataframe(df_display)
-        gb.configure_selection("single")  # chỉ chọn 1 ô
-        gb.configure_default_column(editable=False)
-        gb.configure_grid_options(enableRangeSelection=True)
+        gb.configure_selection(selection_mode="single", use_checkbox=False)
+        gb.configure_default_column(editable=False, cellStyle=cell_style_jscode)
         grid_options = gb.build()
 
         grid_response = AgGrid(
@@ -1136,47 +1149,46 @@ def admin_app(user):
             allow_unsafe_jscode=True,
         )
 
+        selected = grid_response.get("selected_rows") or []
 
-        selected = grid_response.get("selected", [])
-
-
-        # === Nếu có chọn ô, lấy user và ngày ===
+        # === Xác định ô được chọn ===
         selected_user = None
         selected_day = None
         if selected:
-            cell = selected[0]
-            selected_user = cell["row"]["User"]
-            selected_col = cell["colId"]
-            if "/" in selected_col:
-                selected_day = selected_col.split(" ")[0]
-                st.info(f"🔹 Đang chọn: {selected_user} – Ngày {selected_day}")
+            selected_user = selected[0]["User"]
+            st.info(f"🔹 Đang chọn: {selected_user}")
+            # Xác định cột theo click
+            # AgGrid chỉ trả row, nên ta cần cho user click vào cell cụ thể (dùng selectionMode=single)
+            # Lưu ý: Ta giả định user click vào cột cụ thể (hàng đang chọn)
+            st.warning("Chọn đúng cột ngày bạn muốn cập nhật (hiện đang chọn cả hàng).")
 
-        # === Các nút cập nhật nhanh ===
+        # === Các nút hành động ===
         col1, col2, col3 = st.columns(3)
         with col1:
-            if st.button("🟩 Đi làm (work)") and selected_user and selected_day:
-                new_status = "work"
+            act_work = st.button("🟩 Đi làm (work)")
         with col2:
-            if st.button("🟨 Nửa ngày (half)") and selected_user and selected_day:
-                new_status = "half"
+            act_half = st.button("🟨 Nửa ngày (half)")
         with col3:
-            if st.button("🟥 Nghỉ (off)") and selected_user and selected_day:
-                new_status = "off"
+            act_off = st.button("🟥 Nghỉ (off)")
 
-        # === Cập nhật vào database nếu có thay đổi ===
-        if "new_status" in locals() and selected_user and selected_day:
-            username = df_users.loc[df_users["display_name"] == selected_user, "username"].iloc[0]
-            date_val = datetime.datetime.strptime(selected_day + f"/{selected_month.year}", "%d/%m/%Y").date()
-
-            supabase.table("attendance").delete().eq("user_id", username).eq("date", date_val.isoformat()).execute()
-            supabase.table("attendance").insert({
-                "user_id": username,
-                "date": date_val.isoformat(),
-                "status": new_status
-            }).execute()
-
-            st.success(f"✅ Đã cập nhật {selected_user} – {selected_day}: {new_status}")
-            st.rerun()
+        # === Khi nhấn nút, mở hộp chọn ngày cụ thể trong hàng đó ===
+        if selected_user and (act_work or act_half or act_off):
+            df_row = df_display[df_display["User"] == selected_user].iloc[0]
+            # Hỏi chọn ngày trong hàng đó
+            selected_col = st.selectbox("Chọn ngày muốn cập nhật:", [c for c in df_display.columns if "/" in c])
+            if selected_col:
+                new_status = "work" if act_work else "half" if act_half else "off"
+                username = df_users.loc[df_users["display_name"] == selected_user, "username"].iloc[0]
+                date_val = datetime.datetime.strptime(selected_col.split(" ")[0] + f"/{selected_month.year}", "%d/%m/%Y").date()
+                # Cập nhật database
+                supabase.table("attendance").delete().eq("user_id", username).eq("date", date_val.isoformat()).execute()
+                supabase.table("attendance").insert({
+                    "user_id": username,
+                    "date": date_val.isoformat(),
+                    "status": new_status
+                }).execute()
+                st.success(f"✅ Đã cập nhật {selected_user} – {selected_col}: {new_status}")
+                st.rerun()
 
 
     elif choice == "Thống kê công việc":
