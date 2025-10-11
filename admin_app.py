@@ -1091,7 +1091,8 @@ def admin_app(user):
         # Tạo danh sách tất cả các ngày trong tháng đang chọn
         selected_month = today.replace(day=1)
         next_month = (selected_month.replace(day=28) + datetime.timedelta(days=4)).replace(day=1)
-        days = pd.date_range(start=selected_month, end=next_month - datetime.timedelta(days=1))
+        days = pd.date_range(start=selected_month, end=today)
+
 
         user_rows = []
         for _, u in df_users.iterrows():
@@ -1101,21 +1102,22 @@ def admin_app(user):
                 wd = d.weekday()
                 weekday = ["T2","T3","T4","T5","T6","T7","CN"][wd]
 
-                # Nếu là ngày trong tương lai → chỉ hiển thị mặc định
-                if d.date() > today:
-                    status = "work" if wd < 5 else "off"
+                record = df_att[(df_att["user_id"] == u["username"]) & (df_att["date"] == d.date())]
+                if not record.empty:
+                    status = record["status"].iloc[0]
                 else:
-                    record = df_att[(df_att["user_id"] == u["username"]) & (df_att["date"] == d.date())]
-                    if not record.empty:
-                        status = record["status"].iloc[0]
-                    else:
-                        status = "work" if wd < 5 else "off"
+                    status = "work" if wd < 5 else "off"
 
-                # Tính tổng công (chỉ tính đến hôm nay)
+                # ✅ Nếu ngày trong tương lai thì để trống (None)
+                if d.date() > today:
+                    row[f"{d.strftime('%d/%m')} ({weekday})"] = None
+                else:
+                    row[f"{d.strftime('%d/%m')} ({weekday})"] = status
+
+                # ✅ Chỉ tính tổng công đến hôm nay
                 if d.date() <= today:
                     total_work += 1 if status == "work" else 0.5 if status == "half" else 0
 
-                row[f"{d.strftime('%d/%m')} ({weekday})"] = status
 
             row["Số ngày đi làm"] = round(total_work, 1)
             user_rows.append(row)
@@ -1157,6 +1159,7 @@ def admin_app(user):
 
         # Chuyển các cột ngày sang kiểu selectbox để chọn trực tiếp
         editable_cols = [c for c in df_display.columns if "/" in c]
+        # Tính lại tổng ngày đi làm mỗi khi user sửa trạng thái
 
         edited_df = st.data_editor(
             df_display,
@@ -1174,15 +1177,32 @@ def admin_app(user):
             disabled=["User", "Số ngày đi làm"],  # không cho sửa 2 cột này
             hide_index=True,
         )
+        def recalc_total(df):
+            for idx, row in df.iterrows():
+                total = 0
+                for col in [c for c in df.columns if "/" in c]:
+                    val = row[col]
+                    if val == "work": total += 1
+                    elif val == "half": total += 0.5
+                df.at[idx, "Số ngày đi làm"] = total
+            return df
 
+        edited_df = recalc_total(edited_df)
         # Thêm màu nền theo trạng thái
         st.markdown("""
             <style>
-            [data-testid="stDataFrame"] td div:contains("work") {background-color:#b9f6ca !important;}
-            [data-testid="stDataFrame"] td div:contains("half") {background-color:#fff59d !important;}
-            [data-testid="stDataFrame"] td div:contains("off") {background-color:#ff8a80 !important;}
+            [data-testid="stDataEditor"] [data-testid="cell-container"] div:has(span:contains("work")) {
+                background-color: #b9f6ca !important;
+            }
+            [data-testid="stDataEditor"] [data-testid="cell-container"] div:has(span:contains("half")) {
+                background-color: #fff59d !important;
+            }
+            [data-testid="stDataEditor"] [data-testid="cell-container"] div:has(span:contains("off")) {
+                background-color: #ff8a80 !important;
+            }
             </style>
         """, unsafe_allow_html=True)
+
 
 
 
