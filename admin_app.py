@@ -1082,140 +1082,84 @@ def admin_app(user):
         supabase = get_supabase_client()
         df_users = load_users_cached()
 
-        # 🟢 Load dữ liệu chấm công
-        data_att = supabase.table("attendance").select("user_id, date, status").execute()
-        df_att = pd.DataFrame(data_att.data) if data_att.data else pd.DataFrame(columns=["user_id", "date", "status"])
-        df_att["date"] = pd.to_datetime(df_att["date"], errors="coerce").dt.date
-
-        # === Tháng hiện tại ===
+        # === Thiết lập ngày tháng ===
         today = datetime.date.today()
-        selected_month = today.replace(day=1)
-        days = pd.date_range(start=selected_month, end=today)
+        selected_month = st.date_input("Chọn tháng", datetime.date(today.year, today.month, 1))
+        first_day = selected_month.replace(day=1)
+        next_month = (first_day + datetime.timedelta(days=32)).replace(day=1)
+        days = pd.date_range(first_day, min(today, next_month - datetime.timedelta(days=1)))
 
+        # === Lấy dữ liệu chấm công ===
+        data = supabase.table("attendance").select("user_id, date, status").execute()
+        df_att = pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["user_id", "date", "status"])
+        df_att["date"] = pd.to_datetime(df_att["date"]).dt.date
+
+        # === Tạo bảng hiển thị ===
         user_rows = []
         for _, u in df_users.iterrows():
-            row = {"User": u["display_name"], "Số ngày đi làm": 0}
+            row = {"User": u["display_name"]}
             total_work = 0.0
-
             for d in days:
                 wd = d.weekday()
                 weekday = ["T2","T3","T4","T5","T6","T7","CN"][wd]
                 record = df_att[(df_att["user_id"] == u["username"]) & (df_att["date"] == d.date())]
 
-                # 🔹 Nếu chưa có record -> mặc định work / off
+                # Nếu chưa có record trong DB -> mặc định
                 if not record.empty:
                     status = record["status"].iloc[0]
                 else:
                     status = "work" if wd < 5 else "off"
 
-                # 🔹 Không cho điền tương lai
-                if d.date() > today:
-                    row[f"{d.strftime('%d/%m')} ({weekday})"] = None
-                else:
-                    row[f"{d.strftime('%d/%m')} ({weekday})"] = status
-                    if status == "work":
-                        total_work += 1
-                    elif status == "half":
-                        total_work += 0.5
+                row[f"{d.strftime('%d/%m')} ({weekday})"] = status
 
-            row["Số ngày đi làm"] = round(total_work, 1)
+                # Tính tổng công
+                if status == "work":
+                    total_work += 1
+                elif status == "half":
+                    total_work += 0.5
+
+            row["Số ngày đi làm"] = total_work
             user_rows.append(row)
 
         df_display = pd.DataFrame(user_rows)
+        # Đưa cột “Số ngày đi làm” ra ngay sau “User”
+        cols = ["User", "Số ngày đi làm"] + [c for c in df_display.columns if "/" in c]
+        df_display = df_display[cols]
 
-        # 🧮 Hàm tính lại tổng khi đổi trạng thái
-        def recalc_total(df):
-            for idx, row in df.iterrows():
-                total = 0
-                for col in [c for c in df.columns if "/" in c]:
-                    val = row[col]
-                    if val == "work":
-                        total += 1
-                    elif val == "half":
-                        total += 0.5
-                df.at[idx, "Số ngày đi làm"] = round(total, 1)
-            return df
-
-        df_display = recalc_total(df_display)
-
-        # 🖍️ CSS để hiển thị màu nền động
-        # ================= HIỂN THỊ BẢNG CHẤM CÔNG ==================
-        st.markdown("### 📅 Bảng chấm công")
-
-        # Áp dụng CSS màu nền động
-        st.markdown("""
-        <style>
-        /* Streamlit >= 1.38 */
-        [data-testid="stDataEditorCell"] div[role="button"]:has(span:contains("work")) {
-            background-color: #b9f6ca !important;   /* xanh nhạt */
+        # === Hiển thị màu bằng Styler ===
+        color_map = {
+            "work": "#b9f6ca",   # xanh nhạt
+            "half": "#fff59d",   # vàng nhạt
+            "off":  "#ff8a80"    # đỏ nhạt
         }
-        [data-testid="stDataEditorCell"] div[role="button"]:has(span:contains("half")) {
-            background-color: #fff59d !important;   /* vàng nhạt */
-        }
-        [data-testid="stDataEditorCell"] div[role="button"]:has(span:contains("off")) {
-            background-color: #ff8a80 !important;   /* đỏ nhạt */
-        }
-        </style>
-        """, unsafe_allow_html=True)
 
-        editable_cols = [c for c in df_display.columns if "/" in c]
+        def color_cell(val):
+            return f"background-color: {color_map.get(val, 'white')}; text-align:center;"
 
-        # === Hàm tính lại tổng ngày đi làm ===
-        def recalc_total(df):
-            for idx, row in df.iterrows():
-                total = 0
-                for col in editable_cols:
-                    val = row[col]
-                    if val == "work":
-                        total += 1
-                    elif val == "half":
-                        total += 0.5
-                df.at[idx, "Số ngày đi làm"] = round(total, 1)
-            return df
+        styled = df_display.style.applymap(color_cell, subset=df_display.columns[2:])
 
-        # Tính trước khi hiển thị
-        df_display = recalc_total(df_display)
+        st.markdown("### 📅 Bảng chấm công (đến hôm nay)")
+        st.dataframe(styled, use_container_width=True)
 
-        # Hiển thị bảng có thể chỉnh sửa
-        edited_df = st.data_editor(
-            df_display,
-            key="attendance_editor",
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                col: st.column_config.SelectboxColumn(
-                    col,
-                    options=["work", "half", "off"],
-                    help="Chọn trạng thái làm việc"
-                )
-                for col in editable_cols
-            },
-            disabled=["User"],
-        )
+        st.info("🟩 Đi làm | 🟨 Nửa ngày | 🟥 Nghỉ")
 
-        # ✅ Tính lại tổng ngay khi người dùng chỉnh sửa
-        edited_df = recalc_total(edited_df)
+        # === Cập nhật thủ công cho từng người, từng ngày ===
+        st.markdown("### ✏️ Cập nhật thủ công")
 
-        # ================= CẬP NHẬT DATABASE ==================
-        st.write("")
-        if st.button("💾 Cập nhật chấm công", use_container_width=True):
-            for _, row in edited_df.iterrows():
-                username = df_users.loc[df_users["display_name"] == row["User"], "username"].iloc[0]
-                for col in editable_cols:
-                    date_str = col.split(" ")[0]
-                    date_val = datetime.datetime.strptime(date_str + f"/{selected_month.year}", "%d/%m/%Y").date()
-                    if date_val > today:
-                        continue
-                    status_val = row[col]
-                    supabase.table("attendance").delete().eq("user_id", username).eq("date", date_val.isoformat()).execute()
-                    supabase.table("attendance").insert({
-                        "user_id": username,
-                        "date": date_val.isoformat(),
-                        "status": status_val
-                    }).execute()
-            st.success("✅ Đã cập nhật dữ liệu chấm công thành công!")
+        selected_user = st.selectbox("Chọn nhân viên", df_users["display_name"])
+        urow = df_users[df_users["display_name"] == selected_user].iloc[0]
+        edit_date = st.date_input("Chọn ngày cần sửa", today)
+        status = st.radio("Trạng thái", ["work", "half", "off"], horizontal=True)
+
+        if st.button("💾 Cập nhật chấm công"):
+            supabase.table("attendance").delete().eq("user_id", urow["username"]).eq("date", edit_date.isoformat()).execute()
+            supabase.table("attendance").insert({
+                "user_id": urow["username"],
+                "date": edit_date.isoformat(),
+                "status": status
+            }).execute()
+            st.success(f"✅ Đã cập nhật chấm công cho {selected_user} ngày {edit_date.strftime('%d/%m/%Y')} ({status})!")
             st.rerun()
-
 
 
     elif choice == "Thống kê công việc":
