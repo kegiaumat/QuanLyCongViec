@@ -1128,8 +1128,27 @@ def admin_app(user):
         # ==== TẠO BẢNG HIỂN THỊ ====
         rows = []
         for _, u in df.iterrows():
-            uid, uname, months = u["id"], u["display_name"], u["months"]
-            current = months.get(month_str, {"work": [], "half": [], "off": []})
+            uid, uname = u["id"], u["display_name"]
+
+            # Lấy dữ liệu tháng hiện tại nếu có
+            record = df_att[(df_att["user_id"] == uid) & (df_att["month"] == month_str)]
+            if not record.empty:
+                work_days = record["work_days"].iloc[0] or []
+                half_days = record["half_days"].iloc[0] or []
+                off_days = record["off_days"].iloc[0] or []
+            else:
+                # Nếu chưa có dữ liệu thì khởi tạo mặc định
+                work_days, half_days, off_days = [], [], []
+                for d in days:
+                    if d.date() > today.date():
+                        continue
+                    if d.weekday() < 5:
+                        work_days.append(d.day)
+                    else:
+                        off_days.append(d.day)
+
+            current = {"work": work_days, "half": half_days, "off": off_days}
+
 
             # Tự động tạo nếu chưa có
             if not current["work"] and not current["half"] and not current["off"]:
