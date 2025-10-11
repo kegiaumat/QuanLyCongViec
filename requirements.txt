@@ -3,3 +3,4 @@ pandas
 plotly
 streamlit-cookies-manager
 supabase
+streamlit-aggrid
