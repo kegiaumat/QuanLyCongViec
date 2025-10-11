@@ -1172,62 +1172,67 @@ def admin_app(user):
             + [f"{d.strftime('%d/%m')} ({['T2','T3','T4','T5','T6','T7','CN'][d.weekday()]})" for d in days]
         ]
 
-        # ==== KHỞI TẠO SESSION_STATE ====
+        # ==== LƯU SESSION_STATE ====
         if f"{session_key}_display" not in st.session_state:
             st.session_state[f"{session_key}_display"] = df_display.copy()
         else:
             df_display = st.session_state[f"{session_key}_display"]
 
-        st.write("### 🎨 Bảng chấm công (chọn và hiển thị màu trực tiếp):")
-
-        # ==== MÀU BIỂU TƯỢNG ====
-        color_icon = {"work": "🟩 work", "half": "🟨 half", "off": "🟥 off"}
-
-        # ==== CẤU HÌNH DROPDOWN ====
-        config = {
-            col: st.column_config.SelectboxColumn(
-                label=col,
-                options=["work", "half", "off", ""],
-                required=False,
-            )
-            for col in df_display.columns if "/" in col
+        # ==== ICON MÀU ====
+        color_icon = {
+            "work": "🟩 work",
+            "half": "🟨 half",
+            "off": "🟥 off"
         }
 
-        # ==== DATA EDITOR ====
+        # ==== CẤU HÌNH DROPDOWN ====
+        config = {}
+        for col in df_display.columns:
+            if "/" in col:
+                config[col] = st.column_config.SelectboxColumn(
+                    label=col,
+                    options=["work", "half", "off", ""],
+                    required=False,
+                    help="🟩 work | 🟨 half | 🟥 off"
+                )
+
+        st.write("### 🎨 Bảng chấm công (có màu và chỉnh trực tiếp):")
+
+        # ==== DATA EDITOR (một bảng duy nhất) ====
         edited_df = st.data_editor(
             df_display,
             column_config=config,
             hide_index=True,
             use_container_width=True,
             key=f"editor_{month_str}",
-            height=600,
+            height=650,
         )
 
-        # ==== TÍNH LẠI SỐ NGÀY ====
+        # ==== CẬP NHẬT SỐ NGÀY ====
         for i in range(len(edited_df)):
             total = 0
             for col in edited_df.columns:
                 if "/" not in col:
                     continue
-                v = edited_df.at[i, col]
-                if v == "work":
+                val = edited_df.at[i, col]
+                if val == "work":
                     total += 1
-                elif v == "half":
+                elif val == "half":
                     total += 0.5
             edited_df.at[i, "Số ngày đi làm"] = total
 
-        # ==== TẠO BẢN HIỂN THỊ MÀU ====
-        display_df = edited_df.copy()
-        for col in display_df.columns:
-            if "/" in col:
-                display_df[col] = display_df[col].replace(color_icon)
-
         st.session_state[f"{session_key}_display"] = edited_df.copy()
 
-        # ==== HIỂN THỊ TRỰC TIẾP ====
-        st.dataframe(display_df, hide_index=True, use_container_width=True)
+        # ==== HIỂN THỊ LẠI CÓ MÀU TRONG BẢNG ====
+        df_colored = edited_df.copy()
+        for col in df_colored.columns:
+            if "/" in col:
+                df_colored[col] = df_colored[col].replace(color_icon)
 
-        # ==== NÚT CẬP NHẬT DỮ LIỆU ====
+        # render bằng markdown cho màu nằm ngay trong editor
+        st.markdown(df_colored.to_html(escape=False, index=False), unsafe_allow_html=True)
+
+        # ==== NÚT LƯU ====
         if st.button("💾 Cập nhật thay đổi"):
             with st.spinner("Đang ghi dữ liệu lên Supabase..."):
                 for _, row in edited_df.iterrows():
@@ -1252,254 +1257,7 @@ def admin_app(user):
                         "off_days": json.dumps(off_days)
                     }).execute()
 
-            st.success("✅ Dữ liệu đã được cập nhật thành công!")
-
-    elif choice == "Thống kê công việc":
-        st.subheader("📊 Thống kê công việc")
-
-        # Lấy danh sách dự án
-        projects = df_projects["name"].dropna().tolist()
-
-
-        # Bộ lọc dự án
-        filter_mode = st.radio("Chế độ thống kê", 
-                               ["Chỉ dự án chưa hoàn thành", "Chọn dự án", "Tất cả"])
-
-        selected_projects = []
-        if filter_mode == "Chọn dự án":
-            selected_projects = st.multiselect("Chọn dự án cần thống kê", projects)
-        elif filter_mode == "Tất cả":
-            selected_projects = projects
-        elif filter_mode == "Chỉ dự án chưa hoàn thành":
-            data = supabase.table("tasks").select("project").lt("progress", 100).execute()
-            unfinished = list({r["project"] for r in data.data})
-            selected_projects = unfinished
-
-        # Lấy dữ liệu công việc
-        if selected_projects:
-            placeholders = ",".join(["%s"] * len(selected_projects))
-            data = supabase.table("tasks").select("*").in_("project", selected_projects).execute()
-            df = pd.DataFrame(data.data)
-
-        else:
-            df = pd.DataFrame()
-
-        if df.empty:
-            st.info("⚠️ Không có dữ liệu công việc cho lựa chọn này.")
-        else:
-            # Chọn kiểu thống kê
-            df["assignee"] = df["assignee"].map(user_map).fillna(df["assignee"])
-
-            stat_mode = st.radio("Xem thống kê theo", ["Dự án", "Người dùng"])
-
-            # ==================== THEO DỰ ÁN ====================
-            if stat_mode == "Dự án":
-                # Tổng quan theo dự án
-                proj_summary = df.groupby("project").agg(
-                    **{
-                        "Tổng công việc": ("id", "count"),
-                        "Hoàn thành": ("progress", lambda x: (x == 100).sum()),
-                        "Chưa hoàn thành": ("progress", lambda x: (x < 100).sum()),
-                        "Tiến độ trung bình (%)": ("progress", "mean")
-                    }
-                ).reset_index().rename(columns={"project": "Dự án"})
-
-                styled_proj = proj_summary.style.format(
-                    {"Tiến độ trung bình (%)": "{:.0f} %"}
-                ).bar(subset=["Tiến độ trung bình (%)"], color="#4CAF50")
-
-                st.markdown("### 📂 Tiến độ theo dự án")
-                st.dataframe(styled_proj, width="stretch")
-
-
-                # Chi tiết theo đầu mục công việc (cha)
-                # Map task -> cha
-                job_map = df_jobs[["id", "name", "parent_id"]].copy()
-
-                parent_lookup = {}
-                for _, row in job_map.iterrows():
-                    if pd.isna(row["parent_id"]):
-                        parent_lookup[row["name"]] = row["name"]
-                    else:
-                        pid = int(row["parent_id"])
-                        parent_name = job_map.loc[job_map["id"] == pid, "name"].values[0]
-                        parent_lookup[row["name"]] = parent_name
-
-                df["Đầu mục công việc"] = df["task"].map(parent_lookup).fillna(df["task"])
-
-                job_summary = df.groupby(["project", "Đầu mục công việc"]).agg(
-                    **{
-                        "Tổng công việc": ("id", "count"),
-                        "Hoàn thành": ("progress", lambda x: (x == 100).sum()),
-                        "Chưa hoàn thành": ("progress", lambda x: (x < 100).sum()),
-                        "Tiến độ trung bình (%)": ("progress", "mean")
-                    }
-                ).reset_index().rename(columns={"project": "Dự án"})
-
-                styled_job = job_summary.style.format(
-                    {"Tiến độ trung bình (%)": "{:.0f} %"}
-                ).bar(subset=["Tiến độ trung bình (%)"], color="#2196F3")
-                
-                # ---- Thống kê theo đầu mục công việc (dạng cây, bỏ dự án public) ----
-                st.markdown("### 🌳 Thống kê Đầu mục công việc Của dự án")
-
-                # Bỏ các dự án Public nếu có cột project_type
-                if "project_type" in df.columns:
-                    df_non_public = df[df["project_type"] != "public"].copy()
-                else:
-                    df_non_public = df.copy()
-
-                if df_non_public.empty:
-                    st.info("⚠️ Không có dữ liệu công việc cho các dự án không Public.")
-                else:
-                    # Map task -> đầu mục cha
-                    job_map = df_jobs[["id", "name", "parent_id"]].copy()
-
-                    parent_lookup = {}
-                    for _, row in job_map.iterrows():
-                        if pd.isna(row["parent_id"]):
-                            parent_lookup[row["name"]] = row["name"]
-                        else:
-                            pid = int(row["parent_id"])
-                            parent_name = job_map.loc[job_map["id"] == pid, "name"].values[0]
-                            parent_lookup[row["name"]] = parent_name
-
-                    df_non_public["Đầu mục"] = df_non_public["task"].map(parent_lookup).fillna(df_non_public["task"])
-
-                    # Gom nhóm theo Dự án + Đầu mục
-                    grouped = df_non_public.groupby(["project", "Đầu mục"]).agg(
-                        Tổng_công_việc=("id", "count"),
-                        Hoàn_thành=("progress", lambda x: (x == 100).sum()),
-                        Chưa_hoàn_thành=("progress", lambda x: (x < 100).sum()),
-                        Tiến_độ_TB=("progress", "mean")
-                    ).reset_index()
-
-                    # Tạo bảng hiển thị: dự án chỉ ghi ở dòng đầu tiên
-                    rows = []
-                    for proj in grouped["project"].unique():
-                        df_proj = grouped[grouped["project"] == proj]
-                        first = True
-                        for _, r in df_proj.iterrows():
-                            rows.append({
-                                "Dự án": proj if first else "",
-                                "Đầu mục": r["Đầu mục"],
-                                "Tổng công việc": int(r["Tổng_công_việc"]),
-                                "Hoàn thành": int(r["Hoàn_thành"]),
-                                "Chưa hoàn thành": int(r["Chưa_hoàn_thành"]),
-                                "Tiến độ TB (%)": round(r["Tiến_độ_TB"], 1)
-                            })
-                            first = False
-                    display_df = pd.DataFrame(rows)
-
-                    st.dataframe(
-                        display_df.style.format({"Tiến độ TB (%)": "{:.0f} %"}),
-                        width="stretch"
-                    )
-
-                    # ---- Biểu đồ tiến độ dự án (trừ public) ----
-
-
-                    # ---- BIỂU ĐỒ 1: TIẾN ĐỘ THEO ĐẦU MỤC CỦA TỪNG DỰ ÁN (KHÔNG PUBLIC) ----
-                    st.markdown("### 📈 Tiến độ các Đầu mục trong từng Dự án")
-
-                    proj_detail = df.copy()
-
-                    # Loại bỏ các dự án public hoặc "Công việc gián tiếp"
-                    if "project" in proj_detail.columns:
-                        proj_detail = proj_detail[~proj_detail["project"].str.contains("public", case=False, na=False)]
-                        proj_detail = proj_detail[~proj_detail["project"].str.contains("gián tiếp", case=False, na=False)]
-
-                    # Xác định tên cột đầu mục
-                    col_daumuc = "Đầu mục công việc" if "Đầu mục công việc" in proj_detail.columns else (
-                        "Đầu mục" if "Đầu mục" in proj_detail.columns else "task_category"
-                    )
-
-                    proj_detail = proj_detail.groupby(["project", col_daumuc]).agg(
-                        Số_CV=("id", "count"),
-                        Tiến_độ_TB=("progress", "mean")
-                    ).reset_index()
-
-                    proj_detail.rename(columns={col_daumuc: "Đầu mục"}, inplace=True)
-                    proj_detail["Hiển thị"] = proj_detail.apply(
-                        lambda x: f"<b>{x['project']}</b><br>{x['Đầu mục']}", axis=1
-                    )
-
-                    import plotly.express as px
-                    fig = px.bar(
-                        proj_detail,
-                        x="Tiến_độ_TB",
-                        y="Hiển thị",
-                        orientation="h",
-                        text="Số_CV",
-                        labels={
-                            "Tiến_độ_TB": "Tiến độ TB (%)",
-                            "Hiển thị": "Dự án / Đầu mục",
-                            "Số_CV": "Số CV"
-                        },
-                        title="Tiến độ các đầu mục công việc trong từng dự án (không Public)"
-                    )
-                    fig.update_traces(texttemplate='Tiến độ %{x:.0f}% | %{text} CV', textposition='outside')
-                    fig.update_layout(yaxis=dict(autorange="reversed"), showlegend=False)
-                    st.plotly_chart(fig, width="stretch")
-                    st.markdown(
-                        """
-                        <style>
-                        .page-break { 
-                            page-break-before: always; 
-                        }
-                        </style>
-                        """,
-                        unsafe_allow_html=True
-                    )
-                    st.markdown('<div class="page-break"></div>', unsafe_allow_html=True)
-
-                    # ---- BIỂU ĐỒ 2: TIẾN ĐỘ TỔNG THỂ CỦA MỖI DỰ ÁN ----
-                    st.markdown("### 📊 Biểu đồ hoàn thành dự án")
-
-                    proj_progress = df.copy()
-
-                    # Loại bỏ các dự án Public hoặc "Công việc gián tiếp"
-                    if "project" in proj_progress.columns:
-                        proj_progress = proj_progress[~proj_progress["project"].str.contains("public", case=False, na=False)]
-                        proj_progress = proj_progress[~proj_progress["project"].str.contains("gián tiếp", case=False, na=False)]
-
-                    # Ép tên dự án thành chuỗi để Plotly không coi là số
-                    proj_progress["project"] = proj_progress["project"].astype(str)
-
-                    # Gom tiến độ trung bình cho mỗi dự án
-                    proj_progress = proj_progress.groupby("project", dropna=False).agg(
-                        Tổng_CV=("id", "count"),
-                        Tiến_độ_TB=("progress", "mean")
-                    ).reset_index()
-
-                    import plotly.express as px
-
-                    fig_proj = px.bar(
-                        proj_progress,
-                        x="project",          # Trục X = tên dự án
-                        y="Tiến_độ_TB",       # Trục Y = % tiến độ TB
-                        text=proj_progress.apply(lambda x: f"{x['Tiến_độ_TB']:.0f}% | {x['Tổng_CV']} CV", axis=1),
-                        labels={
-                            "project": "Dự án",
-                            "Tiến_độ_TB": "Tiến độ TB (%)",
-                            "Tổng_CV": "Tổng công việc"
-                        },
-                        title="📊 Biểu đồ hoàn thành dự án (không Public)"
-                    )
-
-                    fig_proj.update_traces(textposition='outside')
-                    fig_proj.update_layout(
-                        xaxis=dict(type='category'),  # Giữ nguyên tên dự án dạng text
-                        yaxis=dict(range=[0, 100]),   # Giới hạn 0–100%
-                        showlegend=False,
-                        xaxis_title="Dự án",
-                        yaxis_title="Tiến độ TB (%)"
-                    )
-
-                    st.plotly_chart(fig_proj, width="stretch")
-
-
-
+            st.success("✅ Dữ liệu chấm công đã được lưu!")
 
 
 
