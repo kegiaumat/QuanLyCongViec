@@ -1084,6 +1084,10 @@ def admin_app(user):
 
         # === Chọn tháng cần chấm công ===
         today = datetime.date.today()
+        # Tạo danh sách tất cả các ngày trong tháng đang chọn
+        selected_month = today.replace(day=1)
+        next_month = (selected_month.replace(day=28) + datetime.timedelta(days=4)).replace(day=1)
+        days = pd.date_range(start=selected_month, end=next_month - datetime.timedelta(days=1))
 
         user_rows = []
         for _, u in df_users.iterrows():
