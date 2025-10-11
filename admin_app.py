@@ -1147,9 +1147,42 @@ def admin_app(user):
         def color_cell(val):
             return f"background-color: {color_map.get(val, 'white')}; text-align:center;"
 
-        styled = df_display.style.applymap(color_cell, subset=df_display.columns[2:])
+        st.markdown("### 📅 Bảng chấm công")
 
-        st.dataframe(styled, use_container_width=True)
+        color_map = {
+            "work": "#b9f6ca",   # xanh nhạt
+            "half": "#fff59d",   # vàng nhạt
+            "off":  "#ff8a80"    # đỏ nhạt
+        }
+
+        # Chuyển các cột ngày sang kiểu selectbox để chọn trực tiếp
+        editable_cols = [c for c in df_display.columns if "/" in c]
+
+        edited_df = st.data_editor(
+            df_display,
+            key="attendance_editor",
+            use_container_width=True,
+            column_config={
+                col: st.column_config.SelectboxColumn(
+                    col,
+                    options=["work", "half", "off"],
+                    required=True,
+                    help="Chọn trạng thái làm việc",
+                )
+                for col in editable_cols
+            },
+            disabled=["User", "Số ngày đi làm"],  # không cho sửa 2 cột này
+            hide_index=True,
+        )
+
+        # Thêm màu nền theo trạng thái
+        st.markdown("""
+            <style>
+            [data-testid="stDataFrame"] td div:contains("work") {background-color:#b9f6ca !important;}
+            [data-testid="stDataFrame"] td div:contains("half") {background-color:#fff59d !important;}
+            [data-testid="stDataFrame"] td div:contains("off") {background-color:#ff8a80 !important;}
+            </style>
+        """, unsafe_allow_html=True)
 
 
 
