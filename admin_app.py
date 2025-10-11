@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import datetime
 import datetime as dt
-
+import json
 from auth import get_connection, calc_hours, get_projects, add_user, hash_password, add_project
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 
@@ -1240,12 +1240,13 @@ def admin_app(user):
                         elif val == "off": off_days.append(day)
 
                     supabase.table("attendance_monthly").upsert({
-                        "user_id": df_users.loc[df_users["display_name"]==row["User"],"id"].iloc[0],
+                        "user_id": int(df_users.loc[df_users["display_name"] == row["User"], "id"].iloc[0]),
                         "month": month_str,
-                        "work_days": work_days,
-                        "half_days": half_days,
-                        "off_days": off_days
+                        "work_days": json.dumps(work_days),
+                        "half_days": json.dumps(half_days),
+                        "off_days": json.dumps(off_days)
                     }).execute()
+
                 st.session_state[f"{session_key}_changed"].clear()
             st.success("✅ Đã cập nhật dữ liệu chấm công!")
 
