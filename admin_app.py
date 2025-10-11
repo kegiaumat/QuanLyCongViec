@@ -1081,86 +1081,49 @@ def admin_app(user):
 
         supabase = get_supabase_client()
         df_users = load_users_cached()
-        # 🟢 Load dữ liệu chấm công từ Supabase
+
+        # 🟢 Load dữ liệu chấm công
         data_att = supabase.table("attendance").select("user_id, date, status").execute()
         df_att = pd.DataFrame(data_att.data) if data_att.data else pd.DataFrame(columns=["user_id", "date", "status"])
         df_att["date"] = pd.to_datetime(df_att["date"], errors="coerce").dt.date
 
-        # === Chọn tháng cần chấm công ===
+        # === Tháng hiện tại ===
         today = datetime.date.today()
-        # Tạo danh sách tất cả các ngày trong tháng đang chọn
         selected_month = today.replace(day=1)
-        next_month = (selected_month.replace(day=28) + datetime.timedelta(days=4)).replace(day=1)
         days = pd.date_range(start=selected_month, end=today)
-
 
         user_rows = []
         for _, u in df_users.iterrows():
             row = {"User": u["display_name"], "Số ngày đi làm": 0}
             total_work = 0.0
+
             for d in days:
                 wd = d.weekday()
                 weekday = ["T2","T3","T4","T5","T6","T7","CN"][wd]
-
                 record = df_att[(df_att["user_id"] == u["username"]) & (df_att["date"] == d.date())]
+
+                # 🔹 Nếu chưa có record -> mặc định work / off
                 if not record.empty:
                     status = record["status"].iloc[0]
                 else:
                     status = "work" if wd < 5 else "off"
 
-                # ✅ Nếu ngày trong tương lai thì để trống (None)
+                # 🔹 Không cho điền tương lai
                 if d.date() > today:
                     row[f"{d.strftime('%d/%m')} ({weekday})"] = None
                 else:
                     row[f"{d.strftime('%d/%m')} ({weekday})"] = status
-
-                # ✅ Chỉ tính tổng công đến hôm nay
-                if d.date() <= today:
-                    total_work += 1 if status == "work" else 0.5 if status == "half" else 0
-
+                    if status == "work":
+                        total_work += 1
+                    elif status == "half":
+                        total_work += 0.5
 
             row["Số ngày đi làm"] = round(total_work, 1)
             user_rows.append(row)
 
         df_display = pd.DataFrame(user_rows)
 
-
-
-        # Hiển thị bảng có màu
-        color_map = {"work": "white", "half": "#FFD966", "off": "#FF9999"}
-
-        def color_cell(val):
-            return f"background-color: {color_map.get(val, 'white')}; text-align:center;"
-
-        
-        color_map = {"work": "white", "half": "#FFD966", "off": "#FF9999"}
-
-        def cell_color(val):
-            return f"background-color: {color_map.get(val, 'white')}; text-align:center;"
-
-        st.markdown("### 📅 Bảng chấm công")
-
-        color_map = {
-            "work": "#b9f6ca",   # xanh nhạt
-            "half": "#fff59d",   # vàng nhạt
-            "off":  "#ff8a80"    # đỏ nhạt
-        }
-
-        def color_cell(val):
-            return f"background-color: {color_map.get(val, 'white')}; text-align:center;"
-
-        st.markdown("### 📅 Bảng chấm công")
-
-        color_map = {
-            "work": "#b9f6ca",   # xanh nhạt
-            "half": "#fff59d",   # vàng nhạt
-            "off":  "#ff8a80"    # đỏ nhạt
-        }
-
-        # Chuyển các cột ngày sang kiểu selectbox để chọn trực tiếp
-        editable_cols = [c for c in df_display.columns if "/" in c]
-        # Tính lại tổng ngày đi làm mỗi khi user sửa trạng thái
-
+        # 🧮 Hàm tính lại tổng khi đổi trạng thái
         def recalc_total(df):
             for idx, row in df.iterrows():
                 total = 0
@@ -1170,35 +1133,14 @@ def admin_app(user):
                         total += 1
                     elif val == "half":
                         total += 0.5
-                df.at[idx, "Số ngày đi làm"] = total
+                df.at[idx, "Số ngày đi làm"] = round(total, 1)
             return df
 
-        # 👉 Tính lại ngay trước hiển thị
         df_display = recalc_total(df_display)
 
-        editable_cols = [c for c in df_display.columns if "/" in c]
-        edited_df = st.data_editor(
-            df_display,
-            key="attendance_editor",
-            use_container_width=True,
-            column_config={
-                col: st.column_config.SelectboxColumn(
-                    col,
-                    options=["work", "half", "off"],
-                    help="Chọn trạng thái làm việc",
-                )
-                for col in editable_cols
-            },
-            disabled=["User"],
-            hide_index=True,
-        )
-        edited_df = recalc_total(edited_df)
-
-        # Thêm màu nền theo trạng thái
-        
+        # 🖍️ CSS để hiển thị màu nền động
         st.markdown("""
         <style>
-        /* Áp dụng màu nền cho cell hiển thị text cụ thể */
         [data-testid="stDataEditorCell"] div[role="button"]:has(span:contains("work")) {
             background-color: #b9f6ca !important;
         }
@@ -1211,12 +1153,30 @@ def admin_app(user):
         </style>
         """, unsafe_allow_html=True)
 
+        st.markdown("### 📅 Bảng chấm công")
 
+        editable_cols = [c for c in df_display.columns if "/" in c]
 
+        edited_df = st.data_editor(
+            df_display,
+            key="attendance_editor",
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                col: st.column_config.SelectboxColumn(
+                    col,
+                    options=["work", "half", "off"],
+                    help="Chọn trạng thái làm việc"
+                ) for col in editable_cols
+            },
+            disabled=["User"],
+        )
 
+        # 🔄 Tính lại tổng khi đổi
+        edited_df = recalc_total(edited_df)
 
-
-        if st.button("💾 Cập nhật chấm công"):
+        st.write("")
+        if st.button("💾 Cập nhật chấm công", use_container_width=True):
             for _, row in edited_df.iterrows():
                 username = df_users.loc[df_users["display_name"] == row["User"], "username"].iloc[0]
                 for col in [c for c in edited_df.columns if "/" in c]:
@@ -1225,15 +1185,15 @@ def admin_app(user):
                     if date_val > today:
                         continue
                     status_val = row[col]
+                    # Xoá rồi ghi lại để tránh trùng
                     supabase.table("attendance").delete().eq("user_id", username).eq("date", date_val.isoformat()).execute()
                     supabase.table("attendance").insert({
                         "user_id": username,
                         "date": date_val.isoformat(),
                         "status": status_val
                     }).execute()
-            st.success("✅ Đã cập nhật dữ liệu chấm công thành công!")
+            st.success("✅ Đã cập nhật dữ liệu chấm công!")
             st.rerun()
-
 
 
     elif choice == "Thống kê công việc":
