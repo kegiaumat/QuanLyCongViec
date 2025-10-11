@@ -899,10 +899,10 @@ def admin_app(user):
         if not df_att.empty:
             df_att["date"] = pd.to_datetime(df_att["date"]).dt.date
 
-        # ===== TẠO BẢNG HIỂN THỊ =====
+        # ===== TẠO DỮ LIỆU BẢNG =====
         user_rows = []
         for _, u in df_users.iterrows():
-            row = {"User": u["display_name"]}
+            row = {"User": u["display_name"], "Số ngày đi làm": 0}
             total_days = 0
             for d in days:
                 wd = d.weekday()
@@ -926,7 +926,7 @@ def admin_app(user):
 
         df_display = pd.DataFrame(user_rows)
 
-        # ===== AgGrid hiển thị với Selectbox trong từng cell =====
+        # ===== TÔ MÀU TRẠNG THÁI =====
         color_js = JsCode("""
             function(params) {
                 if (params.value === 'work') {
@@ -940,13 +940,13 @@ def admin_app(user):
             }
         """)
 
+        # ===== CẤU HÌNH LƯỚI =====
         gb = GridOptionsBuilder.from_dataframe(df_display)
         gb.configure_default_column(editable=True, resizable=True)
         gb.configure_column("User", editable=False, width=180)
-        gb.configure_column("Số ngày đi làm", editable=False, width=150)
+        gb.configure_column("Số ngày đi làm", editable=False, width=140)
 
-        # Các cột ngày có selectbox
-        for col in df_display.columns[1:-1]:
+        for col in df_display.columns[2:]:
             gb.configure_column(
                 col,
                 cellEditor='agSelectCellEditor',
@@ -963,33 +963,46 @@ def admin_app(user):
             update_mode=GridUpdateMode.VALUE_CHANGED,
             allow_unsafe_jscode=True,
             fit_columns_on_grid_load=True,
-            height=550,
+            height=600,
             theme="streamlit"
         )
 
         updated_df = pd.DataFrame(grid_response["data"])
 
-        # ===== NÚT CẬP NHẬT =====
-        if st.button("💾 Cập nhật chấm công"):
-            try:
-                for _, row in updated_df.iterrows():
-                    username = df_users[df_users["display_name"] == row["User"]]["username"].iloc[0]
-                    for col in df_display.columns[1:-1]:
-                        date_str = f"{col}/{selected_month.year}"
-                        date_obj = dt.datetime.strptime(date_str, "%d/%m/%Y").date()
-                        status = row[col]
+        # ===== CẬP NHẬT DATABASE NGAY KHI THAY ĐỔI =====
+        if grid_response["data"] != df_display.to_dict(orient="records"):
+            changed = grid_response["data"]
+            st.toast("🔄 Đang cập nhật dữ liệu...", icon="🔁")
 
-                        supabase.table("attendance").delete().eq("user_id", username).eq("date", date_obj.isoformat()).execute()
-                        supabase.table("attendance").insert({
-                            "user_id": username,
-                            "date": date_obj.isoformat(),
-                            "status": status
-                        }).execute()
+            for _, row in updated_df.iterrows():
+                username = df_users[df_users["display_name"] == row["User"]]["username"].iloc[0]
+                total_days = 0
+                for col in df_display.columns[2:]:
+                    status = row[col]
+                    if status == "work":
+                        total_days += 1
+                    elif status == "half":
+                        total_days += 0.5
 
-                st.success("✅ Đã cập nhật chấm công thành công!")
-            except Exception as e:
-                st.error(f"❌ Lỗi khi cập nhật: {e}")
+                    date_str = f"{col}/{selected_month.year}"
+                    date_obj = dt.datetime.strptime(date_str, "%d/%m/%Y").date()
 
+                    supabase.table("attendance").delete().eq("user_id", username).eq("date", date_obj.isoformat()).execute()
+                    supabase.table("attendance").insert({
+                        "user_id": username,
+                        "date": date_obj.isoformat(),
+                        "status": status
+                    }).execute()
+
+                supabase.table("attendance_summary").upsert({
+                    "user_id": username,
+                    "month": selected_month.strftime("%Y-%m"),
+                    "total_days": total_days
+                }).execute()
+
+            st.success("✅ Đã cập nhật dữ liệu và tổng công!")
+
+        # ===== HIỂN THỊ CHÚ GIẢI =====
         st.markdown("""
             <div style='margin-top:10px;'>
                 <span style='background-color:#b6f5b6;padding:4px 8px;border-radius:4px;'>🟢 work</span>
