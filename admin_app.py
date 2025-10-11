@@ -965,31 +965,32 @@ def admin_app(user):
         selected_col = None
 
         try:
-            # Một số version st-aggrid trả kiểu object, cần truy cập đúng thuộc tính
-            if hasattr(grid_response, "selected_rows") and grid_response.selected_rows:
-                # Khi chọn dòng (singleRow hoặc singleCell vẫn có selected_rows)
-                selected_user = grid_response.selected_rows[0].get("User")
-                selected_col = None
-            elif hasattr(grid_response, "selected_cells") and grid_response.selected_cells:
-                # Khi chọn đúng một ô (một số version mới)
-                cell = grid_response.selected_cells[0]
-                selected_user = df_display.iloc[cell["rowIndex"]]["User"]
-                selected_col = cell.get("colId")
-            elif hasattr(grid_response, "grid_response"):
-                raw = grid_response.grid_response
-                if isinstance(raw, dict):
-                    for key in ["selected_cells", "selection"]:
-                        if key in raw and raw[key]:
-                            cell = raw[key][0]
-                            selected_user = df_display.iloc[cell["rowIndex"]]["User"]
-                            selected_col = cell.get("colId")
-                            break
+            # Với version hiện tại, dữ liệu chọn nằm ở grid_response.selected_rows
+            if grid_response.selected_rows:
+                selected_row = grid_response.selected_rows[0]
+                selected_user = selected_row.get("User")
 
-            # Ghi nhớ trạng thái chọn để không mất khi rerun
-            if selected_user:
+                # Lưu lại vào session để không mất khi rerun
                 st.session_state["selected_user"] = selected_user
-            if selected_col:
-                st.session_state["selected_col"] = selected_col
+                # Cột thì ta chỉ biết theo session, vì selected_rows không chứa cell cụ thể
+                # Giữ nguyên selected_col cũ nếu có
+                selected_col = st.session_state.get("selected_col")
+
+            # Nếu chưa chọn gì (người dùng vừa rerun), lấy lại từ session
+            if not selected_user:
+                selected_user = st.session_state.get("selected_user")
+            if not selected_col:
+                selected_col = st.session_state.get("selected_col")
+
+        except Exception as e:
+            st.warning(f"Lỗi khi xác định ô: {e}")
+
+        # Hiển thị lựa chọn hiện tại
+        if selected_user:
+            st.info(f"✅ Đang chọn: {selected_user}")
+        else:
+            st.warning("🟡 Chọn đúng một ô (hoặc dòng) để cập nhật trạng thái.")
+
 
         except Exception as e:
             st.warning(f"⚠️ Lỗi khi xác định ô được chọn: {e}")
