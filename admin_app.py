@@ -1127,8 +1127,53 @@ def admin_app(user):
 
         # ==== TẠO BẢNG HIỂN THỊ ====
         rows = []
-        for _, u in df.iterrows():
-            uid, uname = u["id"], u["display_name"]
+        for _, u in df_users.iterrows():
+            uid = str(u.get("id") or u.get("user_id") or "").strip()
+            uname = u.get("display_name", "")
+            if not uid:
+                continue  # bỏ qua dòng lỗi
+
+            # Lấy dữ liệu tháng hiện tại nếu có
+            record = df_att[(df_att["user_id"].astype(str) == uid) & (df_att["month"] == month_str)]
+            if not record.empty:
+                work_days = record["work_days"].iloc[0] or []
+                half_days = record["half_days"].iloc[0] or []
+                off_days = record["off_days"].iloc[0] or []
+            else:
+                work_days, half_days, off_days = [], [], []
+                for d in days:
+                    if d.date() > today.date():
+                        continue
+                    if d.weekday() < 5:
+                        work_days.append(d.day)
+                    else:
+                        off_days.append(d.day)
+
+            current = {"work": work_days, "half": half_days, "off": off_days}
+        rows = []
+        for _, u in df_users.iterrows():
+            uid = str(u.get("id") or u.get("user_id") or "").strip()
+            uname = u.get("display_name", "")
+            if not uid:
+                continue  # bỏ qua dòng lỗi
+
+            # Lấy dữ liệu tháng hiện tại nếu có
+            record = df_att[(df_att["user_id"].astype(str) == uid) & (df_att["month"] == month_str)]
+            if not record.empty:
+                work_days = record["work_days"].iloc[0] or []
+                half_days = record["half_days"].iloc[0] or []
+                off_days = record["off_days"].iloc[0] or []
+            else:
+                work_days, half_days, off_days = [], [], []
+                for d in days:
+                    if d.date() > today.date():
+                        continue
+                    if d.weekday() < 5:
+                        work_days.append(d.day)
+                    else:
+                        off_days.append(d.day)
+
+            current = {"work": work_days, "half": half_days, "off": off_days}
 
             # Lấy dữ liệu tháng hiện tại nếu có
             record = df_att[(df_att["user_id"] == uid) & (df_att["month"] == month_str)]
