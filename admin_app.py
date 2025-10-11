@@ -30,7 +30,6 @@ def refresh_all_cache():
     st.cache_data.clear()
     for k in ["users_df", "projects_df", "jobs_df"]:
         st.session_state.pop(k, None)
-    refresh_all_cache()
 
 
 st.set_page_config(layout="wide")
