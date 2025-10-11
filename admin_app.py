@@ -1091,10 +1091,16 @@ def admin_app(user):
 
                                 else:
                                     st.info("⚠️ Bạn chưa tick dòng nào để xoá.")
+
     elif choice == "Chấm công – Nghỉ phép":
         st.subheader("🕒 Quản lý chấm công và nghỉ phép")
 
+        import datetime as dt
+        import json
+        from st_aggrid import GridOptionsBuilder, AgGrid, GridUpdateMode, JsCode
+        from auth import get_connection
 
+        supabase = get_connection()
         df_users = load_users_cached()
 
         # ====== Xác định tháng hiện tại ======
