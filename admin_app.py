@@ -1098,12 +1098,13 @@ def admin_app(user):
         import pandas as pd
         from auth import get_connection
 
-        st.subheader("🕒 Quản lý chấm công và nghỉ phép")
+        st.subheader("🕒 Quản lý chấm công & nghỉ phép")
 
+        # ==== KẾT NỐI SUPABASE ====
         supabase = get_connection()
         df_users = load_users_cached()
 
-        # === CÀI ĐẶT THÁNG ===
+        # ==== CÀI ĐẶT THỜI GIAN ====
         today = pd.Timestamp(dt.date.today())
         selected_month = st.date_input("📅 Chọn tháng", dt.date(today.year, today.month, 1))
         month_str = selected_month.strftime("%Y-%m")
@@ -1113,25 +1114,24 @@ def admin_app(user):
 
         session_key = f"attendance_{month_str}"
 
-        # === LẤY DỮ LIỆU TỪ SUPABASE ===
+        # ==== LẤY DỮ LIỆU TỪ SUPABASE ====
         res = supabase.table("attendance_monthly").select("*").eq("month", month_str).execute()
-        df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=[
-            "user_id", "month", "work_days", "half_days", "off_days"
-        ])
+        df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["user_id", "month", "work_days", "half_days", "off_days"])
 
+        # Chuyển cột JSONB thành list
         for col in ["work_days", "half_days", "off_days"]:
             if col in df_att.columns:
                 df_att[col] = df_att[col].apply(lambda x: json.loads(x) if isinstance(x, str) else (x or []))
             else:
                 df_att[col] = [[] for _ in range(len(df_att))]
 
-        # Ghép tên người dùng (ép kiểu để tránh lỗi)
-        df_att["user_id"] = df_att["user_id"].astype(str)
+        # Ghép tên người dùng
         df_users["id"] = df_users["id"].astype(str)
+        df_att["user_id"] = df_att["user_id"].astype(str)
         df_att = df_att.merge(df_users[["id", "display_name"]], left_on="user_id", right_on="id", how="left")
         df_att.rename(columns={"display_name": "User"}, inplace=True)
 
-        # === TẠO DỮ LIỆU HIỂN THỊ ===
+        # ==== TẠO DỮ LIỆU HIỂN THỊ ====
         rows = []
         for _, u in df_users.iterrows():
             uid, uname = u["id"], u["display_name"]
@@ -1154,11 +1154,13 @@ def admin_app(user):
             row = {"User": uname, "user_id": uid}
             total = 0
             for d in days:
-                wd = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"][d.weekday()]
-                col = f"{d.strftime('%d/%m')} ({wd})"
+                weekday = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"][d.weekday()]
+                col = f"{d.strftime('%d/%m')} ({weekday})"
+
                 if d.date() > today.date():
                     row[col] = ""
                     continue
+
                 if d.day in work_days:
                     row[col] = "work"
                     total += 1
@@ -1173,23 +1175,16 @@ def admin_app(user):
             rows.append(row)
 
         df_display = pd.DataFrame(rows)
-        df_display = df_display[
-            ["User", "Số ngày đi làm"]
-            + [f"{d.strftime('%d/%m')} ({['T2','T3','T4','T5','T6','T7','CN'][d.weekday()]})" for d in days]
-        ]
+        df_display = df_display[["User", "Số ngày đi làm"] +
+                                [f"{d.strftime('%d/%m')} ({['T2','T3','T4','T5','T6','T7','CN'][d.weekday()]})" for d in days]]
 
-        # === LƯU SESSION (CHỈ 1 LẦN) ===
+        # ==== KHỞI TẠO SESSION_STATE ====
         if f"{session_key}_display" not in st.session_state:
             st.session_state[f"{session_key}_display"] = df_display.copy()
 
-        st.write("### 🧾 Bảng chấm công (chỉnh trực tiếp):")
+        st.write("### 📋 Bảng chấm công (chỉnh trực tiếp):")
 
-        # Cấu hình màu theo trạng thái
-        color_map = {"work": "background-color: #b6f5b6;",
-                     "half": "background-color: #ffe97f;",
-                     "off": "background-color: #ff9999;"}
-
-        # Cấu hình selectbox cho các cột ngày
+        # ==== CẤU HÌNH DROPDOWN ====
         config = {
             col: st.column_config.SelectboxColumn(
                 label=col,
@@ -1200,17 +1195,17 @@ def admin_app(user):
             if "/" in col
         }
 
-        # Hiển thị bảng chỉnh sửa
+        # ==== DATA EDITOR ====
         edited_df = st.data_editor(
             st.session_state[f"{session_key}_display"],
             column_config=config,
             hide_index=True,
             use_container_width=True,
-            key=f"data_editor_{month_str}",
+            key=f"editor_{month_str}",
             height=600,
         )
 
-        # Tính lại số ngày đi làm (realtime)
+        # ==== CẬP NHẬT TRẠNG THÁI TẠM ====
         for i in range(len(edited_df)):
             total = 0
             for col in edited_df.columns:
@@ -1223,16 +1218,23 @@ def admin_app(user):
                     total += 0.5
             edited_df.at[i, "Số ngày đi làm"] = total
 
+        # Lưu lại session (đảm bảo không rerun mất dữ liệu)
         st.session_state[f"{session_key}_display"] = edited_df.copy()
 
-        # Hiển thị màu nền
-        styled = edited_df.style.map(lambda v: color_map.get(v, ""))
+        # ==== HIỂN THỊ BẢNG MÀU ====
+        st.write("#### 🎨 Hiển thị bảng có màu:")
+        color_icon = {"work": "🟩 work", "half": "🟨 half", "off": "🟥 off"}
+        display_df = edited_df.copy()
 
-        st.dataframe(styled, use_container_width=True, hide_index=True)
+        for col in display_df.columns:
+            if "/" in col:
+                display_df[col] = display_df[col].replace(color_icon)
 
-        # === NÚT GHI DỮ LIỆU ===
+        st.dataframe(display_df, hide_index=True, use_container_width=True)
+
+        # ==== NÚT GHI DATABASE ====
         if st.button("💾 Cập nhật thay đổi"):
-            with st.spinner("Đang ghi dữ liệu lên Supabase..."):
+            with st.spinner("Đang cập nhật dữ liệu lên Supabase..."):
                 for _, row in edited_df.iterrows():
                     work_days, half_days, off_days = [], [], []
                     for col in edited_df.columns:
@@ -1254,7 +1256,8 @@ def admin_app(user):
                         "half_days": json.dumps(half_days),
                         "off_days": json.dumps(off_days)
                     }).execute()
-            st.success("✅ Dữ liệu chấm công đã được cập nhật thành công!")
+
+            st.success("✅ Đã cập nhật dữ liệu chấm công thành công!")
 
     elif choice == "Thống kê công việc":
         st.subheader("📊 Thống kê công việc")
