@@ -1129,12 +1129,13 @@ def admin_app(user):
         grid_response = AgGrid(
             df_display,
             gridOptions=grid_options,
-            update_mode=GridUpdateMode.SINGLE,
+            update_mode=GridUpdateMode.SELECTION_CHANGED,
             fit_columns_on_grid_load=True,
             theme="material",
             height=500,
             allow_unsafe_jscode=True,
         )
+
 
         selected = grid_response["selected_cells"]
 
