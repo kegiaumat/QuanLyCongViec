@@ -364,220 +364,134 @@ def admin_app(user):
                         del st.session_state["confirm_delete_jobs"]
         
 
-    elif choice == "Quản lý dự án":
-        st.subheader("🗂️ Quản lý dự án")
+    elif choice == "Chấm công – Nghỉ phép":
+        from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 
-        # ===== Thêm dự án mới =====
-        project_name = st.text_input("Tên dự án mới")
-        project_deadline = st.date_input("Deadline dự án")
-        project_type = st.selectbox("Nhóm dự án", ["public", "group"], index=1)
-        design_step = st.selectbox("Bước thiết kế", [
-            "Lập DA", "TKKT", "BVTC (2 bước)", "BVTC (3 bước)", "Báo cáo KTKT", "Hồ sơ mời thầu"
-        ])
+        st.subheader("🕓 Quản lý chấm công và nghỉ phép")
 
+        supabase = get_supabase_client()
+        df_users = load_users_cached()
 
-        if st.button("➕ Thêm dự án", key="add_project_btn"):
-            try:
-                add_project(project_name, project_deadline, project_type, design_step)
-                st.success(f"✅ Đã thêm dự án: {project_name}")
-                refresh_all_cache()
-            except Exception as e:
-                if "duplicate key" in str(e).lower():
-                    st.error("⚠️ Dự án đã tồn tại")
+        # ========== CHỌN THÁNG ==========
+        today = datetime.date.today()
+        selected_month = st.date_input("Chọn tháng", datetime.date(today.year, today.month, 1))
+
+        first_day = selected_month.replace(day=1)
+        next_month = (first_day + datetime.timedelta(days=32)).replace(day=1)
+        days = pd.date_range(first_day, next_month - datetime.timedelta(days=1))
+
+        # ========== LẤY DỮ LIỆU CHẤM CÔNG ==========
+        data = supabase.table("attendance").select("*").execute()
+        df_att = pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["user_id", "date", "status"])
+        df_att["date"] = pd.to_datetime(df_att["date"]).dt.date
+
+        # ========== TẠO BẢNG DỮ LIỆU HIỂN THỊ ==========
+        user_rows = []
+        for _, u in df_users.iterrows():
+            row = {"User": u["display_name"]}
+            total_days = 0
+            for d in days:
+                wd = d.weekday()
+                record = df_att[(df_att["user_id"] == u["username"]) & (df_att["date"] == d.date())]
+                if not record.empty:
+                    status = record["status"].iloc[0]
                 else:
-                    st.error(f"⚠️ Lỗi: {e}")
+                    status = "work" if wd < 5 else "off"
+                row[d.strftime("%d/%m")] = status
+                if status == "work":
+                    total_days += 1
+                elif status == "half":
+                    total_days += 0.5
+            row["Số ngày đi làm"] = total_days
+            user_rows.append(row)
 
+        df_display = pd.DataFrame(user_rows)
 
-        # ===== Đọc danh sách dự án và tính tổng thanh toán =====
-        df_proj = df_projects.copy()
+        # ========== GIAO DIỆN CÁC NÚT CHỌN TRẠNG THÁI ==========
+        st.markdown("#### 🎨 Chọn trạng thái để cập nhật:")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.button("🟢 Đi làm (work)", key="set_work")
+        with col2:
+            st.button("🟡 Nửa ngày (half)", key="set_half")
+        with col3:
+            st.button("🔴 Nghỉ (off)", key="set_off")
 
+        # ========== HIỂN THỊ BẢNG CÓ MÀU ==========
+        gb = GridOptionsBuilder.from_dataframe(df_display)
+        gb.configure_default_column(editable=False, resizable=True)
+        gb.configure_selection(selection_mode="singleCell", use_checkbox=False)
 
+        cell_style_js = JsCode("""
+        function(params) {
+            if (params.value === 'work') {
+                return {'backgroundColor': '#b6f5b6', 'textAlign': 'center'};
+            } else if (params.value === 'half') {
+                return {'backgroundColor': '#ffe97f', 'textAlign': 'center'};
+            } else if (params.value === 'off') {
+                return {'backgroundColor': '#ff9999', 'textAlign': 'center'};
+            }
+            return {'textAlign': 'center'};
+        }
+        """)
 
-        if not df_proj.empty:
-            # Tính tổng % thanh toán của mỗi dự án
+        for c in df_display.columns[1:]:
+            gb.configure_column(c, cellStyle=cell_style_js, width=80)
 
-            # 👉 Tự tính tổng % thanh toán của mỗi dự án (không cần hàm SQL trong Supabase)
-            data = supabase.table("payments").select("project_id, percent").execute()
-            df_pay_total = pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["project_id", "percent"])
-            df_pay_total = df_pay_total.groupby("project_id", as_index=False)["percent"].sum()
-            df_pay_total.rename(columns={"percent": "total_paid"}, inplace=True)
+        gb.configure_column("User", width=160)
+        grid_options = gb.build()
 
-            df_proj = df_proj.merge(df_pay_total, how="left", left_on="id", right_on="project_id")
-            df_proj["total_paid"] = df_proj["total_paid"].astype(float).fillna(0)
+        grid_response = AgGrid(
+            df_display,
+            gridOptions=grid_options,
+            height=480,
+            fit_columns_on_grid_load=True,
+            allow_unsafe_jscode=True,
+            update_mode=GridUpdateMode.SELECTION_CHANGED,
+            theme="streamlit",
+        )
 
+        selected = grid_response.get("selected_cells", [])
 
-            # Chuẩn hóa dữ liệu
-            df_proj["deadline"] = pd.to_datetime(df_proj["deadline"], errors="coerce").dt.date
-            df_proj["project_type"] = df_proj["project_type"].fillna("group")
-            df_proj.rename(columns={"total_paid": "Tổng thanh toán (%)"}, inplace=True)
+        # ========== XỬ LÝ CHỌN Ô VÀ CẬP NHẬT ==========
+        if selected and len(selected) == 1:
+            sel = selected[0]
+            selected_user = df_display.iloc[sel["rowIndex"]]["User"]
+            selected_col = sel["colId"]
+            st.info(f"🔹 Đang chọn: **{selected_user}** – **{selected_col}**")
 
-            # Thêm cột Xóa?
-            df_proj["Xóa?"] = False
-            df_display = df_proj.drop(columns=["id", "project_id"]).copy()
+            # Lấy trạng thái được click nút
+            new_status = None
+            if st.session_state.get("set_work"):
+                new_status = "work"
+            elif st.session_state.get("set_half"):
+                new_status = "half"
+            elif st.session_state.get("set_off"):
+                new_status = "off"
 
-            st.write("### 📋 Danh sách dự án")
-            edited_proj = st.data_editor(
-                df_display,
-                width="stretch",
-                key="proj_editor_main",
-                column_config={
-                    "name": st.column_config.TextColumn("Tên dự án"),
-                    "deadline": st.column_config.DateColumn("Deadline", format="YYYY-MM-DD"),
-                    "project_type": st.column_config.SelectboxColumn("Nhóm dự án", options=["public", "group"]),
-                    "design_step": st.column_config.SelectboxColumn("Bước thiết kế", options=[
-                        "Lập DA", "TKKT", "BVTC (2 bước)", "BVTC (3 bước)", "Báo cáo KTKT", "Hồ sơ mời thầu"
-                    ]),
-                    "Tổng thanh toán (%)": st.column_config.NumberColumn("Tổng thanh toán (%)", disabled=True),
-                    "Xóa?": st.column_config.CheckboxColumn("Xóa?", help="Tick để xoá"),
-                }
-            )
+            if new_status:
+                username = df_users[df_users["display_name"] == selected_user]["username"].iloc[0]
+                date_str = selected_col.split()[0] + f"/{selected_month.year}"
+                try:
+                    date_obj = datetime.datetime.strptime(date_str, "%d/%m/%Y").date()
+                except:
+                    st.error(f"❌ Không xác định được ngày từ cột: {selected_col}")
+                    st.stop()
 
-
-            col1, col2 = st.columns(2)
-
-            # ===== Cập nhật =====
-            with col1:
-                if st.button("💾 Cập nhật dự án", key="update_project_btn"):
-                    for idx, row in edited_proj.iterrows():
-                        row_id   = int(df_proj.loc[idx, "id"])
-                        old_name = df_proj.loc[idx, "name"]
-
-                        # Chuẩn hoá deadline
-                        dl = row["deadline"]
-                        if pd.isna(dl):
-                            dl_str = None
-                        else:
-                            dl_str = pd.to_datetime(dl, errors="coerce")
-                            dl_str = dl_str.strftime("%Y-%m-%d") if pd.notna(dl_str) else None
-
-                        # Update project
-                        supabase.table("projects").update({
-                            "name": row["name"],
-                            "deadline": dl_str,
-                            "project_type": row["project_type"],
-                            "design_step": row["design_step"]
-                        }).eq("id", row_id).execute()
-
-
-                        # Nếu đổi tên dự án → cập nhật tasks + users
-                        if row["name"] != old_name:
-                            supabase.table("tasks").update({"project": row["name"]}).eq("project", old_name).execute()
-                            for colu in ("project_manager_of", "project_leader_of"):
-                                
-                                data_users = supabase.table("users").select(f"username, {colu}").not_.is_(colu, None).execute()
-                                for user in data_users.data:
-                                    username = user["username"]
-                                    csv_vals = user.get(colu) or ""
-                                    parts = [p.strip() for p in csv_vals.split(",") if p.strip()]
-                                    changed = False
-                                    for i, p in enumerate(parts):
-                                        if p == old_name:
-                                            parts[i] = row["name"]
-                                            changed = True
-                                    if changed:
-                                        new_csv = ",".join(parts) if parts else None
-                                        supabase.table("users").update({colu: new_csv}).eq("username", username).execute()
-
-
-                    
-                    st.success("✅ Đã cập nhật thông tin dự án")
-                    refresh_all_cache()
-
-            # ===== Xóa =====
-            with col2:
-                if st.button("❌ Xóa dự án", key="delete_project_btn"):
-                    to_delete = edited_proj[edited_proj["Xóa?"] == True]
-                    if to_delete.empty:
-                        st.warning("⚠️ Bạn chưa tick dự án nào để xoá")
-                    else:
-                        st.session_state["confirm_delete"] = to_delete["name"].tolist()
-
-            # ===== Hộp xác nhận xoá =====
-            if "confirm_delete" in st.session_state:
-                proj_list = st.session_state["confirm_delete"]
-                st.error(f"⚠️ Bạn có chắc muốn xoá {len(proj_list)} dự án sau: {', '.join(proj_list)} ?")
-
-                c1, c2 = st.columns(2)
-                with c1:
-                    if st.button("✅ Yes, xoá ngay", key="confirm_delete_yes"):
-                        for proj_name in proj_list:
-                            supabase.table("tasks").delete().eq("project", proj_name).execute()
-                            supabase.table("projects").delete().eq("name", proj_name).execute()
-                            for colu in ("project_manager_of", "project_leader_of"):
-                                
-                                data_users = supabase.table("users").select(f"username, {colu}").not_.is_(colu, None).execute()
-                                for user in data_users.data:
-                                    username = user["username"]
-                                    csv_vals = user.get(colu) or ""
-                                    parts = [p.strip() for p in csv_vals.split(",") if p.strip()]
-                                    parts = [p for p in parts if p != proj_name]
-                                    new_csv = ",".join(parts) if parts else None
-                                    supabase.table("users").update({colu: new_csv}).eq("username", username).execute()
-
-                        
-                        st.success("🗑️ Đã xoá các dự án được chọn")
-                        del st.session_state["confirm_delete"]
-                        refresh_all_cache()
-
-                with c2:
-                    if st.button("❌ No, huỷ", key="confirm_delete_no"):
-                        st.info("Đã huỷ thao tác xoá")
-                        del st.session_state["confirm_delete"]
-        else:
-            st.info("⚠️ Chưa có dự án nào")
-
-        # ===== Quản lý thanh toán =====
-        st.divider()
-        st.markdown("### 💳 Quản lý thanh toán cho dự án")
-
-        if not df_proj.empty:
-            proj_options = df_proj["name"].tolist()
-            selected_proj = st.selectbox("Chọn dự án để xem/nhập thanh toán", proj_options, key="select_proj_for_payment")
-            proj_id = int(df_proj.loc[df_proj["name"] == selected_proj, "id"].iloc[0])
-
-            
-            data = supabase.table("payments").select("id, payment_number, percent, note, paid_at").eq("project_id", proj_id).order("payment_number").execute()
-            df_pay = pd.DataFrame(data.data)
-
-            st.write("#### Danh sách thanh toán")
-            if df_pay.empty:
-                st.info("Chưa có thông tin thanh toán nào")
-                total_paid = 0
-            else:
-                total_paid = df_pay["Tỉ lệ (%)"].sum()
-                st.dataframe(df_pay, width="stretch")
-                st.success(f"💵 Tổng đã thanh toán: **{total_paid:.1f}%**")
-
-            st.write("#### ➕ Thêm lần thanh toán mới")
-
-            # 👉 Gom 4 input vào cùng 1 hàng
-            col1, col2, col3, col4 = st.columns([1, 1, 2, 2])
-            with col1:
-                next_num = (df_pay["Lần thanh toán"].max() + 1) if not df_pay.empty else 1
-                pay_num = st.number_input("Lần", value=int(next_num), step=1, min_value=1, key="pay_num")
-            with col2:
-                pay_percent = st.number_input("%", min_value=0.0, max_value=100.0, step=0.1, key="pay_percent")
-            with col3:
-                pay_note = st.text_input("Ghi chú", key="pay_note")
-            with col4:
-                pay_date = st.date_input("Ngày", key="pay_date")
-
-            if st.button("💾 Lưu lần thanh toán", key="save_payment_btn"):
-                if total_paid + pay_percent > 100:
-                    st.warning("⚠️ Tổng thanh toán sẽ vượt quá 100%!")
-                
-                supabase.table("payments").insert({
-                    "project_id": proj_id,
-                    "payment_number": pay_num,
-                    "percent": pay_percent,
-                    "note": pay_note,
-                    "paid_at": pay_date.strftime("%Y-%m-%d")
+                # Xóa dữ liệu cũ và ghi mới
+                supabase.table("attendance").delete().eq("user_id", username).eq("date", date_obj.isoformat()).execute()
+                supabase.table("attendance").insert({
+                    "user_id": username,
+                    "date": date_obj.isoformat(),
+                    "status": new_status
                 }).execute()
-                
-                st.success("✅ Đã thêm lần thanh toán mới")
+
+                st.success(f"✅ Đã cập nhật {selected_user} – {selected_col} thành **{new_status}**!")
                 st.rerun()
 
-   
+        else:
+            st.warning("🟡 Chọn đúng **một ô** để cập nhật (hiện đang chọn cả hàng hoặc chưa chọn gì).")
+
 
     elif choice == "Quản lý Giao Việc":
         st.subheader("📝 Giao việc")
