@@ -955,6 +955,7 @@ def admin_app(user):
             update_mode=GridUpdateMode.SELECTION_CHANGED,
             theme="streamlit",
         )
+        st.write("🧩 grid_response debug:", grid_response)
 
         # ===== XỬ LÝ LỰA CHỌN Ô =====
         # ===== XỬ LÝ LỰA CHỌN Ô =====
