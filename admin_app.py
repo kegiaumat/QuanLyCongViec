@@ -1103,7 +1103,7 @@ def admin_app(user):
         supabase = get_connection()
         df_users = load_users_cached()
 
-        # === Xác định tháng hiện tại ===
+        # === Xác định tháng ===
         today = pd.Timestamp(dt.date.today())
         selected_month = st.date_input("📅 Chọn tháng", dt.date(today.year, today.month, 1))
         month_str = selected_month.strftime("%Y-%m")
@@ -1113,7 +1113,7 @@ def admin_app(user):
 
         session_key = f"attendance_{month_str}"
 
-        # === CHỈ TẢI DB MỘT LẦN ===
+        # === Lần đầu load DB ===
         if f"{session_key}_raw" not in st.session_state:
             res = supabase.table("attendance_monthly").select("*").eq("month", month_str).execute()
             df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["user_id","month","work_days","half_days","off_days"])
@@ -1126,7 +1126,7 @@ def admin_app(user):
         else:
             df_att = st.session_state[f"{session_key}_raw"]
 
-        # === TẠO DỮ LIỆU HIỂN THỊ ===
+        # === Tạo dữ liệu hiển thị ===
         rows = []
         for _, u in df_users.iterrows():
             uid, uname = u["id"], u["display_name"]
@@ -1141,12 +1141,11 @@ def admin_app(user):
                     if d.date() > today.date(): continue
                     if d.weekday() < 5: work_days.append(d.day)
                     else: off_days.append(d.day)
-
-            row = {"User": uname}
+            row = {"User": uname, "user_id": uid}
             total = 0
             for d in days:
-                weekday = ["T2","T3","T4","T5","T6","T7","CN"][d.weekday()]
-                col = f"{d.strftime('%d/%m')} ({weekday})"
+                wd = ["T2","T3","T4","T5","T6","T7","CN"][d.weekday()]
+                col = f"{d.strftime('%d/%m')} ({wd})"
                 if d.date() > today.date():
                     row[col] = ""
                     continue
@@ -1155,17 +1154,17 @@ def admin_app(user):
                 elif d.day in off_days: row[col] = "off"
                 else: row[col] = ""
             row["Số ngày đi làm"] = total
-            row["user_id"] = uid
             rows.append(row)
 
         df_display = pd.DataFrame(rows)
         df_display = df_display[["User","Số ngày đi làm"] + [f"{d.strftime('%d/%m')} ({['T2','T3','T4','T5','T6','T7','CN'][d.weekday()]})" for d in days]]
 
-        # === Lưu state nếu chưa có ===
-        if f"{session_key}_display" not in st.session_state:
-            st.session_state[f"{session_key}_display"] = df_display.copy()
-            st.session_state[f"{session_key}_edited"] = set()
+        # === Khởi tạo session ===
+        if f"{session_key}_df" not in st.session_state:
+            st.session_state[f"{session_key}_df"] = df_display.copy()
+            st.session_state[f"{session_key}_changed"] = set()
 
+        # === Cấu hình bảng ===
         color_js = JsCode("""
             function(params) {
                 let s = {'textAlign':'center','whiteSpace':'normal','lineHeight':'22px'};
@@ -1176,13 +1175,13 @@ def admin_app(user):
             }
         """)
 
-        gb = GridOptionsBuilder.from_dataframe(df_display)
+        gb = GridOptionsBuilder.from_dataframe(st.session_state[f"{session_key}_df"])
         gb.configure_default_column(editable=True, wrapText=True, autoHeight=True, resizable=True)
         gb.configure_column("User", editable=False, width=180)
         gb.configure_column("Số ngày đi làm", editable=False, width=130)
-        for col in df_display.columns[2:]:
+        for c in df_display.columns[2:]:
             gb.configure_column(
-                col,
+                c,
                 cellEditor='agSelectCellEditor',
                 cellEditorParams={'values':['work','half','off','']},
                 editable=True,
@@ -1190,18 +1189,19 @@ def admin_app(user):
                 width=110
             )
 
+        # === AgGrid hiển thị tĩnh (no rerun trigger) ===
         grid_response = AgGrid(
-            st.session_state[f"{session_key}_display"],
+            st.session_state[f"{session_key}_df"],
             gridOptions=gb.build(),
-            update_mode="NO_UPDATE",        # ❗ Không rerun khi đổi cell
+            update_mode="NO_UPDATE",
             allow_unsafe_jscode=True,
             theme="streamlit",
             height=650
         )
 
+        # === Xử lý chỉnh sửa chỉ trong bộ nhớ ===
         updated_df = pd.DataFrame(grid_response["data"])
-
-        # === Chỉ tính lại cột tổng, KHÔNG GHI DB ===
+        # cập nhật tổng
         for i in range(len(updated_df)):
             total = 0
             for col in updated_df.columns:
@@ -1211,13 +1211,21 @@ def admin_app(user):
                 elif v == "half": total += 0.5
             updated_df.at[i, "Số ngày đi làm"] = total
 
-        # Giữ thay đổi trong session
-        st.session_state[f"{session_key}_display"] = updated_df.copy()
+        # so sánh với bản gốc để biết hàng nào thay đổi
+        old_df = st.session_state[f"{session_key}_df"]
+        for i in range(len(updated_df)):
+            if not updated_df.iloc[i].equals(old_df.iloc[i]):
+                st.session_state[f"{session_key}_changed"].add(i)
+        st.session_state[f"{session_key}_df"] = updated_df.copy()
+
+        st.info(f"🔸 Đã thay đổi {len(st.session_state[f'{session_key}_changed'])} dòng (chưa ghi vào DB)")
 
         # === Khi nhấn nút mới ghi DB ===
         if st.button("💾 Cập nhật thay đổi"):
             with st.spinner("Đang ghi dữ liệu lên Supabase..."):
-                for _, row in updated_df.iterrows():
+                changed_rows = st.session_state[f"{session_key}_changed"]
+                for i in changed_rows:
+                    row = updated_df.iloc[i]
                     work_days, half_days, off_days = [], [], []
                     for col in updated_df.columns:
                         if "/" not in col: continue
@@ -1228,12 +1236,13 @@ def admin_app(user):
                         elif val == "off": off_days.append(day)
 
                     supabase.table("attendance_monthly").upsert({
-                        "user_id": df_users.loc[df_users["display_name"] == row["User"], "id"].iloc[0],
+                        "user_id": df_users.loc[df_users["display_name"]==row["User"],"id"].iloc[0],
                         "month": month_str,
                         "work_days": work_days,
                         "half_days": half_days,
                         "off_days": off_days
                     }).execute()
+                st.session_state[f"{session_key}_changed"].clear()
             st.success("✅ Đã cập nhật thành công!")
 
 
