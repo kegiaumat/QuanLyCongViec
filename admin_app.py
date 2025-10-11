@@ -1226,14 +1226,26 @@ def admin_app(user):
                         elif isinstance(val, str) and "off" in val:
                             off_days.append(day)
 
-                    # Upsert thẳng vào bảng attendance_monthly
-                    supabase.table("attendance_monthly").upsert({
-                        "user_id": uid,
-                        "month": month_str,
-                        "work_days": work_days,
-                        "half_days": half_days,
-                        "off_days": off_days
-                    }, on_conflict=["user_id", "month"]).execute()
+                    # --- Kiểm tra xem đã có dòng chưa ---
+                    existing = supabase.table("attendance_monthly").select("id").eq("user_id", uid).eq("month", month_str).execute()
+
+                    if existing.data:
+                        # --- Nếu có rồi thì update ---
+                        rec_id = existing.data[0]["id"]
+                        supabase.table("attendance_monthly").update({
+                            "work_days": work_days,
+                            "half_days": half_days,
+                            "off_days": off_days
+                        }).eq("id", rec_id).execute()
+                    else:
+                        # --- Nếu chưa có thì insert ---
+                        supabase.table("attendance_monthly").insert({
+                            "user_id": uid,
+                            "month": month_str,
+                            "work_days": work_days,
+                            "half_days": half_days,
+                            "off_days": off_days
+                        }).execute()
 
 
             st.success("✅ Dữ liệu đã được lưu thành công!")
