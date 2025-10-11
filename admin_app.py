@@ -1211,7 +1211,9 @@ def admin_app(user):
         if st.button("💾 Cập nhật thay đổi"):
             with st.spinner("Đang ghi dữ liệu lên Supabase..."):
                 for _, row in edited_df.iterrows():
+                    uid = int(df_users.loc[df_users["display_name"] == row["User"], "id"].iloc[0])
                     work_days, half_days, off_days = [], [], []
+
                     for col in edited_df.columns:
                         if "/" not in col:
                             continue
@@ -1224,24 +1226,15 @@ def admin_app(user):
                         elif isinstance(val, str) and "off" in val:
                             off_days.append(day)
 
-                    # Lấy JSON cũ
-                    uid = str(df_users.loc[df_users["display_name"] == row["User"], "id"].iloc[0])
-                    res = supabase.table("attendance_users").select("months").eq("user_id", uid).execute()
-                    if res.data:
-                        months = res.data[0]["months"] or {}
-                    else:
-                        months = {}
-
-                    months[month_str] = {
-                        "work": work_days,
-                        "half": half_days,
-                        "off": off_days
-                    }
-
-                    supabase.table("attendance_users").upsert({
+                    # Upsert thẳng vào bảng attendance_monthly
+                    supabase.table("attendance_monthly").upsert({
                         "user_id": uid,
-                        "months": json.dumps(months)
-                    }).execute()
+                        "month": month_str,
+                        "work_days": work_days,
+                        "half_days": half_days,
+                        "off_days": off_days
+                    }, on_conflict=["user_id", "month"]).execute()
+
 
             st.success("✅ Dữ liệu đã được lưu thành công!")
 
