@@ -1093,6 +1093,10 @@ def admin_app(user):
                                     st.info("⚠️ Bạn chưa tick dòng nào để xoá.")
 
     elif choice == "Chấm công – Nghỉ phép":
+        import datetime as dt
+        import json
+        import pandas as pd
+        from auth import get_connection
 
         st.subheader("🕒 Quản lý chấm công và nghỉ phép")
 
@@ -1115,20 +1119,16 @@ def admin_app(user):
             "user_id", "month", "work_days", "half_days", "off_days"
         ])
 
-        # Chuyển JSON string -> list
         for col in ["work_days", "half_days", "off_days"]:
             if col in df_att.columns:
                 df_att[col] = df_att[col].apply(lambda x: json.loads(x) if isinstance(x, str) else (x or []))
             else:
                 df_att[col] = [[] for _ in range(len(df_att))]
 
-        # Ép kiểu về chuỗi để merge an toàn
+        # Ghép tên người dùng (ép kiểu để tránh lỗi)
         df_att["user_id"] = df_att["user_id"].astype(str)
         df_users["id"] = df_users["id"].astype(str)
-
         df_att = df_att.merge(df_users[["id", "display_name"]], left_on="user_id", right_on="id", how="left")
-        df_att.rename(columns={"display_name": "User"}, inplace=True)
-
         df_att.rename(columns={"display_name": "User"}, inplace=True)
 
         # === TẠO DỮ LIỆU HIỂN THỊ ===
@@ -1181,78 +1181,61 @@ def admin_app(user):
         # === LƯU SESSION (CHỈ 1 LẦN) ===
         if f"{session_key}_display" not in st.session_state:
             st.session_state[f"{session_key}_display"] = df_display.copy()
-            st.session_state[f"{session_key}_changed"] = set()
 
-        # === MÀU Ô ===
-        color_js = JsCode("""
-            function(params) {
-                let s = {'textAlign':'center','whiteSpace':'normal','lineHeight':'22px'};
-                if(params.value==='work') s.backgroundColor='#b6f5b6';
-                else if(params.value==='half') s.backgroundColor='#ffe97f';
-                else if(params.value==='off') s.backgroundColor='#ff9999';
-                return s;
-            }
-        """)
+        st.write("### 🧾 Bảng chấm công (chỉnh trực tiếp):")
 
-        gb = GridOptionsBuilder.from_dataframe(st.session_state[f"{session_key}_display"])
-        gb.configure_default_column(editable=True, wrapText=True, autoHeight=True, resizable=True)
-        gb.configure_column("User", editable=False, width=180)
-        gb.configure_column("Số ngày đi làm", editable=False, width=130)
+        # Cấu hình màu theo trạng thái
+        color_map = {"work": "background-color: #b6f5b6;",
+                     "half": "background-color: #ffe97f;",
+                     "off": "background-color: #ff9999;"}
 
-        for c in df_display.columns[2:]:
-            gb.configure_column(
-                c,
-                cellEditor="agSelectCellEditor",
-                cellEditorParams={"values": ["work", "half", "off", ""]},
-                editable=True,
-                cellStyle=color_js,
-                width=110,
+        # Cấu hình selectbox cho các cột ngày
+        config = {
+            col: st.column_config.SelectboxColumn(
+                label=col,
+                options=["work", "half", "off", ""],
+                required=False,
             )
+            for col in df_display.columns
+            if "/" in col
+        }
 
-        grid_response = AgGrid(
+        # Hiển thị bảng chỉnh sửa
+        edited_df = st.data_editor(
             st.session_state[f"{session_key}_display"],
-            gridOptions=gb.build(),
-            update_mode="NO_UPDATE",
-            allow_unsafe_jscode=True,
-            theme="streamlit",
-            height=650,
+            column_config=config,
+            hide_index=True,
+            use_container_width=True,
+            key=f"data_editor_{month_str}",
+            height=600,
         )
 
-        # === CẬP NHẬT TẠM TRONG SESSION (chưa ghi DB) ===
-        updated_df = pd.DataFrame(grid_response["data"])
-
-        # Tính lại số ngày đi làm
-        for i in range(len(updated_df)):
+        # Tính lại số ngày đi làm (realtime)
+        for i in range(len(edited_df)):
             total = 0
-            for col in updated_df.columns:
+            for col in edited_df.columns:
                 if "/" not in col:
                     continue
-                v = updated_df.at[i, col]
+                v = edited_df.at[i, col]
                 if v == "work":
                     total += 1
                 elif v == "half":
                     total += 0.5
-            updated_df.at[i, "Số ngày đi làm"] = total
+            edited_df.at[i, "Số ngày đi làm"] = total
 
-        # So sánh thay đổi
-        old_df = st.session_state[f"{session_key}_display"]
-        diff_rows = []
-        for i in range(len(updated_df)):
-            if not updated_df.iloc[i].equals(old_df.iloc[i]):
-                diff_rows.append(i)
-        if diff_rows:
-            st.session_state[f"{session_key}_changed"].update(diff_rows)
-            st.session_state[f"{session_key}_display"] = updated_df.copy()
+        st.session_state[f"{session_key}_display"] = edited_df.copy()
 
-        st.info(f"🔸 Có {len(st.session_state[f'{session_key}_changed'])} dòng đã chỉnh (chưa ghi DB).")
+        # Hiển thị màu nền
+        styled = edited_df.style.map(lambda v: color_map.get(v, ""))
+
+        st.dataframe(styled, use_container_width=True, hide_index=True)
 
         # === NÚT GHI DỮ LIỆU ===
         if st.button("💾 Cập nhật thay đổi"):
             with st.spinner("Đang ghi dữ liệu lên Supabase..."):
-                for i in st.session_state[f"{session_key}_changed"]:
-                    row = st.session_state[f"{session_key}_display"].iloc[i]
+                for _, row in edited_df.iterrows():
                     work_days, half_days, off_days = [], [], []
-                    for col in updated_df.columns:
+                    for col in edited_df.columns:
                         if "/" not in col:
                             continue
                         day = int(col.split("/")[0])
@@ -1271,8 +1254,6 @@ def admin_app(user):
                         "half_days": json.dumps(half_days),
                         "off_days": json.dumps(off_days)
                     }).execute()
-
-                st.session_state[f"{session_key}_changed"].clear()
             st.success("✅ Dữ liệu chấm công đã được cập nhật thành công!")
 
     elif choice == "Thống kê công việc":
