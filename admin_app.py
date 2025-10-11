@@ -75,7 +75,15 @@ def admin_app(user):
 
 
     # ✅ cập nhật trạng thái online (last_seen)
-    supabase.table("users").update({"last_seen": datetime.datetime.now().isoformat()}).eq("username", user).execute()
+    # --- Cập nhật thời gian đăng nhập ---
+    if "username" in st.session_state:
+        current_user = st.session_state["username"]
+        supabase.table("users").update({
+            "last_seen": datetime.datetime.now().isoformat()
+        }).eq("username", current_user).execute()
+    else:
+        print("⚠️ Không tìm thấy user trong session, bỏ qua cập nhật last_seen.")
+
 
     
 
