@@ -955,9 +955,33 @@ def admin_app(user):
 
         # --- Xử lý lựa chọn ô ---
         # --- Xử lý lựa chọn ô (tương thích với mọi bản st-aggrid) ---
-        selected_rows = grid_response.get("selected_rows", [])
-        selected_cells = grid_response.get("selected_cells", [])
+        # --- Xử lý lựa chọn ô (tương thích với tất cả phiên bản st-aggrid) ---
         sel_info = None
+
+        # 1️⃣ Ưu tiên lấy từ grid_response["selected"], vì đây là key phổ biến nhất
+        if "selected" in grid_response and grid_response["selected"]:
+            sel_info = grid_response["selected"][0]
+
+        # 2️⃣ Nếu không có, thử selected_cells hoặc selected_rows
+        elif "selected_cells" in grid_response and grid_response["selected_cells"]:
+            sel_info = grid_response["selected_cells"][0]
+        elif "selected_rows" in grid_response and grid_response["selected_rows"]:
+            sel_info = grid_response["selected_rows"][0]
+
+        if sel_info:
+            try:
+                row_index = sel_info.get("rowIndex", 0)
+                selected_user = df_display.iloc[row_index]["User"]
+                selected_col = sel_info.get("colId")
+                if selected_col and selected_col not in ["User", "Số ngày đi làm"]:
+                    st.session_state["selected_user"] = selected_user
+                    st.session_state["selected_col"] = selected_col
+            except Exception as e:
+                st.warning(f"Lỗi khi xác định ô: {e}")
+        else:
+            selected_user = st.session_state.get("selected_user")
+            selected_col = st.session_state.get("selected_col")
+
 
         if selected_cells:
             sel_info = selected_cells[0]
