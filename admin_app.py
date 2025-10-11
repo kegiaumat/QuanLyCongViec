@@ -1093,44 +1093,44 @@ def admin_app(user):
                                     st.info("⚠️ Bạn chưa tick dòng nào để xoá.")
 
     elif choice == "Chấm công – Nghỉ phép":
-        st.subheader("🕒 Quản lý chấm công và nghỉ phép")
-
         import datetime as dt
         import json
         from st_aggrid import GridOptionsBuilder, AgGrid, JsCode
+        from auth import get_connection
+
+        st.subheader("🕒 Quản lý chấm công và nghỉ phép")
 
         supabase = get_connection()
         df_users = load_users_cached()
 
-        # --- Xác định tháng ---
+        # === Xác định tháng hiện tại ===
         today = pd.Timestamp(dt.date.today())
         selected_month = st.date_input("📅 Chọn tháng", dt.date(today.year, today.month, 1))
+        month_str = selected_month.strftime("%Y-%m")
         first_day = selected_month.replace(day=1)
         next_month = (first_day + dt.timedelta(days=32)).replace(day=1)
         days = pd.date_range(first_day, next_month - dt.timedelta(days=1))
-        month_str = selected_month.strftime("%Y-%m")
 
-        # --- Chỉ tải DB lần đầu ---
         session_key = f"attendance_{month_str}"
-        if f"{session_key}_data" not in st.session_state:
+
+        # === CHỈ TẢI DB MỘT LẦN ===
+        if f"{session_key}_raw" not in st.session_state:
             res = supabase.table("attendance_monthly").select("*").eq("month", month_str).execute()
             df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["user_id","month","work_days","half_days","off_days"])
-            for c in ["work_days", "half_days", "off_days"]:
+            for c in ["work_days","half_days","off_days"]:
                 if c in df_att.columns:
-                    df_att[c] = df_att[c].apply(lambda x: json.loads(x) if isinstance(x, str) else (x or []))
+                    df_att[c] = df_att[c].apply(lambda x: json.loads(x) if isinstance(x,str) else (x or []))
                 else:
                     df_att[c] = [[] for _ in range(len(df_att))]
-            st.session_state[f"{session_key}_data"] = df_att
+            st.session_state[f"{session_key}_raw"] = df_att
         else:
-            df_att = st.session_state[f"{session_key}_data"]
+            df_att = st.session_state[f"{session_key}_raw"]
 
-        # --- Chuẩn bị bảng hiển thị ---
+        # === TẠO DỮ LIỆU HIỂN THỊ ===
         rows = []
         for _, u in df_users.iterrows():
-            uid = u["id"]
-            uname = u["display_name"]
+            uid, uname = u["id"], u["display_name"]
             record = df_att[df_att["user_id"] == uid]
-
             if not record.empty:
                 work_days = record["work_days"].iloc[0]
                 half_days = record["half_days"].iloc[0]
@@ -1145,49 +1145,46 @@ def admin_app(user):
             row = {"User": uname}
             total = 0
             for d in days:
-                col = f"{d.strftime('%d/%m')} ({['T2','T3','T4','T5','T6','T7','CN'][d.weekday()]})"
+                weekday = ["T2","T3","T4","T5","T6","T7","CN"][d.weekday()]
+                col = f"{d.strftime('%d/%m')} ({weekday})"
                 if d.date() > today.date():
                     row[col] = ""
                     continue
-                if d.day in work_days:
-                    row[col] = "work"; total += 1
-                elif d.day in half_days:
-                    row[col] = "half"; total += 0.5
-                elif d.day in off_days:
-                    row[col] = "off"
-                else:
-                    row[col] = ""
+                if d.day in work_days: row[col] = "work"; total += 1
+                elif d.day in half_days: row[col] = "half"; total += 0.5
+                elif d.day in off_days: row[col] = "off"
+                else: row[col] = ""
             row["Số ngày đi làm"] = total
+            row["user_id"] = uid
             rows.append(row)
 
         df_display = pd.DataFrame(rows)
-        df_display = df_display[["User", "Số ngày đi làm"] + [f"{d.strftime('%d/%m')} ({['T2','T3','T4','T5','T6','T7','CN'][d.weekday()]})" for d in days]]
+        df_display = df_display[["User","Số ngày đi làm"] + [f"{d.strftime('%d/%m')} ({['T2','T3','T4','T5','T6','T7','CN'][d.weekday()]})" for d in days]]
 
-        # --- Giữ bảng trong session ---
+        # === Lưu state nếu chưa có ===
         if f"{session_key}_display" not in st.session_state:
             st.session_state[f"{session_key}_display"] = df_display.copy()
             st.session_state[f"{session_key}_edited"] = set()
 
         color_js = JsCode("""
             function(params) {
-                let style = {'textAlign': 'center','whiteSpace':'normal','lineHeight':'22px'};
-                if (params.value === 'work') style.backgroundColor = '#b6f5b6';
-                else if (params.value === 'half') style.backgroundColor = '#ffe97f';
-                else if (params.value === 'off') style.backgroundColor = '#ff9999';
-                return style;
+                let s = {'textAlign':'center','whiteSpace':'normal','lineHeight':'22px'};
+                if(params.value==='work') s.backgroundColor='#b6f5b6';
+                else if(params.value==='half') s.backgroundColor='#ffe97f';
+                else if(params.value==='off') s.backgroundColor='#ff9999';
+                return s;
             }
         """)
 
         gb = GridOptionsBuilder.from_dataframe(df_display)
         gb.configure_default_column(editable=True, wrapText=True, autoHeight=True, resizable=True)
-        gb.configure_column("User", editable=False, width=160)
+        gb.configure_column("User", editable=False, width=180)
         gb.configure_column("Số ngày đi làm", editable=False, width=130)
-
-        for c in df_display.columns[2:]:
+        for col in df_display.columns[2:]:
             gb.configure_column(
-                c,
+                col,
                 cellEditor='agSelectCellEditor',
-                cellEditorParams={'values': ['work', 'half', 'off', '']},
+                cellEditorParams={'values':['work','half','off','']},
                 editable=True,
                 cellStyle=color_js,
                 width=110
@@ -1196,29 +1193,30 @@ def admin_app(user):
         grid_response = AgGrid(
             st.session_state[f"{session_key}_display"],
             gridOptions=gb.build(),
-            update_mode="NO_UPDATE",
+            update_mode="NO_UPDATE",        # ❗ Không rerun khi đổi cell
             allow_unsafe_jscode=True,
             theme="streamlit",
-            height=660,
+            height=650
         )
 
         updated_df = pd.DataFrame(grid_response["data"])
 
-        # --- Tính lại cột số ngày đi làm ---
+        # === Chỉ tính lại cột tổng, KHÔNG GHI DB ===
         for i in range(len(updated_df)):
             total = 0
             for col in updated_df.columns:
                 if "/" not in col: continue
-                val = updated_df.at[i, col]
-                if val == "work": total += 1
-                elif val == "half": total += 0.5
+                v = updated_df.at[i, col]
+                if v == "work": total += 1
+                elif v == "half": total += 0.5
             updated_df.at[i, "Số ngày đi làm"] = total
 
+        # Giữ thay đổi trong session
         st.session_state[f"{session_key}_display"] = updated_df.copy()
 
-        # --- Cập nhật DB khi bấm nút ---
+        # === Khi nhấn nút mới ghi DB ===
         if st.button("💾 Cập nhật thay đổi"):
-            with st.spinner("Đang lưu dữ liệu..."):
+            with st.spinner("Đang ghi dữ liệu lên Supabase..."):
                 for _, row in updated_df.iterrows():
                     work_days, half_days, off_days = [], [], []
                     for col in updated_df.columns:
@@ -1228,6 +1226,7 @@ def admin_app(user):
                         if val == "work": work_days.append(day)
                         elif val == "half": half_days.append(day)
                         elif val == "off": off_days.append(day)
+
                     supabase.table("attendance_monthly").upsert({
                         "user_id": df_users.loc[df_users["display_name"] == row["User"], "id"].iloc[0],
                         "month": month_str,
