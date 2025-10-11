@@ -1208,7 +1208,7 @@ def admin_app(user):
                         continue
 
                 # Cập nhật lại số ngày đi làm cho hàng đó
-                df_display.at[index, 'Số ngày đi làm'] = total_days
+                df_display.at[index, 'Số ngày đi làm'] = total_days  # Cập nhật ngay lập tức trong bảng
 
         # Hiển thị nút lưu khi cần
         if submit:
