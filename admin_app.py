@@ -1139,24 +1139,44 @@ def admin_app(user):
         df_display = recalc_total(df_display)
 
         # 🖍️ CSS để hiển thị màu nền động
+        # ================= HIỂN THỊ BẢNG CHẤM CÔNG ==================
+        st.markdown("### 📅 Bảng chấm công")
+
+        # Áp dụng CSS màu nền động
         st.markdown("""
         <style>
+        /* Streamlit >= 1.38 */
         [data-testid="stDataEditorCell"] div[role="button"]:has(span:contains("work")) {
-            background-color: #b9f6ca !important;
+            background-color: #b9f6ca !important;   /* xanh nhạt */
         }
         [data-testid="stDataEditorCell"] div[role="button"]:has(span:contains("half")) {
-            background-color: #fff59d !important;
+            background-color: #fff59d !important;   /* vàng nhạt */
         }
         [data-testid="stDataEditorCell"] div[role="button"]:has(span:contains("off")) {
-            background-color: #ff8a80 !important;
+            background-color: #ff8a80 !important;   /* đỏ nhạt */
         }
         </style>
         """, unsafe_allow_html=True)
 
-        st.markdown("### 📅 Bảng chấm công")
-
         editable_cols = [c for c in df_display.columns if "/" in c]
 
+        # === Hàm tính lại tổng ngày đi làm ===
+        def recalc_total(df):
+            for idx, row in df.iterrows():
+                total = 0
+                for col in editable_cols:
+                    val = row[col]
+                    if val == "work":
+                        total += 1
+                    elif val == "half":
+                        total += 0.5
+                df.at[idx, "Số ngày đi làm"] = round(total, 1)
+            return df
+
+        # Tính trước khi hiển thị
+        df_display = recalc_total(df_display)
+
+        # Hiển thị bảng có thể chỉnh sửa
         edited_df = st.data_editor(
             df_display,
             key="attendance_editor",
@@ -1167,33 +1187,35 @@ def admin_app(user):
                     col,
                     options=["work", "half", "off"],
                     help="Chọn trạng thái làm việc"
-                ) for col in editable_cols
+                )
+                for col in editable_cols
             },
             disabled=["User"],
         )
 
-        # 🔄 Tính lại tổng khi đổi
+        # ✅ Tính lại tổng ngay khi người dùng chỉnh sửa
         edited_df = recalc_total(edited_df)
 
+        # ================= CẬP NHẬT DATABASE ==================
         st.write("")
         if st.button("💾 Cập nhật chấm công", use_container_width=True):
             for _, row in edited_df.iterrows():
                 username = df_users.loc[df_users["display_name"] == row["User"], "username"].iloc[0]
-                for col in [c for c in edited_df.columns if "/" in c]:
+                for col in editable_cols:
                     date_str = col.split(" ")[0]
                     date_val = datetime.datetime.strptime(date_str + f"/{selected_month.year}", "%d/%m/%Y").date()
                     if date_val > today:
                         continue
                     status_val = row[col]
-                    # Xoá rồi ghi lại để tránh trùng
                     supabase.table("attendance").delete().eq("user_id", username).eq("date", date_val.isoformat()).execute()
                     supabase.table("attendance").insert({
                         "user_id": username,
                         "date": date_val.isoformat(),
                         "status": status_val
                     }).execute()
-            st.success("✅ Đã cập nhật dữ liệu chấm công!")
+            st.success("✅ Đã cập nhật dữ liệu chấm công thành công!")
             st.rerun()
+
 
 
     elif choice == "Thống kê công việc":
