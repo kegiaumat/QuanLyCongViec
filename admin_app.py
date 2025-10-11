@@ -6,6 +6,7 @@ import datetime
 from auth import get_connection, calc_hours, get_projects, add_user, hash_password, add_project
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 
+
 # ====== CACHE DỮ LIỆU TỪ SUPABASE ======
 @st.cache_data(ttl=15)
 def load_users_cached():
@@ -1016,9 +1017,6 @@ def admin_app(user):
                                     st.info("⚠️ Bạn chưa tick dòng nào để xoá.")
 
     elif choice == "Chấm công – Nghỉ phép":
-        import datetime
-        import pandas as pd
-        from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 
         st.subheader("🕓 Quản lý chấm công và nghỉ phép")
 
