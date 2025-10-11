@@ -75,17 +75,17 @@ def admin_app(user):
 
 
     # ✅ cập nhật trạng thái online (last_seen)
-    # --- Cập nhật thời gian đăng nhập ---
-    if "user" not in locals():
-        try:
-            user = st.session_state.get("username") or st.session_state.get("user")
-        except Exception:
-            user = None
-
-    if user:
-        supabase.table("users").update({"last_seen": datetime.datetime.now().isoformat()}).eq("username", user).execute()
-    else:
-        print("⚠️ Không thể cập nhật last_seen vì chưa xác định user.")
+    # ✅ Cập nhật thời gian đăng nhập nếu có user
+    try:
+        current_user = user if user else st.session_state.get("username") or st.session_state.get("user")
+        if current_user:
+            supabase.table("users").update({
+                "last_seen": datetime.datetime.now().isoformat()
+            }).eq("username", current_user).execute()
+        else:
+            print("⚠️ Không thể cập nhật last_seen vì chưa xác định user.")
+    except Exception as e:
+        print(f"⚠️ Lỗi khi cập nhật last_seen: {e}")
 
 
     
