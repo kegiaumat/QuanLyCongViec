@@ -1175,6 +1175,7 @@ def admin_app(user):
             st.session_state[f"{session_key}_changes"] = set()
 
         # ====== Hiển thị AgGrid ======
+        # ====== Hiển thị bảng AgGrid ======
         color_js = JsCode("""
             function(params) {
                 if (params.value === 'work') return {'backgroundColor': '#b6f5b6', 'textAlign': 'center'};
@@ -1185,8 +1186,13 @@ def admin_app(user):
         """)
 
         gb = GridOptionsBuilder.from_dataframe(df_display)
-        gb.configure_default_column(editable=True, resizable=True)
-        gb.configure_column("User", editable=False, width=160)
+        gb.configure_default_column(
+            editable=True, 
+            resizable=True,
+            wrapText=True,           # tự xuống dòng
+            autoHeight=True          # dòng cao theo nội dung
+        )
+        gb.configure_column("User", editable=False, width=180)
         gb.configure_column("Số ngày đi làm", editable=False, width=140)
 
         for d in days:
@@ -1197,76 +1203,71 @@ def admin_app(user):
                 cellEditorParams={'values': ['work', 'half', 'off', '']},
                 editable=editable,
                 cellStyle=color_js,
-                width=80
+                width=85
             )
 
         grid_response = AgGrid(
             st.session_state[session_key],
             gridOptions=gb.build(),
-            update_mode=GridUpdateMode.VALUE_CHANGED,
+            update_mode=GridUpdateMode.NO_UPDATE,  # 🚫 không update lại bảng
             allow_unsafe_jscode=True,
-            fit_columns_on_grid_load=True,
-            height=600
+            fit_columns_on_grid_load=False,
+            height=620,
+            theme="streamlit"
         )
 
         updated_df = pd.DataFrame(grid_response["data"])
 
-        # ====== Ghi nhớ ô đã sửa ======
-        changed_rows = grid_response.get("data", [])
-        if "changedCells" in grid_response:
-            for cell in grid_response["changedCells"]:
-                row_index = cell.get("rowIndex")
-                col_id = cell.get("colId")
-                if row_index is not None and col_id and "/" in col_id:
-                    st.session_state[f"{session_key}_changes"].add((row_index, col_id))
-
-        # ====== Cập nhật tổng ngày đi làm tạm thời ======
+        # ====== Tự tính lại số ngày đi làm tại chỗ ======
         for i in range(len(updated_df)):
             total = 0
             for col in updated_df.columns:
                 if "/" not in col:
                     continue
                 v = updated_df.loc[i, col]
-                if v == "work": total += 1
-                elif v == "half": total += 0.5
+                if v == "work":
+                    total += 1
+                elif v == "half":
+                    total += 0.5
             updated_df.loc[i, "Số ngày đi làm"] = total
 
         st.session_state[session_key] = updated_df.copy()
 
+        # ====== Ghi nhớ thay đổi cell (thủ công) ======
+        edited_cells = []
+        if "edited_cells" not in st.session_state:
+            st.session_state["edited_cells"] = {}
+
+        if grid_response.get("selected_rows"):
+            st.info("✅ Đã chọn hàng, nhưng thay đổi sẽ chỉ lưu khi bạn bấm 'Cập nhật'.")
+
         # ====== Nút cập nhật ======
         if st.button("💾 Cập nhật thay đổi"):
-            with st.spinner("Đang cập nhật vào database..."):
-                changes = st.session_state[f"{session_key}_changes"]
-                if not changes:
-                    st.info("Không có thay đổi nào để cập nhật.")
-                else:
-                    for idx, row in updated_df.iterrows():
-                        if not any(c[0] == idx for c in changes):
-                            continue  # chỉ cập nhật những dòng có thay đổi
+            with st.spinner("Đang cập nhật dữ liệu..."):
+                for idx, row in updated_df.iterrows():
+                    work_days, half_days, off_days = [], [], []
+                    for col in updated_df.columns:
+                        if "/" not in col:
+                            continue
+                        val = row[col]
+                        day_num = int(col.split("/")[0])
+                        if val == "work":
+                            work_days.append(day_num)
+                        elif val == "half":
+                            half_days.append(day_num)
+                        elif val == "off":
+                            off_days.append(day_num)
 
-                        work_days, half_days, off_days = [], [], []
-                        for col in updated_df.columns:
-                            if "/" not in col:
-                                continue
-                            val = row[col]
-                            day_num = int(col.split("/")[0])
-                            if val == "work":
-                                work_days.append(day_num)
-                            elif val == "half":
-                                half_days.append(day_num)
-                            elif val == "off":
-                                off_days.append(day_num)
+                    supabase.table("attendance_monthly").upsert({
+                        "user_id": df_users.iloc[idx]["id"],
+                        "month": month_str,
+                        "work_days": work_days,
+                        "half_days": half_days,
+                        "off_days": off_days
+                    }).execute()
 
-                        supabase.table("attendance_monthly").upsert({
-                            "user_id": df_users.iloc[idx]["id"],
-                            "month": month_str,
-                            "work_days": work_days,
-                            "half_days": half_days,
-                            "off_days": off_days
-                        }).execute()
+            st.success("✅ Đã cập nhật dữ liệu chấm công!")
 
-                    st.session_state[f"{session_key}_changes"].clear()
-                    st.success("✅ Đã cập nhật dữ liệu chấm công thành công!")
 
     elif choice == "Thống kê công việc":
         st.subheader("📊 Thống kê công việc")
