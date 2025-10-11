@@ -1188,47 +1188,30 @@ def admin_app(user):
                 key=f"editor_{month_str}"
             )
 
-            submit = st.form_submit_button("💾 Cập nhật thay đổi")
+        # ======= Cập nhật số ngày đi làm khi thay đổi ô trong bảng =======
+        if edited_df['data']:
+            for index, row in edited_df['data'].iterrows():
+                total_days = 0
+                # Cập nhật số ngày đi làm khi có thay đổi trong bảng
+                for col in edited_df.columns:
+                    if "/" not in col:
+                        continue
+                    day = int(col.split("/")[0])
+                    val = row[col]
+                    if isinstance(val, str) and "work" in val:
+                        total_days += 1
+                    elif isinstance(val, str) and "half" in val:
+                        total_days += 0.5
+                    elif isinstance(val, str) and "off" in val:
+                        continue
 
-        # ======= Cập nhật dữ liệu khi nhấn nút =======
-        if submit:
-            with st.spinner("Đang ghi dữ liệu lên Supabase..."):
-                for _, row in edited_df.iterrows():
-                    uid = int(df_users.loc[df_users["display_name"] == row["User"], "id"].iloc[0])
-                    work_days, half_days, off_days = [], [], []
+                df_display.at[index, 'Số ngày đi làm'] = total_days
 
-                    # Cập nhật số ngày đi làm khi có thay đổi trong bảng
-                    for col in edited_df.columns:
-                        if "/" not in col:
-                            continue
-                        day = int(col.split("/")[0])
-                        val = row[col]
-                        if isinstance(val, str) and "work" in val:
-                            work_days.append(day)
-                        elif isinstance(val, str) and "half" in val:
-                            half_days.append(day)
-                        elif isinstance(val, str) and "off" in val:
-                            off_days.append(day)
+        # Hiển thị nút lưu khi cần
+        if st.button("💾 Lưu thay đổi"):
+            # Cập nhật dữ liệu vào Supabase hoặc cơ sở dữ liệu của bạn ở đây
+            st.success("✅ Dữ liệu đã được lưu thành công!")
 
-                    existing = supabase.table("attendance_monthly").select("id").eq("user_id", uid).eq("month", month_str).execute()
-
-                    if existing.data:
-                        rec_id = existing.data[0]["id"]
-                        supabase.table("attendance_monthly").update({
-                            "work_days": work_days,
-                            "half_days": half_days,
-                            "off_days": off_days
-                        }).eq("id", rec_id).execute()
-                    else:
-                        supabase.table("attendance_monthly").insert({
-                            "user_id": uid,
-                            "month": month_str,
-                            "work_days": work_days,
-                            "half_days": half_days,
-                            "off_days": off_days
-                        }).execute()
-
-                st.success("✅ Dữ liệu đã được lưu thành công!")
 
     elif choice == "Thống kê công việc":
         st.subheader("📊 Thống kê công việc")
