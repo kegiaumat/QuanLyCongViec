@@ -1093,11 +1093,6 @@ def admin_app(user):
                                     st.info("⚠️ Bạn chưa tick dòng nào để xoá.")
 
     elif choice == "Chấm công – Nghỉ phép":
-        import datetime as dt
-        import json
-        import pandas as pd
-        from st_aggrid import GridOptionsBuilder, AgGrid, JsCode
-        from auth import get_connection
 
         st.subheader("🕒 Quản lý chấm công và nghỉ phép")
 
