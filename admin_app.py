@@ -1197,6 +1197,7 @@ def admin_app(user):
                     uid = int(df_users.loc[df_users["display_name"] == row["User"], "id"].iloc[0])
                     work_days, half_days, off_days = [], [], []
 
+                    # Cập nhật số ngày đi làm khi có thay đổi trong bảng
                     for col in edited_df.columns:
                         if "/" not in col:
                             continue
@@ -1228,7 +1229,6 @@ def admin_app(user):
                         }).execute()
 
                 st.success("✅ Dữ liệu đã được lưu thành công!")
-
 
     elif choice == "Thống kê công việc":
         st.subheader("📊 Thống kê công việc")
