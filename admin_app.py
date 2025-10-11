@@ -1180,7 +1180,7 @@ def admin_app(user):
                         options=["🟩 work", "🟨 half", "🟥 off", ""],
                         required=False
                     )
-                    for col in df_display.columns if "/" in col
+                    for col in df_display.columns if "/" in col  # Lọc chỉ các cột ngày tháng
                 },
                 hide_index=True,
                 use_container_width=True,
