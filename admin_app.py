@@ -957,25 +957,40 @@ def admin_app(user):
         )
 
         # ===== XỬ LÝ LỰA CHỌN Ô =====
+        # ===== XỬ LÝ LỰA CHỌN Ô =====
         sel_info = None
-        for key in ["selected", "selected_cells", "selected_rows"]:
+        possible_keys = ["selected_cells", "selected_rows", "selected", "selection"]
+
+        # Tự động dò key thực tế AgGrid trả về
+        for key in possible_keys:
             if key in grid_response and grid_response[key]:
                 sel_info = grid_response[key][0]
                 break
 
+        selected_user = None
+        selected_col = None
+
         if sel_info:
             try:
-                row_index = sel_info.get("rowIndex", 0)
-                selected_user = df_display.iloc[row_index]["User"]
-                selected_col = sel_info.get("colId")
-                if selected_col and selected_col not in ["User", "Số ngày đi làm"]:
-                    st.session_state["selected_user"] = selected_user
-                    st.session_state["selected_col"] = selected_col
+                # Lấy thông tin ô được chọn
+                row_index = sel_info.get("rowIndex", None)
+                col_id = sel_info.get("colId", None)
+
+                if row_index is not None and col_id:
+                    selected_user = df_display.iloc[row_index]["User"]
+                    selected_col = col_id
+                    if selected_col not in ["User", "Số ngày đi làm"]:
+                        st.session_state["selected_user"] = selected_user
+                        st.session_state["selected_col"] = selected_col
             except Exception as e:
-                st.warning(f"Lỗi khi xác định ô: {e}")
-        else:
+                st.warning(f"⚠️ Lỗi khi xác định ô: {e}")
+
+        # Nếu chưa chọn gì thì dùng session trước đó
+        if not selected_user:
             selected_user = st.session_state.get("selected_user")
+        if not selected_col:
             selected_col = st.session_state.get("selected_col")
+
 
         # ===== THANH CÔNG CỤ CỐ ĐỊNH =====
         fixed_bar = st.container()
