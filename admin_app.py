@@ -942,6 +942,7 @@ def admin_app(user):
 
         grid_options = gb.build()
 
+        # --- Hiển thị bảng ---
         grid_response = AgGrid(
             df_display,
             gridOptions=grid_options,
@@ -952,11 +953,32 @@ def admin_app(user):
             theme="streamlit",
         )
 
+        # --- Xử lý lựa chọn ô ---
+        # --- Xử lý lựa chọn ô (tương thích với mọi bản st-aggrid) ---
+        selected_rows = grid_response.get("selected_rows", [])
         selected_cells = grid_response.get("selected_cells", [])
-        if selected_cells and len(selected_cells) == 1:
-            sel = selected_cells[0]
-            st.session_state["selected_user"] = df_display.iloc[sel["rowIndex"]]["User"]
-            st.session_state["selected_col"] = sel["colId"]
+        sel_info = None
+
+        if selected_cells:
+            sel_info = selected_cells[0]
+        elif selected_rows:
+            sel_info = selected_rows[0]
+
+        if sel_info:
+            try:
+                row_index = sel_info.get("rowIndex", 0)
+                selected_user = df_display.iloc[row_index]["User"]
+                selected_col = sel_info.get("colId")
+                if selected_col and selected_col not in ["User", "Số ngày đi làm"]:
+                    st.session_state["selected_user"] = selected_user
+                    st.session_state["selected_col"] = selected_col
+            except Exception as e:
+                st.warning(f"Lỗi khi xác định ô: {e}")
+        else:
+            selected_user = st.session_state.get("selected_user")
+            selected_col = st.session_state.get("selected_col")
+
+
 
         selected_user = st.session_state.get("selected_user")
         selected_col = st.session_state.get("selected_col")
