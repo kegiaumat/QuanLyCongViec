@@ -1185,8 +1185,6 @@ def admin_app(user):
                 # ... (phần cập nhật work/half/off giữ nguyên)
             else:
                 st.warning("🟡 Vui lòng chọn đúng một ô dữ liệu (không phải cột User hoặc tổng).")
-        else:
-            st.warning("🟡 Chọn đúng một ô để cập nhật (hiện đang chọn cả hàng hoặc chưa chọn gì).")
 
 
             st.info(f"🔹 Đang chọn: {selected_user} – Cột: {selected_col}")
