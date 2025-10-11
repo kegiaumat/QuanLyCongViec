@@ -1199,8 +1199,17 @@ def admin_app(user):
         st.write("### 🎨 Bảng chấm công (có màu và chỉnh trực tiếp):")
 
         # ==== DATA EDITOR (một bảng duy nhất) ====
+        # ==== DATA EDITOR CÓ MÀU (1 bảng duy nhất) ====
+        def color_cell(val):
+            color_map = {"work": "#4CAF50", "half": "#FFEB3B", "off": "#F44336"}
+            bg = color_map.get(val, "transparent")
+            return f"background-color: {bg}; color: black; text-align: center;"
+
+        # Tạo styled DataFrame có màu
+        styled_df = df_display.style.applymap(color_cell)
+
         edited_df = st.data_editor(
-            df_display,
+            styled_df,
             column_config=config,
             hide_index=True,
             use_container_width=True,
@@ -1208,29 +1217,6 @@ def admin_app(user):
             height=650,
         )
 
-        # ==== CẬP NHẬT SỐ NGÀY ====
-        for i in range(len(edited_df)):
-            total = 0
-            for col in edited_df.columns:
-                if "/" not in col:
-                    continue
-                val = edited_df.at[i, col]
-                if val == "work":
-                    total += 1
-                elif val == "half":
-                    total += 0.5
-            edited_df.at[i, "Số ngày đi làm"] = total
-
-        st.session_state[f"{session_key}_display"] = edited_df.copy()
-
-        # ==== HIỂN THỊ LẠI CÓ MÀU TRONG BẢNG ====
-        df_colored = edited_df.copy()
-        for col in df_colored.columns:
-            if "/" in col:
-                df_colored[col] = df_colored[col].replace(color_icon)
-
-        # render bằng markdown cho màu nằm ngay trong editor
-        st.markdown(df_colored.to_html(escape=False, index=False), unsafe_allow_html=True)
 
         # ==== NÚT LƯU ====
         if st.button("💾 Cập nhật thay đổi"):
