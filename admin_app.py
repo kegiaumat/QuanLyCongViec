@@ -1205,10 +1205,11 @@ def admin_app(user):
                 if "/" not in col:
                     continue
                 val = edited_df.at[i, col]
-                if "work" in val:
+                if isinstance(val, str) and "work" in val:
                     total += 1
-                elif "half" in val:
+                elif isinstance(val, str) and "half" in val:
                     total += 0.5
+
             edited_df.at[i, "Số ngày đi làm"] = total
 
         st.session_state[f"{session_key}_display"] = edited_df.copy()
@@ -1223,12 +1224,13 @@ def admin_app(user):
                             continue
                         day = int(col.split("/")[0])
                         val = row[col]
-                        if "work" in val:
+                        if isinstance(val, str) and "work" in val:
                             work_days.append(day)
-                        elif "half" in val:
+                        elif isinstance(val, str) and "half" in val:
                             half_days.append(day)
-                        elif "off" in val:
+                        elif isinstance(val, str) and "off" in val:
                             off_days.append(day)
+
 
                     supabase.table("attendance_monthly").upsert({
                         "user_id": str(df_users.loc[df_users["display_name"] == row["User"], "id"].iloc[0]),
