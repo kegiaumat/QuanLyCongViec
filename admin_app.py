@@ -992,14 +992,11 @@ def admin_app(user):
         if not selected_col:
             selected_col = st.session_state.get("selected_col")
 
-            except Exception as e:
-                st.warning(f"⚠️ Lỗi khi xác định ô: {e}")
+            if not selected_user:
+                selected_user = st.session_state.get("selected_user")
+            if not selected_col:
+                selected_col = st.session_state.get("selected_col")
 
-        # Nếu chưa chọn gì thì dùng session trước đó
-        if not selected_user:
-            selected_user = st.session_state.get("selected_user")
-        if not selected_col:
-            selected_col = st.session_state.get("selected_col")
 
 
         # ===== THANH CÔNG CỤ CỐ ĐỊNH =====
