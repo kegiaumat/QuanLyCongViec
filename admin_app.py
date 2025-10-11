@@ -1081,6 +1081,10 @@ def admin_app(user):
 
         supabase = get_supabase_client()
         df_users = load_users_cached()
+        # 🟢 Load dữ liệu chấm công từ Supabase
+        data_att = supabase.table("attendance").select("user_id, date, status").execute()
+        df_att = pd.DataFrame(data_att.data) if data_att.data else pd.DataFrame(columns=["user_id", "date", "status"])
+        df_att["date"] = pd.to_datetime(df_att["date"], errors="coerce").dt.date
 
         # === Chọn tháng cần chấm công ===
         today = datetime.date.today()
