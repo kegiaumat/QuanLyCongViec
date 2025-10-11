@@ -992,12 +992,6 @@ def admin_app(user):
             st.warning("🟡 Chọn đúng một ô (hoặc dòng) để cập nhật trạng thái.")
 
 
-        except Exception as e:
-            st.warning(f"⚠️ Lỗi khi xác định ô được chọn: {e}")
-
-        # Nếu chưa chọn gì thì lấy lại từ session
-        selected_user = st.session_state.get("selected_user")
-        selected_col = st.session_state.get("selected_col")
 
 
 
