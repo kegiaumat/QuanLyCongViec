@@ -1093,6 +1093,10 @@ def admin_app(user):
                                     st.info("⚠️ Bạn chưa tick dòng nào để xoá.")
 
     elif choice == "Chấm công – Nghỉ phép":
+        import datetime as dt
+        import json
+        import pandas as pd
+        from auth import get_connection
 
         st.subheader("🕒 Quản lý chấm công & nghỉ phép")
 
@@ -1120,13 +1124,13 @@ def admin_app(user):
             else:
                 df_att[col] = [[] for _ in range(len(df_att))]
 
-        # Ghép với tên người dùng
+        # Ghép tên người dùng
         df_users["id"] = df_users["id"].astype(str)
         df_att["user_id"] = df_att["user_id"].astype(str)
         df_att = df_att.merge(df_users[["id", "display_name"]], left_on="user_id", right_on="id", how="left")
         df_att.rename(columns={"display_name": "User"}, inplace=True)
 
-        # ==== TẠO BẢNG HIỂN THỊ ====
+        # ==== TẠO BẢNG CHẤM CÔNG ====
         rows = []
         for _, u in df_users.iterrows():
             uid, uname = u["id"], u["display_name"]
@@ -1157,13 +1161,13 @@ def admin_app(user):
                     continue
 
                 if d.day in work_days:
-                    row[col] = "work"
+                    row[col] = "🟩 work"
                     total += 1
                 elif d.day in half_days:
-                    row[col] = "half"
+                    row[col] = "🟨 half"
                     total += 0.5
                 elif d.day in off_days:
-                    row[col] = "off"
+                    row[col] = "🟥 off"
                 else:
                     row[col] = ""
             row["Số ngày đi làm"] = total
@@ -1180,23 +1184,15 @@ def admin_app(user):
         else:
             df_display = st.session_state[f"{session_key}_display"]
 
-        # ==== CỘT MÀU EMOJI ====
-        color_icon = {"work": "🟩", "half": "🟨", "off": "🟥", "": ""}
-        display_df = df_display.copy()
-
-        for col in df_display.columns:
-            if "/" in col:
-                display_df[f"🎨 {col}"] = df_display[col].map(color_icon)
-
-        st.write("### 🎨 Bảng chấm công (có cột màu emoji và chỉnh trực tiếp):")
+        st.write("### 🎨 Bảng chấm công (1 bảng duy nhất, có màu nhỏ bên cạnh chữ):")
 
         # ==== HIỂN THỊ BẢNG ====
         edited_df = st.data_editor(
-            display_df,
+            df_display,
             column_config={
                 col: st.column_config.SelectboxColumn(
                     label=col,
-                    options=["work", "half", "off", ""],
+                    options=["🟩 work", "🟨 half", "🟥 off", ""],
                     required=False,
                 )
                 for col in df_display.columns if "/" in col
@@ -1214,15 +1210,15 @@ def admin_app(user):
                 if "/" not in col:
                     continue
                 val = edited_df.at[i, col]
-                if val == "work":
+                if "work" in val:
                     total += 1
-                elif val == "half":
+                elif "half" in val:
                     total += 0.5
             edited_df.at[i, "Số ngày đi làm"] = total
 
         st.session_state[f"{session_key}_display"] = edited_df.copy()
 
-        # ==== CẬP NHẬT DỮ LIỆU ====
+        # ==== NÚT CẬP NHẬT ====
         if st.button("💾 Cập nhật thay đổi"):
             with st.spinner("Đang ghi dữ liệu lên Supabase..."):
                 for _, row in edited_df.iterrows():
@@ -1232,11 +1228,11 @@ def admin_app(user):
                             continue
                         day = int(col.split("/")[0])
                         val = row[col]
-                        if val == "work":
+                        if "work" in val:
                             work_days.append(day)
-                        elif val == "half":
+                        elif "half" in val:
                             half_days.append(day)
-                        elif val == "off":
+                        elif "off" in val:
                             off_days.append(day)
 
                     supabase.table("attendance_monthly").upsert({
