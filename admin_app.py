@@ -885,7 +885,8 @@ def admin_app(user):
         supabase = get_supabase_client()
         df_users = load_users_cached()
 
-        today = dt.date.today()
+        today = pd.Timestamp(dt.date.today())  # dùng Timestamp để so sánh
+
         selected_month = st.date_input("📅 Chọn tháng", dt.date(today.year, today.month, 1))
 
         # ====== TẠO DANH SÁCH NGÀY ======
@@ -914,7 +915,7 @@ def admin_app(user):
                 # Tạo mới mặc định: T2-6 đi làm, T7-CN nghỉ
                 work_days, half_days, off_days = [], [], []
                 for d in days:
-                    if d.date() > today:
+                    if d > today:
                         continue  # tương lai
                     elif d.weekday() < 5:  # T2–T6
                         work_days.append(d.day)
