@@ -1110,79 +1110,30 @@ def admin_app(user):
 
         # ==== LẤY DỮ LIỆU ====
         res = supabase.table("attendance_monthly").select("*").execute()
-
         df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["user_id", "months"])
-
-        # Giải mã JSON
-        if "months" in df_att.columns:
-            df_att["months"] = df_att["months"].apply(lambda x: json.loads(x) if isinstance(x, str) else (x or {}))
-        else:
-            df_att["months"] = [{} for _ in range(len(df_att))]
+        df_att["month"] = df_att.get("month", None)
 
         # ==== GHÉP USER ====
         df_users["id"] = df_users["id"].astype(str)
         df_att["user_id"] = df_att["user_id"].astype(str)
         df = df_users.merge(df_att, left_on="id", right_on="user_id", how="left")
-        df["months"] = df["months"].apply(lambda x: x if isinstance(x, dict) else {})
 
         # ==== TẠO BẢNG HIỂN THỊ ====
         rows = []
         for _, u in df_users.iterrows():
-            uid = str(u.get("id") or u.get("user_id") or "").strip()
+            uid = str(u.get("id") or "").strip()
             uname = u.get("display_name", "")
             if not uid:
-                continue  # bỏ qua dòng lỗi
+                continue
 
-            # Lấy dữ liệu tháng hiện tại nếu có
-            record = df_att[(df_att["user_id"].astype(str) == uid) & (df_att["month"] == month_str)]
-            if not record.empty:
-                work_days = record["work_days"].iloc[0] or []
-                half_days = record["half_days"].iloc[0] or []
-                off_days = record["off_days"].iloc[0] or []
-            else:
-                work_days, half_days, off_days = [], [], []
-                for d in days:
-                    if d.date() > today.date():
-                        continue
-                    if d.weekday() < 5:
-                        work_days.append(d.day)
-                    else:
-                        off_days.append(d.day)
-
-            current = {"work": work_days, "half": half_days, "off": off_days}
-        rows = []
-        for _, u in df_users.iterrows():
-            uid = str(u.get("id") or u.get("user_id") or "").strip()
-            uname = u.get("display_name", "")
-            if not uid:
-                continue  # bỏ qua dòng lỗi
-
-            # Lấy dữ liệu tháng hiện tại nếu có
-            record = df_att[(df_att["user_id"].astype(str) == uid) & (df_att["month"] == month_str)]
-            if not record.empty:
-                work_days = record["work_days"].iloc[0] or []
-                half_days = record["half_days"].iloc[0] or []
-                off_days = record["off_days"].iloc[0] or []
-            else:
-                work_days, half_days, off_days = [], [], []
-                for d in days:
-                    if d.date() > today.date():
-                        continue
-                    if d.weekday() < 5:
-                        work_days.append(d.day)
-                    else:
-                        off_days.append(d.day)
-
-            current = {"work": work_days, "half": half_days, "off": off_days}
-
-            # Lấy dữ liệu tháng hiện tại nếu có
+            # Tìm record theo user_id + month
             record = df_att[(df_att["user_id"] == uid) & (df_att["month"] == month_str)]
             if not record.empty:
                 work_days = record["work_days"].iloc[0] or []
                 half_days = record["half_days"].iloc[0] or []
                 off_days = record["off_days"].iloc[0] or []
             else:
-                # Nếu chưa có dữ liệu thì khởi tạo mặc định
+                # Nếu chưa có dữ liệu thì tự tạo mặc định
                 work_days, half_days, off_days = [], [], []
                 for d in days:
                     if d.date() > today.date():
@@ -1191,19 +1142,6 @@ def admin_app(user):
                         work_days.append(d.day)
                     else:
                         off_days.append(d.day)
-
-            current = {"work": work_days, "half": half_days, "off": off_days}
-
-
-            # Tự động tạo nếu chưa có
-            if not current["work"] and not current["half"] and not current["off"]:
-                for d in days:
-                    if d.date() > today.date():
-                        continue
-                    if d.weekday() < 5:
-                        current["work"].append(d.day)
-                    else:
-                        current["off"].append(d.day)
 
             row = {"User": uname, "user_id": uid}
             total = 0
@@ -1215,13 +1153,13 @@ def admin_app(user):
                     row[col] = ""
                     continue
 
-                if d.day in current["work"]:
+                if d.day in work_days:
                     row[col] = "🟩 work"
                     total += 1
-                elif d.day in current["half"]:
+                elif d.day in half_days:
                     row[col] = "🟨 half"
                     total += 0.5
-                elif d.day in current["off"]:
+                elif d.day in off_days:
                     row[col] = "🟥 off"
                 else:
                     row[col] = ""
@@ -1234,45 +1172,30 @@ def admin_app(user):
             + [f"{d.strftime('%d/%m')} ({['T2','T3','T4','T5','T6','T7','CN'][d.weekday()]})" for d in days]
         ]
 
-        if f"attendance_{month_str}" not in st.session_state:
-            st.session_state[f"attendance_{month_str}"] = df_display.copy()
-        else:
-            df_display = st.session_state[f"attendance_{month_str}"]
+        # ======= Không rerun khi chọn cell =======
+        with st.form("attendance_form", clear_on_submit=False):
+            st.markdown("### 🎨 Bảng chấm công (mỗi user 1 dòng, có emoji màu)")
 
-        st.markdown("### 🎨 Bảng chấm công (mỗi user 1 dòng, có màu trong chữ)")
-        edited_df = st.data_editor(
-            df_display,
-            column_config={
-                col: st.column_config.SelectboxColumn(
-                    label=col,
-                    options=["🟩 work", "🟨 half", "🟥 off", ""],
-                    required=False,
-                )
-                for col in df_display.columns if "/" in col
-            },
-            hide_index=True,
-            use_container_width=True,
-            height=700,
-            key=f"editor_{month_str}",
-        )
+            edited_df = st.data_editor(
+                df_display,
+                column_config={
+                    col: st.column_config.SelectboxColumn(
+                        label=col,
+                        options=["🟩 work", "🟨 half", "🟥 off", ""],
+                        required=False
+                    )
+                    for col in df_display.columns if "/" in col
+                },
+                hide_index=True,
+                use_container_width=True,
+                height=700,
+                key=f"editor_{month_str}"
+            )
 
-        # ==== TÍNH LẠI SỐ NGÀY ====
-        for i in range(len(edited_df)):
-            total = 0
-            for col in edited_df.columns:
-                if "/" not in col:
-                    continue
-                val = edited_df.at[i, col]
-                if isinstance(val, str) and "work" in val:
-                    total += 1
-                elif isinstance(val, str) and "half" in val:
-                    total += 0.5
-            edited_df.at[i, "Số ngày đi làm"] = total
+            submit = st.form_submit_button("💾 Cập nhật thay đổi")
 
-        st.session_state[f"attendance_{month_str}"] = edited_df.copy()
-
-        # ==== CẬP NHẬT ====
-        if st.button("💾 Cập nhật thay đổi"):
+        # ======= Cập nhật dữ liệu khi nhấn nút =======
+        if submit:
             with st.spinner("Đang ghi dữ liệu lên Supabase..."):
                 for _, row in edited_df.iterrows():
                     uid = int(df_users.loc[df_users["display_name"] == row["User"], "id"].iloc[0])
@@ -1290,11 +1213,9 @@ def admin_app(user):
                         elif isinstance(val, str) and "off" in val:
                             off_days.append(day)
 
-                    # --- Kiểm tra xem đã có dòng chưa ---
                     existing = supabase.table("attendance_monthly").select("id").eq("user_id", uid).eq("month", month_str).execute()
 
                     if existing.data:
-                        # --- Nếu có rồi thì update ---
                         rec_id = existing.data[0]["id"]
                         supabase.table("attendance_monthly").update({
                             "work_days": work_days,
@@ -1302,7 +1223,6 @@ def admin_app(user):
                             "off_days": off_days
                         }).eq("id", rec_id).execute()
                     else:
-                        # --- Nếu chưa có thì insert ---
                         supabase.table("attendance_monthly").insert({
                             "user_id": uid,
                             "month": month_str,
@@ -1311,9 +1231,7 @@ def admin_app(user):
                             "off_days": off_days
                         }).execute()
 
-
             st.success("✅ Dữ liệu đã được lưu thành công!")
-
 
 
     elif choice == "Thống kê công việc":
