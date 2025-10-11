@@ -1114,23 +1114,17 @@ def admin_app(user):
                 weekday = ["T2","T3","T4","T5","T6","T7","CN"][d.weekday()]
                 row[f"{d.strftime('%d/%m')} ({weekday})"] = status
 
-
-            # 🔹 Tính tổng công của nhân viên (1 = làm, 0.5 = nửa ngày, 0 = nghỉ)
-            row["Tổng công"] = sum(
-                1 if s == "work" else 0.5 if s == "half" else 0
-                for s in list(row.values())[1:]  # bỏ cột "User"
-            )
-
-            user_rows.append(row)
-        df_display = pd.DataFrame(user_rows)
-        
+            # ✅ Thêm cột tính số ngày đi làm (phải nằm trong vòng for)
             row["Số ngày đi làm"] = sum(
                 1 if s == "work" else 0.5 if s == "half" else 0
                 for s in list(row.values())[1:]  # bỏ cột User
             )
 
+            user_rows.append(row)
 
+        # ✅ Chỉ tạo DataFrame sau khi vòng lặp kết thúc
         df_display = pd.DataFrame(user_rows)
+
 
         # Hiển thị bảng có màu
         color_map = {"work": "white", "half": "#FFD966", "off": "#FF9999"}
