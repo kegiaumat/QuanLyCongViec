@@ -1093,8 +1093,6 @@ def admin_app(user):
                                     st.info("⚠️ Bạn chưa tick dòng nào để xoá.")
 
     elif choice == "Chấm công – Nghỉ phép":
-        import datetime as dt
-        import pandas as pd
         st.subheader("🕒 Quản lý chấm công & nghỉ phép (phiên bản emoji chuẩn Excel)")
 
         supabase = get_connection()
