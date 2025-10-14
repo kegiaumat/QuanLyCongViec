@@ -1176,7 +1176,7 @@ def admin_app(user):
         df_display = df_display[["User"] + day_cols]
 
         # ==== HIỂN THỊ BẢNG CHẤM CÔNG ====
-        st.markdown("### 📊 Bảng chấm công (chọn emoji ký hiệu)")
+        st.markdown("### 📊 Bảng chấm công")
         edited_df = st.data_editor(
             df_display,
             hide_index=True,
@@ -1184,8 +1184,13 @@ def admin_app(user):
             height=700,
             column_config={...},
             key=f"attendance_{month_str}",
-            on_change=st.rerun
+            on_change=lambda: st.session_state.update({"_refresh": True})
         )
+
+        # Tự động rerun khi có thay đổi
+        if "_refresh" in st.session_state:
+            del st.session_state["_refresh"]
+            st.rerun()
 
 
         # ==== GHI CHÚ THÁNG ====
