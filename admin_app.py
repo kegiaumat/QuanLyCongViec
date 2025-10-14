@@ -1107,37 +1107,6 @@ def admin_app(user):
         first_day = selected_month.replace(day=1)
         next_month = (first_day + dt.timedelta(days=32)).replace(day=1)
         days = pd.date_range(first_day, next_month - dt.timedelta(days=1))
-
-        # ==== BẢNG GHI CHÚ CÁC LOẠI CÔNG (CÔNG ĐƠN) ====
-        st.markdown("### 📘 Ghi chú các loại công")
-
-        legend_data = [
-            ("🟩", "K", "01 ngày làm việc"),
-            ("🟥", "P", "Nghỉ phép"),
-            ("🟦", "H", "Hội họp"),
-            ("🟨", "TQ", "Tham quan, học tập"),
-            ("🟧", "BD", "Đào tạo, bồi dưỡng"),
-            ("🟫", "L", "Nghỉ lễ, tết"),
-            ("🟩", "O", "Nghỉ ốm, con ốm"),
-            ("⬛", "VR", "Nghỉ hiếu, hỷ"),
-            ("🟪", "NM", "Nghỉ mát"),
-            ("🟪", "TS", "Nghỉ thai sản"),
-            ("🟦", "VS", "Nghỉ vợ sinh"),
-            ("🟨", "TV", "Thử việc"),
-            ("🟠", "K/P, P/K", "Kết hợp làm việc & phép (0.5 công mỗi loại)"),
-            ("🔵", "K/H, H/K", "Kết hợp làm việc & hội họp"),
-            ("🟣", "K/TQ, TQ/K", "Kết hợp làm việc & tham quan"),
-            ("🟤", "K/NM, NM/K", "Kết hợp làm việc & nghỉ mát"),
-            ("🟡", "K/TS, TS/K", "Kết hợp làm việc & thai sản"),
-            ("🟢", "K/VR, VR/K", "Kết hợp làm việc & hiếu hỷ"),
-            ("🔴", "K/O, O/K", "Kết hợp làm việc & ốm"),
-            ("⚫", "K/ĐT, ĐT/K", "Kết hợp làm việc & đào tạo"),
-            ("⚪", "K/L, L/K", "Kết hợp làm việc & lễ, tết")
-        ]
-
-        df_legend = pd.DataFrame(legend_data, columns=["Emoji", "Ký hiệu", "Diễn giải"])
-        st.dataframe(df_legend, hide_index=True, width="stretch")
-
         # ==== DANH SÁCH KÝ HIỆU ====
         code_options = [
             "🟩 K", "🟥 P", "🟦 H", "🟨 TQ", "🟧 BD", "🟫 L", "🟩 O", "⬛ VR",
@@ -1267,6 +1236,37 @@ def admin_app(user):
                     else:
                         supabase.table("attendance_monthly").insert(data_payload).execute()
             st.success("✅ Đã lưu bảng chấm công và ghi chú thành công!")
+
+        # ==== BẢNG GHI CHÚ CÁC LOẠI CÔNG (CÔNG ĐƠN) ====
+        st.markdown("### 📘 Ghi chú các loại công")
+
+        legend_data = [
+            ("🟩", "K", "01 ngày làm việc"),
+            ("🟥", "P", "Nghỉ phép"),
+            ("🟦", "H", "Hội họp"),
+            ("🟨", "TQ", "Tham quan, học tập"),
+            ("🟧", "BD", "Đào tạo, bồi dưỡng"),
+            ("🟫", "L", "Nghỉ lễ, tết"),
+            ("🟩", "O", "Nghỉ ốm, con ốm"),
+            ("⬛", "VR", "Nghỉ hiếu, hỷ"),
+            ("🟪", "NM", "Nghỉ mát"),
+            ("🟪", "TS", "Nghỉ thai sản"),
+            ("🟦", "VS", "Nghỉ vợ sinh"),
+            ("🟨", "TV", "Thử việc"),
+            ("🟠", "K/P, P/K", "Kết hợp làm việc & phép (0.5 công mỗi loại)"),
+            ("🔵", "K/H, H/K", "Kết hợp làm việc & hội họp"),
+            ("🟣", "K/TQ, TQ/K", "Kết hợp làm việc & tham quan"),
+            ("🟤", "K/NM, NM/K", "Kết hợp làm việc & nghỉ mát"),
+            ("🟡", "K/TS, TS/K", "Kết hợp làm việc & thai sản"),
+            ("🟢", "K/VR, VR/K", "Kết hợp làm việc & hiếu hỷ"),
+            ("🔴", "K/O, O/K", "Kết hợp làm việc & ốm"),
+            ("⚫", "K/ĐT, ĐT/K", "Kết hợp làm việc & đào tạo"),
+            ("⚪", "K/L, L/K", "Kết hợp làm việc & lễ, tết")
+        ]
+
+        df_legend = pd.DataFrame(legend_data, columns=["Emoji", "Ký hiệu", "Diễn giải"])
+        st.dataframe(df_legend, hide_index=True, width="stretch")
+
 
     elif choice == "Thống kê công việc":
         st.subheader("📊 Thống kê công việc")
