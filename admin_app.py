@@ -1093,7 +1093,7 @@ def admin_app(user):
                                     st.info("⚠️ Bạn chưa tick dòng nào để xoá.")
 
     elif choice == "Chấm công – Nghỉ phép":
-        st.subheader("🕒 Quản lý chấm công & nghỉ phép (mỗi user 1 dòng JSON)")
+        st.subheader("🕒 Bảng chấm công & nghỉ phép ")
 
         supabase = get_connection()
         df_users = load_users_cached()
@@ -1103,152 +1103,105 @@ def admin_app(user):
         selected_month = st.date_input("📅 Chọn tháng", dt.date(today.year, today.month, 1))
         month_str = selected_month.strftime("%Y-%m")
 
+        # ==== LẬP DANH SÁCH NGÀY ====
         first_day = selected_month.replace(day=1)
         next_month = (first_day + dt.timedelta(days=32)).replace(day=1)
         days = pd.date_range(first_day, next_month - dt.timedelta(days=1))
 
+        # ==== CÁC KÝ HIỆU CHẤM CÔNG ====
+        code_map = {
+            "🟩 K": "01 ngày làm việc",
+            "🟥 P": "Nghỉ phép",
+            "🟪 TS": "Nghỉ thai sản",
+            "🟦 H": "Hội họp",
+            "🟨 TQ": "Thăm quan, học tập",
+            "🟧 BD": "Đào tạo, bồi dưỡng",
+            "🟥 O": "Nghỉ ốm, con ốm",
+            "🟫 L": "Nghỉ lễ, tết",
+            "🟩 NM": "Nghỉ mát",
+            "⚪ VR": "Nghỉ hiếu, hỷ",
+            "🟦 ĐT": "Đoàn thể, VH, TT",
+            "🟪 VS": "Nghỉ vợ sinh",
+            "🟨 TV": "Thử việc",
+            "": ""
+        }
+
         # ==== LẤY DỮ LIỆU ====
-        res = supabase.table("attendance_monthly").select("*").execute()
-        df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["user_id", "months"])
-        df_att["month"] = df_att.get("month", None)
+        res = supabase.table("attendance_monthly").select("*").eq("month", month_str).execute()
+        df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["user_id", "data"])
 
-        # ==== GHÉP USER ====
-        df_users["id"] = df_users["id"].astype(str)
-        df_att["user_id"] = df_att["user_id"].astype(str)
-        df = df_users.merge(df_att, left_on="id", right_on="user_id", how="left")
-
-        # ==== TẠO BẢNG HIỂN THỊ ====
         rows = []
         for _, u in df_users.iterrows():
-            uid = str(u.get("id") or "").strip()
+            uid = str(u.get("id") or "")
             uname = u.get("display_name", "")
-            if not uid:
-                continue
-
-            # Tìm record theo user_id + month
-            record = df_att[(df_att["user_id"] == uid) & (df_att["month"] == month_str)]
-            if not record.empty:
-                work_days = record["work_days"].iloc[0] or []
-                half_days = record["half_days"].iloc[0] or []
-                off_days = record["off_days"].iloc[0] or []
-            else:
-                work_days, half_days, off_days = [], [], []
-                for d in days:
-                    if d.date() > today.date():
-                        continue
-                    if d.weekday() < 5:
-                        work_days.append(d.day)
-                    else:
-                        off_days.append(d.day)
-
+            record = df_att[df_att["user_id"] == uid]
             row = {"User": uname, "user_id": uid}
-            total = 0
+
             for d in days:
-                weekday = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"][d.weekday()]
-                col = f"{d.strftime('%d/%m')} ({weekday})"
+                weekday = d.weekday()
+                col = f"{d.strftime('%d/%m')} ({['T2','T3','T4','T5','T6','T7','CN'][weekday]})"
 
                 if d.date() > today.date():
-                    row[col] = ""
-                    continue
-
-                if d.day in work_days:
-                    row[col] = "🟩 work"
-                    total += 1
-                elif d.day in half_days:
-                    row[col] = "🟨 half"
-                    total += 0.5
-                elif d.day in off_days:
-                    row[col] = "🟥 off"
+                    val = ""
+                elif weekday < 5:
+                    val = "🟩 K"  # Thứ 2 - Thứ 6
                 else:
-                    row[col] = ""
-            row["Số ngày đi làm"] = total
+                    val = ""     # Thứ 7, CN
+                row[col] = val
+
             rows.append(row)
 
         df_display = pd.DataFrame(rows)
-        df_display = df_display[["User", "Số ngày đi làm"] + [f"{d.strftime('%d/%m')} ({['T2','T3','T4','T5','T6','T7','CN'][d.weekday()]})" for d in days]]
+        day_cols = [c for c in df_display.columns if "/" in c]
+        df_display = df_display[["User"] + day_cols]
 
-        # ======= Không rerun khi chọn cell =======
-        with st.form("attendance_form", clear_on_submit=False):
-            st.markdown("### 🎨 Bảng chấm công (mỗi user 1 dòng, có emoji màu)")
+        st.markdown("### 📊 Bảng chấm công (ký hiệu có màu)")
 
-            # Sử dụng st.data_editor trong form để tránh rerun khi sửa cell
-            edited_df = st.data_editor(
-                df_display,
-                column_config={
-                    col: st.column_config.SelectboxColumn(
-                        label=col,
-                        options=["🟩 work", "🟨 half", "🟥 off", ""],
-                        required=False
-                    )
-                    for col in df_display.columns if "/" in col  # Lọc chỉ các cột ngày tháng
-                },
-                hide_index=True,
-                use_container_width=True,
-                height=700,
-                key=f"editor_{month_str}"
-            )
+        # ==== HIỂN THỊ BẢNG ====
+        edited_df = st.data_editor(
+            df_display,
+            hide_index=True,
+            use_container_width=True,
+            height=700,
+            column_config={
+                col: st.column_config.SelectboxColumn(
+                    label=col,
+                    options=list(code_map.keys()),
+                    help="\n".join([f"{k}: {v}" for k, v in code_map.items() if k])
+                )
+                for col in day_cols
+            },
+            key=f"editor_{month_str}"
+        )
 
-            submit = st.form_submit_button("💾 Cập nhật thay đổi")  # Thêm nút submit
+        # ==== PHẦN GHI CHÚ (B36–B39) ====
+        st.markdown("#### 📝 Ghi chú tháng")
+        note_key = f"note_{month_str}"
+        monthly_note = st.text_area(
+            "Nhập ghi chú (B36–B39):",
+            value=st.session_state.get(note_key, ""),
+            height=120,
+            key=note_key
+        )
 
-        # ======= Cập nhật số ngày đi làm khi thay đổi ô trong bảng =======
-        if 'data' in edited_df and edited_df['data'] is not None:  # Kiểm tra nếu 'data' tồn tại và không phải None
-            for index, row in edited_df['data'].iterrows():
-                total_days = 0
-                # Cập nhật số ngày đi làm khi có thay đổi trong bảng
-                for col in edited_df.columns:
-                    if "/" not in col:
-                        continue
-                    day = int(col.split("/")[0])
-                    val = row[col]
-                    if isinstance(val, str) and "work" in val:
-                        total_days += 1
-                    elif isinstance(val, str) and "half" in val:
-                        total_days += 0.5
-                    elif isinstance(val, str) and "off" in val:
-                        continue
-
-                # Cập nhật lại số ngày đi làm cho hàng đó
-                df_display.at[index, 'Số ngày đi làm'] = total_days  # Cập nhật ngay lập tức trong bảng
-
-        # Hiển thị nút lưu khi cần
-        if submit:
-            with st.spinner("Đang ghi dữ liệu lên Supabase..."):
+        # ==== NÚT LƯU ====
+        if st.button("💾 Lưu bảng chấm công"):
+            st.session_state[note_key] = monthly_note  # Lưu ghi chú tạm
+            with st.spinner("Đang lưu dữ liệu lên Supabase..."):
                 for _, row in edited_df.iterrows():
                     uid = int(df_users.loc[df_users["display_name"] == row["User"], "id"].iloc[0])
-                    work_days, half_days, off_days = [], [], []
-
-                    # Cập nhật số ngày đi làm khi có thay đổi trong bảng
-                    for col in edited_df.columns:
-                        if "/" not in col:
-                            continue
-                        day = int(col.split("/")[0])
-                        val = row[col]
-                        if isinstance(val, str) and "work" in val:
-                            work_days.append(day)
-                        elif isinstance(val, str) and "half" in val:
-                            half_days.append(day)
-                        elif isinstance(val, str) and "off" in val:
-                            off_days.append(day)
+                    codes = {col: row[col] for col in day_cols}
 
                     existing = supabase.table("attendance_monthly").select("id").eq("user_id", uid).eq("month", month_str).execute()
+                    data_payload = {"user_id": uid, "month": month_str, "attendance": codes, "note": monthly_note}
 
                     if existing.data:
                         rec_id = existing.data[0]["id"]
-                        supabase.table("attendance_monthly").update({
-                            "work_days": work_days,
-                            "half_days": half_days,
-                            "off_days": off_days
-                        }).eq("id", rec_id).execute()
+                        supabase.table("attendance_monthly").update(data_payload).eq("id", rec_id).execute()
                     else:
-                        supabase.table("attendance_monthly").insert({
-                            "user_id": uid,
-                            "month": month_str,
-                            "work_days": work_days,
-                            "half_days": half_days,
-                            "off_days": off_days
-                        }).execute()
+                        supabase.table("attendance_monthly").insert(data_payload).execute()
 
-                st.success("✅ Dữ liệu đã được lưu thành công!")
+                st.success("✅ Đã lưu bảng chấm công & ghi chú thành công!")
 
     elif choice == "Thống kê công việc":
         st.subheader("📊 Thống kê công việc")
