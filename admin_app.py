@@ -1182,16 +1182,11 @@ def admin_app(user):
             hide_index=True,
             use_container_width=True,
             height=700,
-            column_config={
-                col: st.column_config.SelectboxColumn(
-                    label=col,
-                    options=code_options,
-                    help="Chọn ký hiệu công theo hướng dẫn phía trên"
-                )
-                for col in day_cols
-            },
-            key=f"attendance_{month_str}"
+            column_config={...},
+            key=f"attendance_{month_str}",
+            on_change=st.rerun
         )
+
 
         # ==== GHI CHÚ THÁNG ====
         st.markdown("### 📝 Ghi chú tháng (B36–B39)")
