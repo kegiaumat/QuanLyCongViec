@@ -1242,9 +1242,9 @@ def admin_app(user):
                     # Ghi từng mã công (K, P, H, ...)
                     for code_symbol, day_list in grouped.items():
                         data_json = {d: code_symbol for d in day_list}
-                        existing = supabase.table("attendance_new").select("id").eq("user", uname).eq("month", month_str).eq("code", code_symbol).execute()
+                        existing = supabase.table("attendance_new").select("id").eq("username", uname).eq("month", month_str).eq("code", code_symbol).execute()
                         payload = {
-                            "user": uname,
+                            "username": uname,
                             "month": month_str,
                             "code": code_symbol,
                             "data": data_json,
