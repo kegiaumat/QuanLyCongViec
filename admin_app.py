@@ -1182,10 +1182,18 @@ def admin_app(user):
             hide_index=True,
             use_container_width=True,
             height=700,
-            column_config={...},
             key=f"attendance_{month_str}",
-            on_change=lambda: st.session_state.update({"_refresh": True})
+            on_change=lambda: st.session_state.update({"_refresh": True}),
+            column_config={
+                "User": st.column_config.TextColumn("Nhân viên", disabled=True),
+                **{c: st.column_config.SelectboxColumn(
+                    c,
+                    options=code_options,
+                    help="Chọn loại công (emoji)",
+                ) for c in day_cols}
+            }
         )
+
 
         # Tự động rerun khi có thay đổi
         if "_refresh" in st.session_state:
