@@ -1265,7 +1265,16 @@ def admin_app(user):
         ]
 
         df_legend = pd.DataFrame(legend_data, columns=["Emoji", "Ký hiệu", "Diễn giải"])
-        st.dataframe(df_legend, hide_index=True, width="stretch")
+
+        # 🔹 Chia đôi danh sách để hiển thị 2 bảng song song
+        half = len(df_legend) // 2 + len(df_legend) % 2
+        col_left, col_right = st.columns(2)
+
+        with col_left:
+            st.dataframe(df_legend.iloc[:half], hide_index=True, use_container_width=True)
+        with col_right:
+            st.dataframe(df_legend.iloc[half:], hide_index=True, use_container_width=True)
+
 
 
     elif choice == "Thống kê công việc":
