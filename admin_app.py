@@ -99,11 +99,12 @@ def admin_app(user):
     if choice == "Quản lý người dùng":
         st.subheader("👥 Quản lý user")
 
-        supabase = get_supabase_client()
+        # === Tải dữ liệu ===
         df_users = load_users_cached()
         df_projects = load_projects_cached()
+        supabase = get_supabase_client()
 
-        # Chuẩn hóa cột
+        # === Chuẩn hóa cột ===
         df_users = df_users.rename(columns={
             "username": "Tên đăng nhập",
             "display_name": "Tên hiển thị",
@@ -113,58 +114,58 @@ def admin_app(user):
             "project_leader_of": "Chủ trì dự án"
         })
 
-        # Chuyển dữ liệu để hiển thị đúng
-        df_users["Ngày sinh"] = pd.to_datetime(df_users["Ngày sinh"], errors="coerce").dt.date
+        # === Thêm cột Xóa? ===
         df_users["Xóa?"] = False
 
-        # Xử lý vai trò (đa lựa chọn)
-        df_users["Vai trò"] = df_users["Vai trò"].fillna("").apply(
-            lambda x: [r.strip() for r in x.split(",")] if isinstance(x, str) and x else []
-        )
-
-        project_options = df_projects["name"].dropna().tolist()
+        # === Dữ liệu cho selectbox ===
         role_options = ["user", "admin", "Chủ nhiệm dự án", "Chủ trì dự án"]
+        project_options = df_projects["name"].dropna().tolist()
 
-        # Hiển thị bảng có thể chỉnh sửa
+        # === Bảng chỉnh sửa ===
+        df_users["Ngày sinh"] = pd.to_datetime(df_users["Ngày sinh"], errors="coerce").dt.date
+        df_users["Xóa?"] = df_users["Xóa?"].fillna(False).astype(bool)
+        for col in ["Vai trò", "Chủ nhiệm dự án", "Chủ trì dự án"]:
+            df_users[col] = df_users[col].astype(str).fillna("")
+
+        # === Bảng chỉnh sửa ===
         edited_users = st.data_editor(
             df_users,
             width="stretch",
             hide_index=True,
             key="user_editor",
             column_config={
+                # ✅ Không cho sửa tên đăng nhập
                 "Tên đăng nhập": st.column_config.TextColumn(
                     "Tên đăng nhập",
-                    disabled=True,  # ✅ KHÔNG CHO SỬA
-                    help="Không thể thay đổi tên đăng nhập"
+                    disabled=True,
+                    help="Không thể chỉnh sửa tên đăng nhập"
                 ),
                 "Tên hiển thị": st.column_config.TextColumn("Tên hiển thị"),
                 "Ngày sinh": st.column_config.DateColumn("Ngày sinh", format="YYYY-MM-DD"),
                 "Vai trò": st.column_config.MultiselectColumn(
                     "Vai trò",
                     options=role_options,
-                    help="Có thể chọn nhiều vai trò"
+                    help="Có thể chọn nhiều vai trò (user, admin, Chủ nhiệm dự án, Chủ trì dự án)"
                 ),
-                "Chủ nhiệm dự án": st.column_config.SelectboxColumn(
-                    "Chủ nhiệm dự án", options=project_options, required=False
-                ),
-                "Chủ trì dự án": st.column_config.SelectboxColumn(
-                    "Chủ trì dự án", options=project_options, required=False
-                ),
-                "Xóa?": st.column_config.CheckboxColumn("Xóa?", help="Tick để xóa user này")
+                "Chủ nhiệm dự án": st.column_config.SelectboxColumn("Chủ nhiệm dự án", options=project_options),
+                "Chủ trì dự án": st.column_config.SelectboxColumn("Chủ trì dự án", options=project_options),
+                "Xóa?": st.column_config.CheckboxColumn("Xóa?", help="Tick để đánh dấu user cần xoá")
             }
         )
 
         col1, col2 = st.columns(2)
 
-        # --- Nút cập nhật ---
+        # === Nút cập nhật ===
         with col1:
             if st.button("💾 Update"):
                 changed_count = 0
                 for i, row in edited_users.iterrows():
                     username = row["Tên đăng nhập"]
+                    # Lấy bản gốc để so sánh
                     original = df_users.loc[df_users["Tên đăng nhập"] == username].iloc[0]
-                    update_data = {}
 
+                    # Tạo dict dữ liệu cập nhật
+                    update_data = {}
                     for col, db_field in [
                         ("Tên hiển thị", "display_name"),
                         ("Ngày sinh", "dob"),
@@ -175,16 +176,17 @@ def admin_app(user):
                         new_val = row[col]
                         old_val = original[col]
 
-                        # Xử lý kiểu dữ liệu
+                        # --- Chuyển ngày sang string để JSON serializable ---
                         if col == "Ngày sinh" and pd.notna(new_val):
                             new_val = str(new_val)
                         elif col == "Vai trò" and isinstance(new_val, list):
                             new_val = ", ".join(new_val)
 
-                        # Chỉ update khi khác
+                        # Chỉ thêm vào update_data nếu có thay đổi
                         if str(new_val) != str(old_val):
                             update_data[db_field] = new_val
 
+                    # Nếu có thay đổi thì mới update
                     if update_data:
                         try:
                             supabase.table("users").update(update_data).eq("username", username).execute()
@@ -198,7 +200,7 @@ def admin_app(user):
                 else:
                     st.info("ℹ️ Không có user nào thay đổi, không cần cập nhật.")
 
-        # --- Nút xóa ---
+        # === Nút xóa ===
         with col2:
             if st.button("❌ Xóa user"):
                 to_delete = edited_users[edited_users["Xóa?"] == True]
@@ -212,11 +214,11 @@ def admin_app(user):
                         if st.button("✅ Yes, xoá ngay"):
                             for _, row in to_delete.iterrows():
                                 supabase.table("users").delete().eq("username", row["Tên đăng nhập"]).execute()
-                            st.success("🗑️ Đã xoá user được chọn.")
+                            st.success("🗑️ Đã xoá user được chọn")
                             refresh_all_cache()
                     with c2:
                         if st.button("❌ No, huỷ"):
-                            st.info("Đã huỷ thao tác xoá.")
+                            st.info("Đã huỷ thao tác xoá")
 
             
     elif choice == "Mục lục công việc":
