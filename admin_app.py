@@ -136,7 +136,12 @@ def admin_app(user):
             column_config={
                 "Tên hiển thị": st.column_config.TextColumn("Tên hiển thị"),
                 "Ngày sinh": st.column_config.DateColumn("Ngày sinh", format="YYYY-MM-DD"),
-                "Vai trò": st.column_config.SelectboxColumn("Vai trò", options=role_options),
+                "Vai trò": st.column_config.MultiselectColumn(
+                    "Vai trò",
+                    options=role_options,
+                    help="Có thể chọn nhiều vai trò (user, admin, Chủ nhiệm dự án, Chủ trì dự án)"
+                ),
+
                 "Chủ nhiệm dự án": st.column_config.SelectboxColumn("Chủ nhiệm dự án", options=project_options),
                 "Chủ trì dự án": st.column_config.SelectboxColumn("Chủ trì dự án", options=project_options),
                 "Xóa?": st.column_config.CheckboxColumn("Xóa?", help="Tick để đánh dấu user cần xoá")
@@ -149,21 +154,46 @@ def admin_app(user):
         # === Nút cập nhật ===
         with col1:
             if st.button("💾 Update"):
+                changed_count = 0
                 for i, row in edited_users.iterrows():
                     username = row["Tên đăng nhập"]
-                    update_data = {
-                        "display_name": row["Tên hiển thị"],
-                        "dob": row["Ngày sinh"],
-                        "role": row["Vai trò"],
-                        "project_manager_of": row["Chủ nhiệm dự án"],
-                        "project_leader_of": row["Chủ trì dự án"],
-                    }
-                    try:
-                        supabase.table("users").update(update_data).eq("username", username).execute()
-                    except Exception as e:
-                        st.error(f"⚠️ Lỗi khi cập nhật {username}: {e}")
-                st.success("✅ Đã cập nhật thông tin user")
-                refresh_all_cache()
+                    # Lấy bản gốc để so sánh
+                    original = df_users.loc[df_users["Tên đăng nhập"] == username].iloc[0]
+
+                    # Tạo dict dữ liệu cập nhật
+                    update_data = {}
+                    for col, db_field in [
+                        ("Tên hiển thị", "display_name"),
+                        ("Ngày sinh", "dob"),
+                        ("Vai trò", "role"),
+                        ("Chủ nhiệm dự án", "project_manager_of"),
+                        ("Chủ trì dự án", "project_leader_of"),
+                    ]:
+                        new_val = row[col]
+                        old_val = original[col]
+
+                        # --- Chuyển ngày sang string để JSON serializable ---
+                        if col == "Ngày sinh" and pd.notna(new_val):
+                            new_val = str(new_val)
+
+                        # Chỉ thêm vào update_data nếu có thay đổi
+                        if str(new_val) != str(old_val):
+                            update_data[db_field] = new_val
+
+                    # Nếu có thay đổi thì mới update
+                    if update_data:
+                        try:
+                            supabase.table("users").update(update_data).eq("username", username).execute()
+                            changed_count += 1
+                        except Exception as e:
+                            st.error(f"⚠️ Lỗi khi cập nhật {username}: {e}")
+
+                if changed_count > 0:
+                    st.success(f"✅ Đã cập nhật {changed_count} user có thay đổi.")
+                    refresh_all_cache()
+                else:
+                    st.info("ℹ️ Không có user nào thay đổi, không cần cập nhật.")
+
 
         # === Nút xóa ===
         with col2:
