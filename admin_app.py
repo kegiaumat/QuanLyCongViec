@@ -7,8 +7,6 @@ import json
 from auth import get_connection, calc_hours, get_projects, add_user, hash_password, add_project
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 import io  # đảm bảo có import này ở đầu file
-import re
-from datetime import datetime as _dt, timedelta as _td
 
 # ====== CACHE DỮ LIỆU TỪ SUPABASE ======
 @st.cache_data(ttl=15)
@@ -1087,17 +1085,14 @@ def admin_app(user):
                             if st.button(f"💾 Cập nhật khối lượng của {u}", key=f"save_other_{u}"):
                                 for i, row in edited_other.iterrows():
                                     try:
-                                        # Lấy id thật từ bản hiển thị
                                         tid = int(row.get("ID", 0))
                                         if not tid:
                                             continue
 
-                                        # Lấy giá trị đã chỉnh sửa
                                         new_qty = float(row.get("Khối lượng") or 0)
                                         note_val = str(row.get("Ghi chú") or "").strip()
-                                        progress_val = int(float(row.get("Tiến độ (%)") or 0))  # ✅ ép kiểu int để không bị lỗi "0.0"
+                                        progress_val = int(float(row.get("Tiến độ (%)") or 0))
 
-                                        # Chuẩn hóa Deadline
                                         dl = row.get("Deadline")
                                         if isinstance(dl, (datetime.date, pd.Timestamp)):
                                             dl_str = pd.to_datetime(dl).strftime("%Y-%m-%d")
@@ -1107,46 +1102,27 @@ def admin_app(user):
                                         else:
                                             dl_str = None
 
+                                        # 💡 Chỉ thêm định dạng thời gian cho công việc GIÁN TIẾP (khối lượng)
+                                        if not note_val.startswith("⏰"):
+                                            today_str = datetime.date.today().strftime("%Y-%m-%d")
+                                            end_str = dl_str or today_str
+                                            time_note = f"⏰ 08:00:00 - 14:30:00 ({today_str}→{end_str})"
+                                            note_val = f"{time_note} {note_val}".strip()
+
                                         # Cập nhật thật vào Supabase
-
-                                        # --------- Chuẩn hóa ghi chú cho CÔNG GIÁN TIẾP ---------
-                                        # 1) Gỡ mọi phần header cũ nếu có (⏰ ... (...) ) ở đầu ghi chú
-                                        note_clean = str(note_val or "").strip()
-                                        note_clean = re.sub(r"^\s*⏰.*?\)\s*", "", note_clean)      # bỏ "⏰ ... (....→....) " ở đầu
-                                        note_clean = re.sub(r"^\s*\(.*?→.*?\)\s*", "", note_clean) # bỏ "(....→....) " nếu người dùng tự gõ
-
-                                        # 2) Suy ra thời gian từ Khối lượng: mặc định bắt đầu 08:00
-                                        start_time = _dt.strptime("08:00", "%H:%M")
-                                        try:
-                                            total_minutes = int(round(float(new_qty) * 60))
-                                        except Exception:
-                                            total_minutes = 0
-                                        end_time = start_time + _td(minutes=total_minutes)
-                                        s_str = start_time.strftime("%H:%M:%S")
-                                        e_str = end_time.strftime("%H:%M:%S")
-
-                                        # 3) Dùng Deadline để gán ngày (nếu có)
-                                        date_part = f"({dl_str}→{dl_str})" if dl_str else ""
-
-                                        # 4) Ghép header thời gian + ngày + phần ghi chú còn lại
-                                        time_header = f"⏰ {s_str} - {e_str} {date_part}".strip()
-                                        final_note = f"{time_header} {note_clean}".strip()
-
-                                        # 5) Cập nhật vào Supabase
                                         supabase.table("tasks").update({
                                             "khoi_luong": new_qty,
-                                            "note": final_note,
+                                            "note": note_val,
                                             "progress": progress_val,
                                             "deadline": dl_str
                                         }).eq("id", tid).execute()
-
-
 
                                     except Exception as e:
                                         st.warning(f"⚠️ Lỗi cập nhật dòng {i+1}: {e}")
 
                                 st.success(f"✅ Đã cập nhật công việc khối lượng của {u}")
                                 st.rerun()
+
 
 
                         # ===== Nút xóa =====
