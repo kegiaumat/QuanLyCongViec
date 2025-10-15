@@ -1106,12 +1106,21 @@ def admin_app(user):
                                             dl_str = None
 
                                         # Cập nhật thật vào Supabase
+                                        # 💡 Chỉ thêm định dạng thời gian cho công việc gián tiếp
+                                        if not note_val.startswith("⏰"):
+                                            if dl_str:
+                                                # Thêm định dạng thời gian mặc định cho công việc gián tiếp
+                                                time_note = f"⏰ 08:00:00 - 14:30:00 ({dl_str}→{dl_str})"
+                                                note_val = f"{time_note} {note_val}".strip()
+
+                                        # Cập nhật thật vào Supabase
                                         supabase.table("tasks").update({
                                             "khoi_luong": new_qty,
                                             "note": note_val,
                                             "progress": progress_val,
                                             "deadline": dl_str
                                         }).eq("id", tid).execute()
+
 
                                     except Exception as e:
                                         st.warning(f"⚠️ Lỗi cập nhật dòng {i+1}: {e}")
