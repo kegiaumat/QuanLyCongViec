@@ -1261,41 +1261,62 @@ def admin_app(user):
             with st.spinner("Đang lưu dữ liệu lên Supabase..."):
 
                 # --- Lưu bảng công cho từng user ---
+                today = pd.Timestamp(dt.date.today())
+
                 for _, row in edited_df.iterrows():
                     uname = row["User"]
-                    # Loại bỏ emoji trước khi lưu
+
+                    # Hàm bỏ emoji
                     def remove_emoji(txt):
                         if not isinstance(txt, str):
                             return ""
                         return txt.split()[-1] if " " in txt else txt
 
-                    codes = {col.split("/")[0]: remove_emoji(row[col]) for col in day_cols if isinstance(row[col], str)}
-                    record = df_att[df_att["username"] == uname]
+                    # Chỉ lấy dữ liệu tới ngày hiện tại
+                    codes = {}
+                    for col in day_cols:
+                        if not isinstance(row[col], str):
+                            continue
+                        day = int(col.split("/")[0])
+                        date_in_month = selected_month.replace(day=day)
+                        if date_in_month <= today:
+                            codes[f"{day:02d}"] = remove_emoji(row[col])
 
+                    # Lấy record hiện có trong DB
+                    record = df_att[df_att["username"] == uname]
                     if len(record) > 0:
                         rec = record.iloc[0]
                         months = rec.get("months", []) or []
                         data_all = rec.get("data", {}) or {}
                         if isinstance(data_all, str):
                             data_all = json.loads(data_all)
+                        old_month_data = data_all.get(month_str, {})
+
+                        # So sánh chi tiết để biết có thay đổi không
+                        has_changed = False
+                        for d, v in codes.items():
+                            if old_month_data.get(d) != v:
+                                has_changed = True
+                                break
+                        if not has_changed and set(old_month_data.keys()) != set(codes.keys()):
+                            has_changed = True
+
+                        if has_changed:
+                            data_all[month_str] = codes
+                            if month_str not in months:
+                                months.append(month_str)
+                            payload = {"months": months, "data": data_all}
+                            supabase.table("attendance_new").update(payload).eq("username", uname).execute()
+
                     else:
-                        months, data_all = [], {}
-
-                    # Cập nhật tháng hiện tại
-                    data_all[month_str] = codes
-                    if month_str not in months:
-                        months.append(month_str)
-
-                    payload = {
-                        "months": months,
-                        "data": data_all
-                    }
-
-                    if len(record) > 0:
-                        supabase.table("attendance_new").update(payload).eq("username", uname).execute()
-                    else:
-                        payload["username"] = uname
+                        # User chưa có dữ liệu -> insert mới
+                        payload = {
+                            "username": uname,
+                            "months": [month_str],
+                            "data": {month_str: codes}
+                        }
                         supabase.table("attendance_new").insert(payload).execute()
+
 
                 # --- Lưu ghi chú tháng riêng vào NoteData ---
                 note_record = df_att[df_att["username"] == "NoteData"]
