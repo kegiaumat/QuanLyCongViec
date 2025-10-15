@@ -1093,8 +1093,7 @@ def admin_app(user):
                                     st.info("⚠️ Bạn chưa tick dòng nào để xoá.")
 
     elif choice == "Chấm công – Nghỉ phép":
-        st.subheader(f"🕒 Quản lý chấm công & nghỉ phép ({selected_month.strftime('%m/%Y')})")
-
+        
 
 
         supabase = get_connection()
@@ -1104,7 +1103,7 @@ def admin_app(user):
         today = pd.Timestamp(dt.date.today())
         selected_month = st.date_input("📅 Chọn tháng", dt.date(today.year, today.month, 1))
         month_str = selected_month.strftime("%Y-%m")
-
+        st.subheader(f"🕒 Quản lý chấm công & nghỉ phép (Tháng {selected_month.strftime('%m')} năm {selected_month.strftime('%Y')})")
         # ==== LẬP DANH SÁCH NGÀY ====
         first_day = selected_month.replace(day=1)
         next_month = (first_day + dt.timedelta(days=32)).replace(day=1)
