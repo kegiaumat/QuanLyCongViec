@@ -96,13 +96,15 @@ def admin_app(user):
 
 
     choice = st.sidebar.radio("Chức năng", menu)
-    if choice == "Quản lý người dùng":
+    elif choice == "Quản lý người dùng":
         st.subheader("👥 Quản lý user")
 
-        # Đọc danh sách user
-        df_users = st.session_state["df_users"]
+        # === Tải dữ liệu ===
+        df_users = load_users_cached()
+        df_projects = load_projects_cached()
+        supabase = get_supabase_client()
 
-        # Đổi tên cột
+        # === Chuẩn hóa cột ===
         df_users = df_users.rename(columns={
             "username": "Tên đăng nhập",
             "display_name": "Tên hiển thị",
@@ -112,88 +114,69 @@ def admin_app(user):
             "project_leader_of": "Chủ trì dự án"
         })
 
-        # 👉 Ẩn cột ID khi hiển thị
-        st.dataframe(df_users.drop(columns=["id"], errors="ignore"), width="stretch")
+        # === Thêm cột Xóa? ===
+        df_users["Xóa?"] = False
 
-        # 👉 Selectbox hiển thị theo Tên hiển thị
-        selected_display = st.selectbox("Chọn user", df_users["Tên hiển thị"].tolist())
+        # === Dữ liệu cho selectbox ===
+        role_options = ["user", "admin", "Chủ nhiệm dự án", "Chủ trì dự án"]
+        project_options = df_projects["name"].dropna().tolist()
 
-        # Map ngược để lấy username thực khi cần update/xóa
-        if df_users.empty:
-            st.error("⚠️ Không có người dùng nào trong cơ sở dữ liệu.")
-            return  # Dừng lại nếu không có người dùng
-
-        # Kiểm tra xem selected_display có trong danh sách tên hiển thị hay không
-        if selected_display not in df_users["Tên hiển thị"].values:
-            st.error("⚠️ Tên hiển thị không tồn tại trong cơ sở dữ liệu.")
-            return  # Dừng lại nếu tên hiển thị không hợp lệ
-
-        # Tiến hành lấy selected_user nếu có dữ liệu hợp lệ
-        selected_user = df_users.loc[df_users["Tên hiển thị"] == selected_display, "Tên đăng nhập"].iloc[0]
-
-        # Các quyền (vai trò)
-        roles = st.multiselect(
-            "Cập nhật vai trò",
-            ["user", "Chủ nhiệm dự án", "Chủ trì dự án", "admin"]
+        # === Bảng chỉnh sửa ===
+        edited_users = st.data_editor(
+            df_users,
+            width="stretch",
+            hide_index=True,
+            key="user_editor",
+            column_config={
+                "Tên hiển thị": st.column_config.TextColumn("Tên hiển thị"),
+                "Ngày sinh": st.column_config.DateColumn("Ngày sinh", format="YYYY-MM-DD"),
+                "Vai trò": st.column_config.SelectboxColumn("Vai trò", options=role_options),
+                "Chủ nhiệm dự án": st.column_config.SelectboxColumn("Chủ nhiệm dự án", options=project_options),
+                "Chủ trì dự án": st.column_config.SelectboxColumn("Chủ trì dự án", options=project_options),
+                "Xóa?": st.column_config.CheckboxColumn("Xóa?", help="Tick để đánh dấu user cần xoá")
+            }
         )
-
-        # Lấy danh sách dự án
-        projects_list = df_projects["name"].dropna().tolist()
-
-
-        project_manager = None
-        project_leader = None
-
-        if "Chủ nhiệm dự án" in roles:
-            selected_projects_manager = st.multiselect("Chọn các dự án chủ nhiệm", projects_list)
-            project_manager = ",".join(selected_projects_manager) if selected_projects_manager else None
-
-        if "Chủ trì dự án" in roles:
-            selected_projects_leader = st.multiselect("Chọn các dự án chủ trì", projects_list)
-            project_leader = ",".join(selected_projects_leader) if selected_projects_leader else None
 
         col1, col2 = st.columns(2)
 
+        # === Nút cập nhật ===
         with col1:
-            if st.button("💾 Cập nhật quyền"):
-                roles_str = ",".join(roles) if roles else "user"
-                supabase.table("users").update({
-                    "role": roles_str,
-                    "project_manager_of": project_manager,
-                    "project_leader_of": project_leader
-                }).eq("username", selected_user).execute()
-                
-                st.success("✅ Đã cập nhật quyền")
-                refresh_all_cache()  # refresh lại danh sách
-
-        with col2:
-            if st.button("❌ Xóa user"):
-                supabase.table("users").delete().eq("username", selected_user).execute()
-                st.success("🗑️ Đã xóa user")
+            if st.button("💾 Update"):
+                for i, row in edited_users.iterrows():
+                    username = row["Tên đăng nhập"]
+                    update_data = {
+                        "display_name": row["Tên hiển thị"],
+                        "dob": row["Ngày sinh"],
+                        "role": row["Vai trò"],
+                        "project_manager_of": row["Chủ nhiệm dự án"],
+                        "project_leader_of": row["Chủ trì dự án"],
+                    }
+                    try:
+                        supabase.table("users").update(update_data).eq("username", username).execute()
+                    except Exception as e:
+                        st.error(f"⚠️ Lỗi khi cập nhật {username}: {e}")
+                st.success("✅ Đã cập nhật thông tin user")
                 refresh_all_cache()
 
-
-        # === Thêm chức năng đổi mật khẩu cho người dùng ===
-        st.subheader("🔑 Đổi mật khẩu cho người dùng")
-
-        new_password = st.text_input("Mật khẩu mới", type="password")
-        confirm_password = st.text_input("Xác nhận mật khẩu mới", type="password")
-
-
-
-        if st.button("✅ Đổi mật khẩu"):
-            if new_password != confirm_password:
-                st.error("⚠️ Mật khẩu mới và xác nhận không khớp.")
-            else:
-                try:
-                    supabase.table("users").update({
-                        "password": hash_password(new_password)
-                    }).eq("username", selected_user).execute()
-                    
-                    st.success("✅ Đã đổi mật khẩu cho người dùng.")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"⚠️ Lỗi khi đổi mật khẩu: {e}")
+        # === Nút xóa ===
+        with col2:
+            if st.button("❌ Xóa user"):
+                to_delete = edited_users[edited_users["Xóa?"] == True]
+                if to_delete.empty:
+                    st.warning("⚠️ Bạn chưa tick user nào để xoá.")
+                else:
+                    st.error(f"⚠️ Bạn có chắc muốn xoá {len(to_delete)} user: "
+                             f"{', '.join(to_delete['Tên hiển thị'].tolist())}?")
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        if st.button("✅ Yes, xoá ngay"):
+                            for _, row in to_delete.iterrows():
+                                supabase.table("users").delete().eq("username", row["Tên đăng nhập"]).execute()
+                            st.success("🗑️ Đã xoá user được chọn")
+                            refresh_all_cache()
+                    with c2:
+                        if st.button("❌ No, huỷ"):
+                            st.info("Đã huỷ thao tác xoá")
 
             
     elif choice == "Mục lục công việc":
