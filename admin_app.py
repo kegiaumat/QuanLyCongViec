@@ -96,7 +96,7 @@ def admin_app(user):
 
 
     choice = st.sidebar.radio("Chức năng", menu)
-    elif choice == "Quản lý người dùng":
+    if choice == "Quản lý người dùng":
         st.subheader("👥 Quản lý user")
 
         # === Tải dữ liệu ===
