@@ -1093,7 +1093,8 @@ def admin_app(user):
                                     st.info("⚠️ Bạn chưa tick dòng nào để xoá.")
 
     elif choice == "Chấm công – Nghỉ phép":
-        st.subheader(f"🕒 Quản lý chấm công & nghỉ phép (Tháng {selected_month.strftime('%m')} năm {selected_month.strftime('%Y')})")
+        st.subheader(f"🕒 Quản lý chấm công & nghỉ phép ({selected_month.strftime('%m/%Y')})")
+
 
 
         supabase = get_connection()
