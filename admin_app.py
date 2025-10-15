@@ -99,9 +99,13 @@ def admin_app(user):
     if choice == "Quản lý người dùng":
         st.subheader("👥 Quản lý user")
 
-        # === Tải dữ liệu ===
-        df_users = load_users_cached()
-        df_projects = load_projects_cached()
+        # === Chỉ tải lại nếu chưa có trong session (để tránh nhảy bảng) ===
+        if "df_users" not in st.session_state or "df_projects" not in st.session_state:
+            st.session_state.df_users = load_users_cached()
+            st.session_state.df_projects = load_projects_cached()
+
+        df_users = st.session_state.df_users.copy()
+        df_projects = st.session_state.df_projects.copy()
         supabase = get_supabase_client()
 
         # === Chuẩn hóa cột ===
@@ -115,13 +119,14 @@ def admin_app(user):
         })
 
         # === Thêm cột Xóa? ===
-        df_users["Xóa?"] = False
+        if "Xóa?" not in df_users.columns:
+            df_users["Xóa?"] = False
 
         # === Dữ liệu cho selectbox ===
         role_options = ["user", "admin", "Chủ nhiệm dự án", "Chủ trì dự án"]
         project_options = df_projects["name"].dropna().tolist()
 
-        # === Bảng chỉnh sửa ===
+        # === Chuẩn hóa dữ liệu ===
         df_users["Ngày sinh"] = pd.to_datetime(df_users["Ngày sinh"], errors="coerce").dt.date
         df_users["Xóa?"] = df_users["Xóa?"].fillna(False).astype(bool)
         for col in ["Vai trò", "Chủ nhiệm dự án", "Chủ trì dự án"]:
@@ -161,11 +166,9 @@ def admin_app(user):
                 changed_count = 0
                 for i, row in edited_users.iterrows():
                     username = row["Tên đăng nhập"]
-                    # Lấy bản gốc để so sánh
                     original = df_users.loc[df_users["Tên đăng nhập"] == username].iloc[0]
-
-                    # Tạo dict dữ liệu cập nhật
                     update_data = {}
+
                     for col, db_field in [
                         ("Tên hiển thị", "display_name"),
                         ("Ngày sinh", "dob"),
@@ -182,11 +185,9 @@ def admin_app(user):
                         elif col == "Vai trò" and isinstance(new_val, list):
                             new_val = ", ".join(new_val)
 
-                        # Chỉ thêm vào update_data nếu có thay đổi
                         if str(new_val) != str(old_val):
                             update_data[db_field] = new_val
 
-                    # Nếu có thay đổi thì mới update
                     if update_data:
                         try:
                             supabase.table("users").update(update_data).eq("username", username).execute()
@@ -197,28 +198,43 @@ def admin_app(user):
                 if changed_count > 0:
                     st.success(f"✅ Đã cập nhật {changed_count} user có thay đổi.")
                     refresh_all_cache()
+                    # Reload lại cache sau update
+                    st.session_state.df_users = load_users_cached()
                 else:
                     st.info("ℹ️ Không có user nào thay đổi, không cần cập nhật.")
 
         # === Nút xóa ===
         with col2:
+            if "confirm_delete" not in st.session_state:
+                st.session_state.confirm_delete = False
+
             if st.button("❌ Xóa user"):
                 to_delete = edited_users[edited_users["Xóa?"] == True]
                 if to_delete.empty:
                     st.warning("⚠️ Bạn chưa tick user nào để xoá.")
                 else:
-                    st.error(f"⚠️ Bạn có chắc muốn xoá {len(to_delete)} user: "
-                             f"{', '.join(to_delete['Tên hiển thị'].tolist())}?")
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        if st.button("✅ Yes, xoá ngay"):
-                            for _, row in to_delete.iterrows():
-                                supabase.table("users").delete().eq("username", row["Tên đăng nhập"]).execute()
-                            st.success("🗑️ Đã xoá user được chọn")
-                            refresh_all_cache()
-                    with c2:
-                        if st.button("❌ No, huỷ"):
-                            st.info("Đã huỷ thao tác xoá")
+                    st.session_state.to_delete = to_delete
+                    st.session_state.confirm_delete = True
+
+            # === Hiển thị xác nhận xoá nếu cần ===
+            if st.session_state.confirm_delete:
+                to_delete = st.session_state.to_delete
+                st.error(f"⚠️ Bạn có chắc muốn xoá {len(to_delete)} user: "
+                         f"{', '.join(to_delete['Tên hiển thị'].tolist())}?")
+                c1, c2 = st.columns(2)
+                with c1:
+                    if st.button("✅ Yes, xoá ngay"):
+                        for _, row in to_delete.iterrows():
+                            supabase.table("users").delete().eq("username", row["Tên đăng nhập"]).execute()
+                        st.success("🗑️ Đã xoá user được chọn")
+                        refresh_all_cache()
+                        # Reload lại cache sau xoá
+                        st.session_state.df_users = load_users_cached()
+                        st.session_state.confirm_delete = False
+                with c2:
+                    if st.button("❌ No, huỷ"):
+                        st.info("Đã huỷ thao tác xoá")
+                        st.session_state.confirm_delete = False
 
             
     elif choice == "Mục lục công việc":
