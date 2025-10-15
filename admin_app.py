@@ -97,7 +97,6 @@ def admin_app(user):
 
     choice = st.sidebar.radio("Chức năng", menu)
     if choice == "Quản lý người dùng":
-        import pandas as pd
         st.subheader("👥 Quản lý user")
 
         supabase = get_supabase_client()
