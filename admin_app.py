@@ -1106,8 +1106,12 @@ def admin_app(user):
                                         if not note_val.startswith("⏰"):
                                             today_str = datetime.date.today().strftime("%Y-%m-%d")
                                             end_str = dl_str or today_str
-                                            time_note = f"⏰ 08:00:00 - 14:30:00 ({today_str}→{end_str})"
+                                            start_time = "08:00:00"
+                                            end_time = "14:30:00"
+                                            time_note = f"⏰ {start_time} - {end_time} ({today_str}→{end_str})"
                                             note_val = f"{time_note} {note_val}".strip()
+
+
 
                                         # Cập nhật thật vào Supabase
                                         supabase.table("tasks").update({
