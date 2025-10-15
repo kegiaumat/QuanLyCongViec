@@ -1180,8 +1180,11 @@ def admin_app(user):
         # ==== GHÉP DỮ LIỆU CHO HIỂN THỊ ====
         rows = []
         for _, u in df_users.iterrows():
-            uname = u.get("display_name", "")
+            uname = u.get("username", "")            # ← Dùng username thật để so sánh DB
+            display_name = u.get("display_name", "") # ← Dùng để hiển thị
             record = df_att[df_att["username"] == uname]
+
+
             user_data = {}
 
             if len(record) > 0:
@@ -1194,7 +1197,8 @@ def admin_app(user):
                         user_data = {}
 
             month_data = user_data.get(month_str, {})
-            row = {"User": uname}
+            row = {"User": display_name, "username": uname}
+
 
             # ==== Chỉ tự động chấm đến ngày hiện tại ====
             today = pd.Timestamp(dt.date.today())
@@ -1217,7 +1221,8 @@ def admin_app(user):
 
         df_display = pd.DataFrame(rows)
         day_cols = [c for c in df_display.columns if "/" in c]
-        df_display = df_display[["User"] + day_cols]
+        df_display = df_display[["username", "User"] + day_cols]
+
 
         # ==== HIỂN THỊ BẢNG CHẤM CÔNG ====
         st.markdown("### 📊 Bảng chấm công")
@@ -1312,7 +1317,9 @@ def admin_app(user):
                 errors = []
 
                 for _, row in edited_df.iterrows():
-                    uname = row["User"]
+                    uname = row["username"]      # Lấy username thật để lưu
+                    display_name = row["User"]   # Hiển thị thôi
+
 
                     # --- Hàm bỏ emoji ---
                     def remove_emoji(txt):
@@ -1375,9 +1382,11 @@ def admin_app(user):
                             # --- User chưa có dữ liệu -> insert mới ---
                             payload = {
                                 "username": uname,
+                                "display_name": display_name,  # tùy chọn, chỉ để xem
                                 "months": [month_str],
                                 "data": {month_str: codes}
                             }
+
                             supabase.table("attendance_new").insert(payload).execute()
                             inserted_users.append(uname)
 
