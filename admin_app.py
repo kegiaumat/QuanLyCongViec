@@ -1154,12 +1154,23 @@ def admin_app(user):
             month_data = user_data.get(month_str, {})
             row = {"User": uname}
 
+            # ==== Chỉ tự động chấm đến ngày hiện tại ====
+            today = pd.Timestamp(dt.date.today())
+
             for d in days:
                 weekday = d.weekday()
                 day_key = d.strftime("%d")
                 col = f"{day_key}/{d.strftime('%m')} ({['T2','T3','T4','T5','T6','T7','CN'][weekday]})"
-                val = month_data.get(day_key, "K" if weekday < 5 else "")
+
+                if d <= today:
+                    # Nếu đã có dữ liệu trong Supabase thì giữ nguyên, ngược lại auto K (trừ CN)
+                    val = month_data.get(day_key, "K" if weekday < 5 else "")
+                else:
+                    # Các ngày tương lai chưa đến => None
+                    val = month_data.get(day_key, None)
+
                 row[col] = add_emoji(val)
+
             rows.append(row)
 
         df_display = pd.DataFrame(rows)
