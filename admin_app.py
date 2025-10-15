@@ -1108,40 +1108,48 @@ def admin_app(user):
         next_month = (first_day + dt.timedelta(days=32)).replace(day=1)
         days = pd.date_range(first_day, next_month - dt.timedelta(days=1))
 
-        # ==== DANH SÁCH KÝ HIỆU ====
+        # ==== DANH SÁCH KÝ HIỆU (chỉ ký tự, không emoji) ====
         code_options = [
-            "🟩 K", "🟥 P", "🟦 H", "🟨 TQ", "🟧 BD", "🟫 L", "🟩 O", "⬛ VR",
-            "🟪 NM", "🟪 TS", "🟦 VS", "🟨 TV",
-            "🟠 K/P", "🟠 P/K", "🔵 K/H", "🔵 H/K", "🟣 K/TQ", "🟣 TQ/K", "🟤 K/NM", "🟤 NM/K",
-            "🟡 K/TS", "🟡 TS/K", "🟢 K/VR", "🟢 VR/K", "🔴 K/O", "🔴 O/K",
-            "⚫ K/ĐT", "⚫ ĐT/K", "⚪ K/L", "⚪ L/K", ""
+            "K", "P", "H", "TQ", "BD", "L", "O", "VR",
+            "NM", "TS", "VS", "TV",
+            "K/P", "P/K", "K/H", "H/K", "K/TQ", "TQ/K", "K/NM", "NM/K",
+            "K/TS", "TS/K", "K/VR", "VR/K", "K/O", "O/K",
+            "K/ĐT", "ĐT/K", "K/L", "L/K", ""
         ]
+
+        # ==== MAP EMOJI ====
+        emoji_map = {
+            "K": "🟩", "P": "🟥", "H": "🟦", "TQ": "🟨", "BD": "🟧",
+            "L": "🟫", "O": "🟩", "VR": "⬛", "NM": "🟪", "TS": "🟪",
+            "VS": "🟦", "TV": "🟨"
+        }
+
+        def add_emoji(val: str):
+            """Thêm emoji vào ký hiệu"""
+            if not val:
+                return ""
+            parts = val.split("/")
+            return "/".join([f"{emoji_map.get(p, '')} {p}".strip() for p in parts])
 
         # ==== ĐỌC DỮ LIỆU TỪ SUPABASE ====
         res = supabase.table("attendance_new").select("*").execute()
-        df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["username", "data", "note", "months"])
+        df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["username", "data", "months"])
 
         # ==== GHÉP DỮ LIỆU CHO HIỂN THỊ ====
         rows = []
         for _, u in df_users.iterrows():
             uname = u.get("display_name", "")
             record = df_att[df_att["username"] == uname]
-            user_data, user_note = {}, {}
+            user_data = {}
 
             if len(record) > 0:
                 rec = record.iloc[0]
                 user_data = rec.get("data", {}) or {}
-                user_note = rec.get("note", {}) or {}
                 if isinstance(user_data, str):
                     try:
                         user_data = json.loads(user_data)
                     except:
                         user_data = {}
-                if isinstance(user_note, str):
-                    try:
-                        user_note = json.loads(user_note)
-                    except:
-                        user_note = {}
 
             month_data = user_data.get(month_str, {})
             row = {"User": uname}
@@ -1150,8 +1158,8 @@ def admin_app(user):
                 weekday = d.weekday()
                 day_key = d.strftime("%d")
                 col = f"{day_key}/{d.strftime('%m')} ({['T2','T3','T4','T5','T6','T7','CN'][weekday]})"
-                val = month_data.get(day_key, "🟩 K" if weekday < 5 else "")
-                row[col] = val
+                val = month_data.get(day_key, "K" if weekday < 5 else "")
+                row[col] = add_emoji(val)
             rows.append(row)
 
         df_display = pd.DataFrame(rows)
@@ -1168,21 +1176,24 @@ def admin_app(user):
             key=f"attendance_{month_str}",
             column_config={
                 "User": st.column_config.TextColumn("Nhân viên", disabled=True),
-                **{c: st.column_config.SelectboxColumn(c, options=code_options) for c in day_cols}
+                **{c: st.column_config.SelectboxColumn(c, options=[add_emoji(x) for x in code_options]) for c in day_cols}
             }
         )
 
-        # ==== GHI CHÚ THÁNG ====
+        # ==== GHI CHÚ THÁNG (dùng user NoteData) ====
         st.markdown("### 📝 Ghi chú tháng")
+
+        note_rec = df_att[df_att["username"] == "NoteData"]
         existing_note = ""
-        if not df_att.empty:
-            try:
-                note_json = df_att.iloc[0].get("note", {}) or {}
-                if isinstance(note_json, str):
-                    note_json = json.loads(note_json)
-                existing_note = note_json.get(month_str, "")
-            except:
-                existing_note = ""
+        if not note_rec.empty:
+            note_data = note_rec.iloc[0].get("data", {}) or {}
+            if isinstance(note_data, str):
+                try:
+                    note_data = json.loads(note_data)
+                except:
+                    note_data = {}
+            existing_note = note_data.get(month_str, "")
+
         monthly_note = st.text_area(
             f"Ghi chú cho tháng {month_str}:",
             value=existing_note,
@@ -1216,7 +1227,7 @@ def admin_app(user):
             total_H = cnt("H")
             total_P = cnt("P")
             total_BHXH = cnt("O","TS","VS")
-            total_KhongLuong = cnt("R0","VR","NM","TQ","ĐT","L")
+            total_KhongLuong = cnt("VR","NM","TQ","ĐT","L")
             total_TV = cnt("TV")
             total_all = total_K + total_H + total_P + total_BHXH + total_KhongLuong + total_TV
 
@@ -1237,31 +1248,36 @@ def admin_app(user):
         # ==== LƯU DỮ LIỆU ====
         if st.button("💾 Lưu bảng chấm công & ghi chú"):
             with st.spinner("Đang lưu dữ liệu lên Supabase..."):
+
+                # --- Lưu bảng công cho từng user ---
                 for _, row in edited_df.iterrows():
                     uname = row["User"]
-                    codes = {col.split("/")[0]: row[col] for col in day_cols if isinstance(row[col], str)}
+                    # Loại bỏ emoji trước khi lưu
+                    def remove_emoji(txt):
+                        if not isinstance(txt, str):
+                            return ""
+                        return txt.split()[-1] if " " in txt else txt
+
+                    codes = {col.split("/")[0]: remove_emoji(row[col]) for col in day_cols if isinstance(row[col], str)}
                     record = df_att[df_att["username"] == uname]
 
                     if len(record) > 0:
                         rec = record.iloc[0]
                         months = rec.get("months", []) or []
                         data_all = rec.get("data", {}) or {}
-                        note_all = rec.get("note", {}) or {}
-                        if isinstance(data_all, str): data_all = json.loads(data_all)
-                        if isinstance(note_all, str): note_all = json.loads(note_all)
+                        if isinstance(data_all, str):
+                            data_all = json.loads(data_all)
                     else:
-                        months, data_all, note_all = [], {}, {}
+                        months, data_all = [], {}
 
                     # Cập nhật tháng hiện tại
                     data_all[month_str] = codes
-                    note_all[month_str] = monthly_note
                     if month_str not in months:
                         months.append(month_str)
 
                     payload = {
                         "months": months,
-                        "data": data_all,
-                        "note": note_all
+                        "data": data_all
                     }
 
                     if len(record) > 0:
@@ -1269,6 +1285,22 @@ def admin_app(user):
                     else:
                         payload["username"] = uname
                         supabase.table("attendance_new").insert(payload).execute()
+
+                # --- Lưu ghi chú tháng riêng vào NoteData ---
+                note_record = df_att[df_att["username"] == "NoteData"]
+                if len(note_record) > 0:
+                    rec = note_record.iloc[0]
+                    data_all = rec.get("data", {}) or {}
+                    if isinstance(data_all, str):
+                        data_all = json.loads(data_all)
+                    data_all[month_str] = monthly_note
+                    supabase.table("attendance_new").update({"data": data_all, "months": [month_str]}).eq("username", "NoteData").execute()
+                else:
+                    supabase.table("attendance_new").insert({
+                        "username": "NoteData",
+                        "data": {month_str: monthly_note},
+                        "months": [month_str]
+                    }).execute()
 
             st.success("✅ Đã lưu bảng chấm công và ghi chú thành công!")
 
@@ -1305,7 +1337,6 @@ def admin_app(user):
             st.dataframe(df_legend.iloc[:half], hide_index=True, use_container_width=True)
         with col2:
             st.dataframe(df_legend.iloc[half:], hide_index=True, use_container_width=True)
-
 
     elif choice == "Thống kê công việc":
         st.subheader("📊 Thống kê công việc")
