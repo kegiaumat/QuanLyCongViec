@@ -1310,39 +1310,116 @@ def admin_app(user):
 
         # ==== XUẤT FILE EXCEL (luôn hiển thị nút tải) ====
 
+        # Chuẩn bị dữ liệu xuất
+        export_df = edited_df.copy()
+
+        # Loại bỏ emoji, chỉ giữ ký hiệu (K, P, ...)
+        def remove_emoji(val):
+            if isinstance(val, str) and " " in val:
+                return val.split()[-1]
+            return val
+        for col in export_df.columns:
+            if col != "User":
+                export_df[col] = export_df[col].apply(remove_emoji)
+
+        # Tổng hợp số công quy ra
+        summary_rows = []
+        for _, row in export_df.iterrows():
+            vals = [v for k, v in row.items() if "/" in k]
+
+            def cnt(*patterns):
+                c = 0
+                for v in vals:
+                    if not isinstance(v, str):
+                        continue
+                    for p in patterns:
+                        if p in v:
+                            if "/" in v and (p + "/" in v or "/" + p in v):
+                                c += 0.5
+                            else:
+                                c += 1
+                return c
+
+            total_K = cnt("K") - cnt("K/P", "K/H", "K/TQ", "K/NM", "K/O", "K/TS", "K/VR", "K/ĐT", "K/L") * 0.5
+            total_H = cnt("H")
+            total_P = cnt("P")
+            total_BHXH = cnt("O","TS","VS")
+            total_KhongLuong = cnt("VR","NM","TQ","ĐT","L")
+            total_TV = cnt("TV")
+            total_all = total_K + total_H + total_P + total_BHXH + total_KhongLuong + total_TV
+
+            summary_rows.append([
+                total_K, total_H, total_P, total_BHXH, total_KhongLuong, total_TV, total_all
+            ])
+
+        summary_df = pd.DataFrame(summary_rows, columns=[
+            "Công K (SP)", "Hội họp (H)", "Phép (P)", "BHXH (O,TS,VS)",
+            "Không lương (VR,TQ,L,ĐT,NM)", "Thử việc (TV)", "Tổng cộng"
+        ])
+
+        # Ghép bảng chính + quy ra công
+        final_df = pd.concat([export_df.reset_index(drop=True), summary_df], axis=1)
+
+        # === Tạo file Excel với định dạng ===
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            edited_df.to_excel(writer, index=False, sheet_name=f"{month_str}")
-            workbook = writer.book
-            worksheet = writer.sheets[f"{month_str}"]
+            final_df.to_excel(writer, index=False, sheet_name=f"{month_str}", startrow=8)
 
-            header_fmt = workbook.add_format({
-                "bold": True, "text_wrap": True, "align": "center",
-                "valign": "vcenter", "bg_color": "#DCE6F1", "border": 1
-            })
-            cell_fmt = workbook.add_format({
-                "align": "center", "valign": "vcenter", "border": 1
-            })
+            wb = writer.book
+            ws = writer.sheets[f"{month_str}"]
 
-            for col_num, value in enumerate(edited_df.columns):
-                worksheet.write(0, col_num, value, header_fmt)
-                worksheet.set_column(col_num, col_num, 12, cell_fmt)
-            worksheet.set_column(0, 0, 20)  # cột “User” rộng hơn
+            # ======= HEADER =======
+            title_format = wb.add_format({
+                'bold': True, 'align': 'center', 'valign': 'vcenter',
+                'font_size': 14
+            })
+            center_bold = wb.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1})
+            normal = wb.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1})
+            header_bg = wb.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1, 'bg_color': '#D9E1F2'})
+
+            # ======= Tiêu đề công ty =======
+            ws.merge_range('A1:M1', 'CÔNG TY CP TVXDCT GIAO THÔNG 2', title_format)
+            ws.merge_range('A2:M2', 'Đơn vị: Xí nghiệp KSTK Đường 1', wb.add_format({'align': 'left'}))
+            ws.merge_range('A3:M3', f'BẢNG CHẤM CÔNG NĂM {selected_month.year} - THÁNG {selected_month.strftime("%m")}', title_format)
+
+            # ======= Header bảng =======
+            for col_num, col_name in enumerate(final_df.columns):
+                ws.write(8, col_num, col_name, header_bg)
+                ws.set_column(col_num, col_num, 5)
+            ws.set_column(0, 0, 25)
+
+            # ======= Phần ký tên =======
+            start_row = 10 + len(final_df)
+            ws.write(start_row + 2, 1, "Người lập biểu", center_bold)
+            ws.write(start_row + 2, 4, "XN KSTK Đường 1", center_bold)
+            ws.write(start_row + 2, 7, "Phòng Kinh tế kế hoạch", center_bold)
+            ws.write(start_row + 2, 10, "Giám đốc Công ty", center_bold)
+
+            ws.write(start_row + 6, 1, "Đỗ Văn Thành", normal)
+            ws.write(start_row + 6, 4, "Đỗ Văn Thành", normal)
+            ws.write(start_row + 6, 7, "Phạm Quang Huy", normal)
+            ws.write(start_row + 6, 10, "Trần Quang Tú", normal)
+            
+            # ======= Ghi chú động (từ ô nhập ghi chú tháng trong app) =======
+            ws.write(start_row + 9, 0, "Ghi chú:", wb.add_format({'bold': True}))
+
+            # Tách ghi chú theo dòng (xuống dòng nếu người dùng nhấn Enter)
+            if monthly_note.strip():
+                note_lines = [line.strip() for line in monthly_note.split("\n") if line.strip()]
+                for i, line in enumerate(note_lines):
+                    ws.write(start_row + 10 + i, 0, f"{i+1}. {line}", normal)
+            else:
+                ws.write(start_row + 10, 0, "", normal)
+
 
         excel_data = output.getvalue()
 
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            if st.button("💾 Lưu bảng chấm công & ghi chú", key="save_attendance"):
-                st.rerun()
-        with col2:
-            st.download_button(
-                label=f"📥 Xuất Excel tháng {month_str}",
-                data=excel_data,
-                file_name=f"bang_cham_cong_{month_str}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-
+        st.download_button(
+            label=f"📥 Xuất bảng chấm công mẫu hành chính ({month_str})",
+            data=excel_data,
+            file_name=f"bang_cham_cong_{month_str}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
         # ==== GHI CHÚ CÁC LOẠI CÔNG ====
         st.markdown("### 📘 Ghi chú các loại công")
