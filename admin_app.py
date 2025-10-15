@@ -122,6 +122,12 @@ def admin_app(user):
         project_options = df_projects["name"].dropna().tolist()
 
         # === Bảng chỉnh sửa ===
+        df_users["Ngày sinh"] = pd.to_datetime(df_users["Ngày sinh"], errors="coerce").dt.date
+        df_users["Xóa?"] = df_users["Xóa?"].fillna(False).astype(bool)
+        for col in ["Vai trò", "Chủ nhiệm dự án", "Chủ trì dự án"]:
+            df_users[col] = df_users[col].astype(str).fillna("")
+
+        # === Bảng chỉnh sửa ===
         edited_users = st.data_editor(
             df_users,
             width="stretch",
@@ -136,6 +142,7 @@ def admin_app(user):
                 "Xóa?": st.column_config.CheckboxColumn("Xóa?", help="Tick để đánh dấu user cần xoá")
             }
         )
+
 
         col1, col2 = st.columns(2)
 
