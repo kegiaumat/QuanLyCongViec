@@ -1308,12 +1308,13 @@ def admin_app(user):
 
 
 
-        # ==== XUẤT FILE EXCEL (luôn hiển thị nút tải) ====
+        
+        # ==== XUẤT FILE EXCEL BẢNG CÔNG ====
 
-        # Chuẩn bị dữ liệu xuất
+        # Chuẩn bị dữ liệu
         export_df = edited_df.copy()
 
-        # Loại bỏ emoji, chỉ giữ ký hiệu (K, P, ...)
+        # Loại bỏ emoji -> chỉ giữ ký hiệu (K, P, ...)
         def remove_emoji(val):
             if isinstance(val, str) and " " in val:
                 return val.split()[-1]
@@ -1322,7 +1323,7 @@ def admin_app(user):
             if col != "User":
                 export_df[col] = export_df[col].apply(remove_emoji)
 
-        # Tổng hợp số công quy ra
+        # ====== Tổng hợp “Quy ra công” ======
         summary_rows = []
         for _, row in export_df.iterrows():
             vals = [v for k, v in row.items() if "/" in k]
@@ -1343,8 +1344,8 @@ def admin_app(user):
             total_K = cnt("K") - cnt("K/P", "K/H", "K/TQ", "K/NM", "K/O", "K/TS", "K/VR", "K/ĐT", "K/L") * 0.5
             total_H = cnt("H")
             total_P = cnt("P")
-            total_BHXH = cnt("O","TS","VS")
-            total_KhongLuong = cnt("VR","NM","TQ","ĐT","L")
+            total_BHXH = cnt("O", "TS", "VS")
+            total_KhongLuong = cnt("VR", "NM", "TQ", "ĐT", "L")
             total_TV = cnt("TV")
             total_all = total_K + total_H + total_P + total_BHXH + total_KhongLuong + total_TV
 
@@ -1353,64 +1354,82 @@ def admin_app(user):
             ])
 
         summary_df = pd.DataFrame(summary_rows, columns=[
-            "Công K (SP)", "Hội họp (H)", "Phép (P)", "BHXH (O,TS,VS)",
-            "Không lương (VR,TQ,L,ĐT,NM)", "Thử việc (TV)", "Tổng cộng"
+            "Số công hưởng lương SP", "Số công hội họp", "Số công nghỉ phép",
+            "Số công hưởng BHXH", "Số công không lương", "Thử việc", "Tổng cộng"
         ])
 
-        # Ghép bảng chính + quy ra công
+        # Gộp dữ liệu bảng công + quy ra công
         final_df = pd.concat([export_df.reset_index(drop=True), summary_df], axis=1)
 
-        # === Tạo file Excel với định dạng ===
+        # ====== Xuất Excel ======
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            final_df.to_excel(writer, index=False, sheet_name=f"{month_str}", startrow=8)
+            final_df.to_excel(writer, index=False, sheet_name="Bảng chấm công", startrow=7)
 
             wb = writer.book
-            ws = writer.sheets[f"{month_str}"]
+            ws = writer.sheets["Bảng chấm công"]
 
-            # ======= HEADER =======
-            title_format = wb.add_format({
-                'bold': True, 'align': 'center', 'valign': 'vcenter',
-                'font_size': 14
-            })
-            center_bold = wb.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1})
-            normal = wb.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1})
-            header_bg = wb.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1, 'bg_color': '#D9E1F2'})
+            # ==== Cài đặt style ====
+            header_bold = wb.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'bg_color': '#D9E1F2'})
+            cell_fmt = wb.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1})
+            title_fmt = wb.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'font_size': 14})
+            subtitle_fmt = wb.add_format({'align': 'center', 'valign': 'vcenter', 'italic': True})
+            left_fmt = wb.add_format({'align': 'left'})
+            bold_left = wb.add_format({'align': 'left', 'bold': True})
+            sign_fmt = wb.add_format({'align': 'center', 'bold': True})
+            normal = wb.add_format({'align': 'center', 'valign': 'vcenter'})
 
-            # ======= Tiêu đề công ty =======
-            ws.merge_range('A1:M1', 'CÔNG TY CP TVXDCT GIAO THÔNG 2', title_format)
-            ws.merge_range('A2:M2', 'Đơn vị: Xí nghiệp KSTK Đường 1', wb.add_format({'align': 'left'}))
-            ws.merge_range('A3:M3', f'BẢNG CHẤM CÔNG NĂM {selected_month.year} - THÁNG {selected_month.strftime("%m")}', title_format)
+            # ==== Tiêu đề công ty & tháng ====
+            ws.merge_range('A1:N1', 'CÔNG TY CP TVXDCT GIAO THÔNG 2', title_fmt)
+            ws.merge_range('A2:N2', 'Đơn vị: Xí nghiệp KSTK Đường 1', left_fmt)
+            ws.merge_range('A3:N3', f"BẢNG CHẤM CÔNG NĂM {selected_month.year} - THÁNG {selected_month.strftime('%m')}", title_fmt)
+            ws.merge_range('A4:N4', "", title_fmt)
+            ws.write('N1', "Mẫu số 02", subtitle_fmt)
 
-            # ======= Header bảng =======
+            # ==== Header bảng công ====
             for col_num, col_name in enumerate(final_df.columns):
-                ws.write(8, col_num, col_name, header_bg)
-                ws.set_column(col_num, col_num, 5)
-            ws.set_column(0, 0, 25)
+                ws.write(7, col_num, col_name, header_bold)
+                ws.set_column(col_num, col_num, 5, cell_fmt)
+            ws.set_column(0, 0, 25)  # cột Họ và tên
 
-            # ======= Phần ký tên =======
-            start_row = 10 + len(final_df)
-            ws.write(start_row + 2, 1, "Người lập biểu", center_bold)
-            ws.write(start_row + 2, 4, "XN KSTK Đường 1", center_bold)
-            ws.write(start_row + 2, 7, "Phòng Kinh tế kế hoạch", center_bold)
-            ws.write(start_row + 2, 10, "Giám đốc Công ty", center_bold)
+            # ==== Viền và căn giữa dữ liệu ====
+            nrows, ncols = final_df.shape
+            for r in range(8, 8 + nrows):
+                for c in range(ncols):
+                    ws.write(r, c, final_df.iloc[r - 8, c], cell_fmt)
 
-            ws.write(start_row + 6, 1, "Đỗ Văn Thành", normal)
-            ws.write(start_row + 6, 4, "Đỗ Văn Thành", normal)
-            ws.write(start_row + 6, 7, "Phạm Quang Huy", normal)
-            ws.write(start_row + 6, 10, "Trần Quang Tú", normal)
-            
-            # ======= Ghi chú động (từ ô nhập ghi chú tháng trong app) =======
-            ws.write(start_row + 9, 0, "Ghi chú:", wb.add_format({'bold': True}))
+            # ==== Dòng “Cộng” ====
+            total_row = 8 + nrows
+            ws.write(total_row, 0, "Cộng", header_bold)
+            for c in range(1, ncols):
+                ws.write(total_row, c, "", cell_fmt)
 
-            # Tách ghi chú theo dòng (xuống dòng nếu người dùng nhấn Enter)
+            # ==== Phần ký tên ====
+            start_row = total_row + 3
+            ws.write(start_row, 1, "Người lập biểu", sign_fmt)
+            ws.write(start_row, 4, "XN KSTK Đường 1", sign_fmt)
+            ws.write(start_row, 7, "Phòng Kinh tế kế hoạch", sign_fmt)
+            ws.write(start_row, 10, "Giám đốc Công ty", sign_fmt)
+
+            ws.write(start_row + 4, 1, "Đỗ Văn Thành", normal)
+            ws.write(start_row + 4, 4, "Đỗ Văn Thành", normal)
+            ws.write(start_row + 4, 7, "Phạm Quang Huy", normal)
+            ws.write(start_row + 4, 10, "Trần Quang Tú", normal)
+
+            # ==== Ghi chú (từ monthly_note) ====
+            ws.write(start_row + 7, 0, "Ghi chú:", bold_left)
             if monthly_note.strip():
-                note_lines = [line.strip() for line in monthly_note.split("\n") if line.strip()]
-                for i, line in enumerate(note_lines):
-                    ws.write(start_row + 10 + i, 0, f"{i+1}. {line}", normal)
+                lines = [line.strip() for line in monthly_note.split("\n") if line.strip()]
+                for i, line in enumerate(lines):
+                    ws.write(start_row + 8 + i, 0, f"{i+1}. {line}", left_fmt)
             else:
-                ws.write(start_row + 10, 0, "", normal)
+                ws.write(start_row + 8, 0, "(Không có ghi chú)", left_fmt)
 
+            # ==== Định dạng độ rộng cột giống mẫu ====
+            ws.set_column("A:A", 25)   # Họ và tên
+            ws.set_column("B:AF", 3.5) # Các ngày trong tháng
+            ws.set_column("AG:AM", 12) # Các cột “Quy ra công”
+            ws.set_zoom(90)
 
         excel_data = output.getvalue()
 
@@ -1420,6 +1439,7 @@ def admin_app(user):
             file_name=f"bang_cham_cong_{month_str}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+
 
         # ==== GHI CHÚ CÁC LOẠI CÔNG ====
         st.markdown("### 📘 Ghi chú các loại công")
