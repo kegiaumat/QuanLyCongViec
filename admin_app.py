@@ -1221,7 +1221,7 @@ def admin_app(user):
 
         df_display = pd.DataFrame(rows)
         day_cols = [c for c in df_display.columns if "/" in c]
-        df_display = df_display[["username", "User"] + day_cols]
+        df_display = df_display[[ "User"] + day_cols]
 
 
         # ==== HIỂN THỊ BẢNG CHẤM CÔNG ====
@@ -1341,9 +1341,25 @@ def admin_app(user):
                             continue  # bỏ qua nếu lỗi parsing
 
                     # --- Bỏ qua nếu hoàn toàn không có dữ liệu ---
-                    if not codes:
+                    # --- Nếu bảng công rỗng (DB trống) => vẫn insert mới để khởi tạo ---
+                    record = df_att[df_att["username"] == uname]
+
+                    if not codes and len(record) == 0:
+                        # user chưa có dữ liệu trong DB -> tạo bản ghi trống để khởi tạo
+                        payload = {
+                            "username": uname,
+                            "display_name": display_name,
+                            "months": [month_str],
+                            "data": {month_str: {}}
+                        }
+                        supabase.table("attendance_new").insert(payload).execute()
+                        inserted_users.append(uname)
+                        continue
+
+                    elif not codes:
                         skipped_users.append(uname)
                         continue
+
 
                     # --- Đọc record hiện có trong DB ---
                     record = df_att[df_att["username"] == uname]
