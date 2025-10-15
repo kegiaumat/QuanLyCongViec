@@ -1307,36 +1307,37 @@ def admin_app(user):
 
 
 
-            # ==== XUẤT FILE EXCEL ====
-            st.markdown("### 📤 Xuất bảng công ra Excel")
 
-            # Chuyển DataFrame hiện tại (đang hiển thị) sang Excel
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                edited_df.to_excel(writer, index=False, sheet_name=f"{month_str}")
-                workbook = writer.book
-                worksheet = writer.sheets[f"{month_str}"]
+        # ==== XUẤT FILE EXCEL (luôn hiển thị nút tải) ====
 
-                # Căn chỉnh độ rộng cột và style
-                header_fmt = workbook.add_format({
-                    "bold": True, "text_wrap": True, "align": "center",
-                    "valign": "vcenter", "bg_color": "#DCE6F1", "border": 1
-                })
-                cell_fmt = workbook.add_format({
-                    "align": "center", "valign": "vcenter", "border": 1
-                })
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            edited_df.to_excel(writer, index=False, sheet_name=f"{month_str}")
+            workbook = writer.book
+            worksheet = writer.sheets[f"{month_str}"]
 
-                # Áp dụng format header
-                for col_num, value in enumerate(edited_df.columns):
-                    worksheet.write(0, col_num, value, header_fmt)
-                    worksheet.set_column(col_num, col_num, 12, cell_fmt)
+            header_fmt = workbook.add_format({
+                "bold": True, "text_wrap": True, "align": "center",
+                "valign": "vcenter", "bg_color": "#DCE6F1", "border": 1
+            })
+            cell_fmt = workbook.add_format({
+                "align": "center", "valign": "vcenter", "border": 1
+            })
 
-                worksheet.set_column(0, 0, 20)  # Cột “User” rộng hơn
+            for col_num, value in enumerate(edited_df.columns):
+                worksheet.write(0, col_num, value, header_fmt)
+                worksheet.set_column(col_num, col_num, 12, cell_fmt)
+            worksheet.set_column(0, 0, 20)  # cột “User” rộng hơn
 
-            excel_data = output.getvalue()
+        excel_data = output.getvalue()
 
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if st.button("💾 Lưu bảng chấm công & ghi chú", key="save_attendance"):
+                st.rerun()
+        with col2:
             st.download_button(
-                label=f"📥 Tải Excel tháng {month_str}",
+                label=f"📥 Xuất Excel tháng {month_str}",
                 data=excel_data,
                 file_name=f"bang_cham_cong_{month_str}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
