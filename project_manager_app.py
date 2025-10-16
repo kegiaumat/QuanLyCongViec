@@ -396,6 +396,30 @@ def project_manager_app(user):
             data = supabase.table("tasks").select("id, task, khoi_luong, deadline, note, progress")\
                 .eq("project", project).eq("assignee", username).execute()
             my_tasks = pd.DataFrame(data.data)
+            # === Tách giờ bắt đầu và kết thúc từ note nếu có dạng "⏰ 08:00 - 17:00 (...)" ===
+            def extract_times(note):
+                match = re.search(r"(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})", str(note))
+                if match:
+                    return match.group(1), match.group(2)
+                return "", ""
+
+            if not my_tasks.empty:
+                my_tasks["Giờ bắt đầu"], my_tasks["Giờ kết thúc"] = zip(*my_tasks["note"].map(extract_times))
+
+                def _to_time(x):
+                    if x is None or str(x).strip() == "":
+                        return None
+                    try:
+                        return pd.to_datetime(str(x), format="%H:%M").time()
+                    except Exception:
+                        try:
+                            return pd.to_datetime(str(x)).time()
+                        except Exception:
+                            return None
+
+                my_tasks["Giờ bắt đầu"] = my_tasks["Giờ bắt đầu"].map(_to_time)
+                my_tasks["Giờ kết thúc"] = my_tasks["Giờ kết thúc"].map(_to_time)
+            
                         
             # 🧹 Làm sạch ghi chú: loại bỏ trùng lặp giờ/ngày nếu có
             if not my_tasks.empty and "note" in my_tasks.columns:
@@ -442,45 +466,82 @@ def project_manager_app(user):
                     hide_index=True,
                     column_config={
                         "Công việc": st.column_config.TextColumn(disabled=True),
+                        "Giờ bắt đầu": st.column_config.TimeColumn("Giờ bắt đầu", format="HH:mm"),
+                        "Giờ kết thúc": st.column_config.TimeColumn("Giờ kết thúc", format="HH:mm"),
                         "Ghi chú": st.column_config.TextColumn(),
-
                         "Chọn": st.column_config.CheckboxColumn("Xóa?", help="Tick để xóa dòng này")
                     }
                 )
+
 
                 col1, col2 = st.columns([2, 1])
                 with col1:
                     
                     
                     if st.button("💾 Lưu khối lượng của tôi", key="save_my_qty_btn"):
+                        from datetime import time, date
+
+                        def _fmt_time(t):
+                            if isinstance(t, time):
+                                return t.strftime("%H:%M")
+                            s = str(t).strip()
+                            for fmt in ("%H:%M", "%H:%M:%S"):
+                                try:
+                                    return datetime.strptime(s, fmt).strftime("%H:%M")
+                                except Exception:
+                                    pass
+                            return ""
+
+                        def _parse_time(t):
+                            if isinstance(t, time):
+                                return datetime.combine(date.today(), t)
+                            s = str(t).strip()
+                            for fmt in ("%H:%M", "%H:%M:%S"):
+                                try:
+                                    return datetime.strptime(s, fmt)
+                                except Exception:
+                                    pass
+                            return None
+
                         for i, row in edited.iterrows():
                             tid = int(my_tasks.iloc[i]["id"])
+                            update_data = {}
 
-                            # Lấy khối lượng tùy theo loại dự án
-                            qty_val = row.get("Khối lượng (giờ)") if is_public else row.get("Khối lượng")
-                            try:
-                                new_qty = float(qty_val or 0)
-                                if new_qty.is_integer():
-                                    new_qty = int(new_qty)
-                            except Exception:
-                                new_qty = 0
+                            start_time = row.get("Giờ bắt đầu", "")
+                            end_time = row.get("Giờ kết thúc", "")
+                            note_text = str(row.get("Ghi chú", "")).strip()
 
-                            # Lấy ghi chú (note)
-                            note_val = row.get("Ghi chú")
-                            if note_val is None or (isinstance(note_val, float) and pd.isna(note_val)):
-                                note_val = ""
+                            # 🧹 Giữ lại phần ngày nếu có
+                            match_date = re.search(r"\(\d{4}-\d{2}-\d{2}\s*-\s*\d{4}-\d{2}-\d{2}\)", note_text)
+                            date_part = match_date.group(0) if match_date else ""
+
+                            # 🧹 Xóa phần giờ cũ để tránh lặp
+                            note_text = re.sub(r"^⏰\s*\d{2}:\d{2}(?::\d{2})?\s*-\s*\d{2}:\d{2}(?::\d{2})?", "", note_text)
+                            note_text = re.sub(r"\(\d{4}-\d{2}-\d{2}\s*-\s*\d{4}-\d{2}-\d{2}\)", "", note_text).strip()
+
+                            # 🕒 Ghép lại ghi chú mới
+                            start_str = _fmt_time(start_time)
+                            end_str = _fmt_time(end_time)
+                            if start_str and end_str:
+                                new_note = f"⏰ {start_str} - {end_str} {date_part} {note_text}".strip()
                             else:
-                                note_val = str(note_val).strip()
+                                new_note = note_text
+                            update_data["note"] = new_note
 
-                            # Cập nhật cả khối lượng + ghi chú
-                            update_data = {"khoi_luong": new_qty, "note": note_val}
+                            # 🧮 Tính lại khối lượng (giờ)
+                            st_dt = _parse_time(start_time)
+                            en_dt = _parse_time(end_time)
+                            if st_dt and en_dt:
+                                if en_dt < st_dt:
+                                    en_dt = en_dt.replace(day=st_dt.day + 1)
+                                hours = (en_dt - st_dt).total_seconds() / 3600
+                                if hours > 0:
+                                    update_data["khoi_luong"] = round(hours, 2)
 
                             supabase.table("tasks").update(update_data).eq("id", tid).execute()
 
-                        st.success("✅ Đã cập nhật khối lượng & ghi chú")
+                        st.success("✅ Đã cập nhật giờ, ghi chú và khối lượng!")
                         st.rerun()
-
-
 
                 with col2:
                     if st.button("🗑️ Xóa các dòng đã chọn", key="delete_my_tasks_btn"):
