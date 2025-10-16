@@ -942,16 +942,19 @@ def admin_app(user):
                         df_cong_show_display["Xóa?"] = False
 
                         # ✅ Chuyển chuỗi "HH:MM" sang kiểu datetime.time để tương thích với TimeColumn
+                        
                         def to_time(x):
                             if isinstance(x, datetime.time):
                                 return x
                             if isinstance(x, str) and x.strip():
+                                parts = x.split(":")
                                 try:
-                                    h, m = map(int, x.split(":"))
+                                    h = int(parts[0]); m = int(parts[1])  # bỏ qua giây nếu có
                                     return datetime.time(h, m)
                                 except Exception:
                                     return None
                             return None
+
 
                         df_cong_show_display["Giờ bắt đầu"] = df_cong_show_display["Giờ bắt đầu"].apply(to_time)
                         df_cong_show_display["Giờ kết thúc"] = df_cong_show_display["Giờ kết thúc"].apply(to_time)
