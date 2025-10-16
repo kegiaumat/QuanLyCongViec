@@ -8,6 +8,8 @@ from auth import get_connection, calc_hours, get_projects, add_user, hash_passwo
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 import io  # đảm bảo có import này ở đầu file
 import re
+import time
+
 # ====== CACHE DỮ LIỆU TỪ SUPABASE ======
 @st.cache_data(ttl=15)
 def load_users_cached():
@@ -1070,7 +1072,10 @@ def admin_app(user):
                                         supabase.table("tasks").update(update_data).eq("id", tid).execute()
 
                                 st.success(f"✅ Đã cập nhật công nhật của {u}")
-                                st.rerun()
+                                st.toast("💾 Dữ liệu đã được lưu!", icon="💾")
+
+                                # Đặt cờ báo vừa lưu để reload 1 lần duy nhất
+                                st.session_state.just_saved = True
 
 
 
@@ -1985,3 +1990,9 @@ def admin_app(user):
                 st.markdown("### 👤 Thống kê chi tiết theo người dùng")
                 st.dataframe(styled_user, width="stretch")
         
+
+    # 🔁 Nếu vừa lưu xong, đợi 0.5s rồi reload lại một lần
+    if st.session_state.get("just_saved"):
+        time.sleep(0.5)
+        st.session_state.just_saved = False
+        st.rerun()
