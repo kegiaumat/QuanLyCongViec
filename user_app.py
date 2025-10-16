@@ -164,9 +164,17 @@ def user_app(user):
                                 fmt = "%H:%M"
                                 start_dt = datetime.strptime(str(start_time), fmt)
                                 end_dt = datetime.strptime(str(end_time), fmt)
-                                hours = (end_dt - start_dt).seconds / 3600
+
+                                # Nếu giờ kết thúc nhỏ hơn giờ bắt đầu → coi là sang ngày hôm sau
+                                if end_dt < start_dt:
+                                    end_dt = end_dt.replace(day=start_dt.day + 1)
+
+                                hours = (end_dt - start_dt).total_seconds() / 3600
                                 if hours > 0:
                                     update_data["khoi_luong"] = round(hours, 2)
+                                    df_show.at[i, "Khối lượng (giờ)"] = round(hours, 2)
+
+
                             except Exception:
                                 pass
 
