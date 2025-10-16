@@ -1344,11 +1344,11 @@ def admin_app(user):
             column_config={
                 # 👇 ẨN HOÀN TOÀN cột username nhưng vẫn giữ trong dữ liệu trả về
                 "username": st.column_config.TextColumn(
-                    "Tên đăng nhập",
+                    "Tên đăng nhập (ẩn)",
                     disabled=True,
-                    hidden=True,                # <-- điểm mấu chốt
-                    help="Cột ẩn để đối chiếu/gửi DB"
+                    help="Cột ẩn để lưu DB"
                 ),
+
                 "User": st.column_config.TextColumn("Nhân viên", disabled=True),
                 **{
                     c: st.column_config.SelectboxColumn(
@@ -1362,6 +1362,20 @@ def admin_app(user):
             column_order=["User"] + day_cols,
         )
 
+        # Ẩn cột 'username' khỏi giao diện bằng CSS
+        st.markdown(
+            """
+            <style>
+            [data-testid="stColumn"] div[data-testid*="username"] {
+                display: none !important;
+            }
+            th[data-testid*="username"], td[data-testid*="username"] {
+                display: none !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
 
 
 
