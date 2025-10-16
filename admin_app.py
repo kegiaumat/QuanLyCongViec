@@ -1438,14 +1438,15 @@ def admin_app(user):
 
                     # --- Hàm bỏ emoji ---
                     def remove_emoji(txt):
-                        """Loại emoji, giữ nguyên ký hiệu chuẩn"""
+                        """Loại emoji, giữ nguyên ký hiệu chuẩn (ổn định hơn cho Streamlit)"""
                         if not txt:
                             return ""
                         if isinstance(txt, str):
                             txt = txt.strip()
-                            # Nếu dạng "🟩 K" hoặc "🟧 K:2"
-                            if " " in txt:
-                                return txt.split(" ")[-1].strip()
+                            # Nếu chỉ có emoji, trả về rỗng
+                            txt = re.sub(r"[\U0001F300-\U0001FAFF]", "", txt)  # xoá emoji
+                            txt = txt.replace("🟩", "").replace("🟥", "").replace("🟦", "").replace("🟧", "").replace("🟨", "").replace("🟫", "").replace("🟪", "").replace("⬛", "")
+                            txt = txt.strip()
                             return txt
                         return ""
 
