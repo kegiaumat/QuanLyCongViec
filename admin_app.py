@@ -1490,19 +1490,13 @@ def admin_app(user):
                             old_month_data = data_all.get(month_str, {})
                             has_changed = False
 
-                            # --- So sánh kỹ dữ liệu mới & cũ ---
+                            # --- So sánh kỹ dữ liệu mới & cũ ---                            
                             def normalize(v):
                                 if v in [None, "None", "nan", "NaN"]:
                                     return ""
                                 return str(v).strip()
 
-                            
-                            # --- So sánh kỹ dữ liệu mới & cũ (ổn định hơn) ---
-                            def normalize(v):
-                                if v in [None, "None", "nan", "NaN"]:
-                                    return ""
-                                return str(v).strip()
-
+                            # Ép lại dữ liệu JSON thành dict Python thật sự
                             try:
                                 old_json = json.loads(json.dumps(old_month_data or {}, ensure_ascii=False))
                             except Exception:
@@ -1513,14 +1507,17 @@ def admin_app(user):
                             except Exception:
                                 new_json = codes or {}
 
+                            # Đưa về dạng chuẩn { '01': 'K', '02': 'K:2', ... }
                             old_clean = {str(k).zfill(2): normalize(v) for k, v in old_json.items()}
                             new_clean = {str(k).zfill(2): normalize(v) for k, v in new_json.items()}
 
-                            # ✅ Nếu khác độ dài hoặc có ngày thay đổi, coi là khác
-                            if len(old_clean) != len(new_clean):
-                                has_changed = True
-                            else:
-                                has_changed = any(new_clean.get(k) != old_clean.get(k) for k in new_clean)
+                            # ✅ So sánh từng ngày để bắt đúng thay đổi
+                            diff_days = [d for d in new_clean if new_clean.get(d) != old_clean.get(d)]
+                            has_changed = len(diff_days) > 0 or len(old_clean) != len(new_clean)
+
+                            if has_changed:
+                                st.write(f"🔁 {uname}: thay đổi {diff_days}")  # debug log
+
 
 
 
