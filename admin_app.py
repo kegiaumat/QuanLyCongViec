@@ -1338,18 +1338,14 @@ def admin_app(user):
             height=650,
             key=f"attendance_{month_str}",
             column_config={
-                # Có trong dữ liệu để lưu, nhưng disabled
-                "username": st.column_config.TextColumn(
-                    "Username",
-                    disabled=True,
-                    help="Ẩn nội bộ để lưu DB"
-                ),
+                "username": st.column_config.TextColumn("Username", disabled=True),
                 "User": st.column_config.TextColumn("Nhân viên", disabled=True),
                 **{c: st.column_config.SelectboxColumn(c, options=[add_emoji(x) for x in code_options]) for c in day_cols}
             },
-            # Chỉ hiển thị cột 'User' và các cột ngày -> 'username' sẽ KHÔNG hiện ra
-            column_order=["User"] + day_cols,
+            # GIỮ CẢ CỘT USERNAME ĐỂ KHI LƯU KHÔNG BỊ MẤT
+            column_order=["username", "User"] + day_cols,
         )
+
 
 
         # ==== GHI CHÚ THÁNG (dùng user NoteData) ====
