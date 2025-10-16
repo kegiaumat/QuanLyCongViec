@@ -1338,13 +1338,13 @@ def admin_app(user):
             height=650,
             key=f"attendance_{month_str}",
             column_config={
-                "username": st.column_config.TextColumn("Username", disabled=True),
+                "username": st.column_config.TextColumn("Tên đăng nhập (ẩn)", disabled=True, help="Giữ để lưu DB", visible=False),
                 "User": st.column_config.TextColumn("Nhân viên", disabled=True),
                 **{c: st.column_config.SelectboxColumn(c, options=[add_emoji(x) for x in code_options]) for c in day_cols}
             },
-            # GIỮ CẢ CỘT USERNAME ĐỂ KHI LƯU KHÔNG BỊ MẤT
             column_order=["username", "User"] + day_cols,
         )
+
 
 
 
@@ -1426,6 +1426,7 @@ def admin_app(user):
                 inserted_users = []
                 skipped_users = []
                 errors = []
+                st.write("🔍 Dữ liệu gửi lên:", edited_df.head())
 
                 for _, row in edited_df.iterrows():
                     uname = row["username"]      # Lấy username thật để lưu
@@ -1530,7 +1531,8 @@ def admin_app(user):
                                     "months": months,
                                     "data": data_all
                                 }
-                                supabase.table("attendance_new").update(payload).eq("username", uname).execute()
+                                supabase.table("attendance_new").update(payload).eq("username", str(uname).strip()).execute()
+
 
                                 updated_users.append(uname)
                             else:
