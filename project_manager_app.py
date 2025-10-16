@@ -43,12 +43,15 @@ def _load_visible_projects(supabase, managed: list[str], username: str) -> pd.Da
         public_df = pd.DataFrame(data.data)
 
     # Dự án do user quản lý
-    if managed:
-        data = supabase.table("projects").select("id, name, deadline, project_type")\
-            .in_("name", managed).execute()
-        managed_df = pd.DataFrame(data.data)
-    else:
-        managed_df = pd.DataFrame(columns=["id", "name", "deadline", "project_type"])
+    managed_df = pd.DataFrame(columns=["id", "name", "deadline", "project_type"])
+    if managed and len(managed) > 0:
+        try:
+            data = supabase.table("projects").select("id, name, deadline, project_type")\
+                .in_("name", managed).execute()
+            managed_df = pd.DataFrame(data.data)
+        except Exception as e:
+            st.warning(f"⚠️ Không tải được danh sách dự án do bạn quản lý: {e}")
+
 
     # Dự án user được giao task
     data = supabase.table("tasks").select("project").eq("assignee", username).execute()
