@@ -2,12 +2,8 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import datetime
-import datetime as dt
-import json
+
 from auth import get_connection, calc_hours, get_projects, add_user, hash_password, add_project
-from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
-
-
 # ====== CACHE DỮ LIỆU TỪ SUPABASE ======
 @st.cache_data(ttl=15)
 def load_users_cached():
@@ -32,6 +28,7 @@ def refresh_all_cache():
     st.cache_data.clear()
     for k in ["users_df", "projects_df", "jobs_df"]:
         st.session_state.pop(k, None)
+    refresh_all_cache()
 
 
 st.set_page_config(layout="wide")
@@ -77,23 +74,11 @@ def admin_app(user):
 
 
     # ✅ cập nhật trạng thái online (last_seen)
-    # ✅ Cập nhật thời gian đăng nhập nếu có user
-    try:
-        current_user = user if user else st.session_state.get("username") or st.session_state.get("user")
-        if current_user:
-            supabase.table("users").update({
-                "last_seen": datetime.datetime.now().isoformat()
-            }).eq("username", current_user).execute()
-        else:
-            print("⚠️ Không thể cập nhật last_seen vì chưa xác định user.")
-    except Exception as e:
-        print(f"⚠️ Lỗi khi cập nhật last_seen: {e}")
-
+    supabase.table("users").update({"last_seen": datetime.datetime.now().isoformat()}).eq("username", user).execute()
 
     
 
-    menu = ["Quản lý người dùng", "Mục lục công việc", "Quản lý dự án", "Quản lý Giao Việc", "Chấm công – Nghỉ phép", "Thống kê công việc"]
-
+    menu = ["Quản lý người dùng", "Mục lục công việc","Quản lý dự án", "Quản lý Giao Việc",  "Thống kê công việc"]
 
     choice = st.sidebar.radio("Chức năng", menu)
     if choice == "Quản lý người dùng":
@@ -377,7 +362,6 @@ def admin_app(user):
                         del st.session_state["confirm_delete_jobs"]
         
 
-
     elif choice == "Quản lý dự án":
         st.subheader("🗂️ Quản lý dự án")
 
@@ -591,9 +575,7 @@ def admin_app(user):
                 st.success("✅ Đã thêm lần thanh toán mới")
                 st.rerun()
 
-   
- 
-
+        
 
     elif choice == "Quản lý Giao Việc":
         st.subheader("📝 Giao việc")
@@ -1092,219 +1074,9 @@ def admin_app(user):
                                 else:
                                     st.info("⚠️ Bạn chưa tick dòng nào để xoá.")
 
-    elif choice == "Chấm công – Nghỉ phép":
-        st.subheader("🕒 Quản lý chấm công & nghỉ phép (1 user – nhiều tháng)")
 
-        supabase = get_connection()
-        df_users = load_users_cached()
+        
 
-        # ==== CHỌN THÁNG ====
-        today = pd.Timestamp(dt.date.today())
-        selected_month = st.date_input("📅 Chọn tháng", dt.date(today.year, today.month, 1))
-        month_str = selected_month.strftime("%Y-%m")
-
-        # ==== LẬP DANH SÁCH NGÀY ====
-        first_day = selected_month.replace(day=1)
-        next_month = (first_day + dt.timedelta(days=32)).replace(day=1)
-        days = pd.date_range(first_day, next_month - dt.timedelta(days=1))
-
-        # ==== DANH SÁCH KÝ HIỆU ====
-        code_options = [
-            "🟩 K", "🟥 P", "🟦 H", "🟨 TQ", "🟧 BD", "🟫 L", "🟩 O", "⬛ VR",
-            "🟪 NM", "🟪 TS", "🟦 VS", "🟨 TV",
-            "🟠 K/P", "🟠 P/K", "🔵 K/H", "🔵 H/K", "🟣 K/TQ", "🟣 TQ/K", "🟤 K/NM", "🟤 NM/K",
-            "🟡 K/TS", "🟡 TS/K", "🟢 K/VR", "🟢 VR/K", "🔴 K/O", "🔴 O/K",
-            "⚫ K/ĐT", "⚫ ĐT/K", "⚪ K/L", "⚪ L/K", ""
-        ]
-
-        # ==== ĐỌC DỮ LIỆU TỪ SUPABASE ====
-        res = supabase.table("attendance_new").select("*").execute()
-        df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["username", "data", "note", "months"])
-
-        # ==== GHÉP DỮ LIỆU CHO HIỂN THỊ ====
-        rows = []
-        for _, u in df_users.iterrows():
-            uname = u.get("display_name", "")
-            record = df_att[df_att["username"] == uname]
-            user_data, user_note = {}, {}
-
-            if len(record) > 0:
-                rec = record.iloc[0]
-                user_data = rec.get("data", {}) or {}
-                user_note = rec.get("note", {}) or {}
-                if isinstance(user_data, str):
-                    try:
-                        user_data = json.loads(user_data)
-                    except:
-                        user_data = {}
-                if isinstance(user_note, str):
-                    try:
-                        user_note = json.loads(user_note)
-                    except:
-                        user_note = {}
-
-            month_data = user_data.get(month_str, {})
-            row = {"User": uname}
-
-            for d in days:
-                weekday = d.weekday()
-                day_key = d.strftime("%d")
-                col = f"{day_key}/{d.strftime('%m')} ({['T2','T3','T4','T5','T6','T7','CN'][weekday]})"
-                val = month_data.get(day_key, "🟩 K" if weekday < 5 else "")
-                row[col] = val
-            rows.append(row)
-
-        df_display = pd.DataFrame(rows)
-        day_cols = [c for c in df_display.columns if "/" in c]
-        df_display = df_display[["User"] + day_cols]
-
-        # ==== HIỂN THỊ BẢNG CHẤM CÔNG ====
-        st.markdown("### 📊 Bảng chấm công")
-        edited_df = st.data_editor(
-            df_display,
-            hide_index=True,
-            use_container_width=True,
-            height=650,
-            key=f"attendance_{month_str}",
-            column_config={
-                "User": st.column_config.TextColumn("Nhân viên", disabled=True),
-                **{c: st.column_config.SelectboxColumn(c, options=code_options) for c in day_cols}
-            }
-        )
-
-        # ==== GHI CHÚ THÁNG ====
-        st.markdown("### 📝 Ghi chú tháng")
-        existing_note = ""
-        if not df_att.empty:
-            try:
-                note_json = df_att.iloc[0].get("note", {}) or {}
-                if isinstance(note_json, str):
-                    note_json = json.loads(note_json)
-                existing_note = note_json.get(month_str, "")
-            except:
-                existing_note = ""
-        monthly_note = st.text_area(
-            f"Ghi chú cho tháng {month_str}:",
-            value=existing_note,
-            height=120
-        )
-
-        # ==== BẢNG TỔNG HỢP ====
-        st.markdown("### 📈 Tổng hợp số công theo loại")
-
-        summary_rows = []
-        for _, row in edited_df.iterrows():
-            vals = [v for k, v in row.items() if "/" in k]
-
-            def cnt(*patterns):
-                c = 0
-                for v in vals:
-                    if not isinstance(v, str):
-                        continue
-                    for p in patterns:
-                        if p in v:
-                            if "/" in v and (p + "/" in v or "/" + p in v):
-                                c += 0.5
-                            else:
-                                c += 1
-                return c
-
-            total_K = cnt("K") - cnt(
-                "P/K","H/K","TQ/K","NM/K","O/K","TS/K","VS/K","VR/K","ĐT/K","L/K",
-                "K/P","K/H","K/TQ","K/NM","K/O","K/TS","K/VS","K/VR","K/ĐT","K/L"
-            )*0.5
-            total_H = cnt("H")
-            total_P = cnt("P")
-            total_BHXH = cnt("O","TS","VS")
-            total_KhongLuong = cnt("R0","VR","NM","TQ","ĐT","L")
-            total_TV = cnt("TV")
-            total_all = total_K + total_H + total_P + total_BHXH + total_KhongLuong + total_TV
-
-            summary_rows.append({
-                "Nhân viên": row["User"],
-                "Công K (SP)": total_K,
-                "Hội họp (H)": total_H,
-                "Phép (P)": total_P,
-                "BHXH (O,TS,VS)": total_BHXH,
-                "Không lương (VR,TQ,L,ĐT,NM)": total_KhongLuong,
-                "Thử việc (TV)": total_TV,
-                "Tổng cộng": total_all
-            })
-
-        df_summary = pd.DataFrame(summary_rows)
-        st.dataframe(df_summary, hide_index=True, width="stretch")
-
-        # ==== LƯU DỮ LIỆU ====
-        if st.button("💾 Lưu bảng chấm công & ghi chú"):
-            with st.spinner("Đang lưu dữ liệu lên Supabase..."):
-                for _, row in edited_df.iterrows():
-                    uname = row["User"]
-                    codes = {col.split("/")[0]: row[col] for col in day_cols if isinstance(row[col], str)}
-                    record = df_att[df_att["username"] == uname]
-
-                    if len(record) > 0:
-                        rec = record.iloc[0]
-                        months = rec.get("months", []) or []
-                        data_all = rec.get("data", {}) or {}
-                        note_all = rec.get("note", {}) or {}
-                        if isinstance(data_all, str): data_all = json.loads(data_all)
-                        if isinstance(note_all, str): note_all = json.loads(note_all)
-                    else:
-                        months, data_all, note_all = [], {}, {}
-
-                    # Cập nhật tháng hiện tại
-                    data_all[month_str] = codes
-                    note_all[month_str] = monthly_note
-                    if month_str not in months:
-                        months.append(month_str)
-
-                    payload = {
-                        "months": months,
-                        "data": data_all,
-                        "note": note_all
-                    }
-
-                    if len(record) > 0:
-                        supabase.table("attendance_new").update(payload).eq("username", uname).execute()
-                    else:
-                        payload["username"] = uname
-                        supabase.table("attendance_new").insert(payload).execute()
-
-            st.success("✅ Đã lưu bảng chấm công và ghi chú thành công!")
-
-        # ==== GHI CHÚ CÁC LOẠI CÔNG ====
-        st.markdown("### 📘 Ghi chú các loại công")
-
-        legend_data = [
-            ("🟩", "K", "01 ngày làm việc"),
-            ("🟥", "P", "Nghỉ phép"),
-            ("🟦", "H", "Hội họp"),
-            ("🟨", "TQ", "Tham quan, học tập"),
-            ("🟧", "BD", "Đào tạo, bồi dưỡng"),
-            ("🟫", "L", "Nghỉ lễ, tết"),
-            ("🟩", "O", "Nghỉ ốm, con ốm"),
-            ("⬛", "VR", "Nghỉ hiếu, hỷ"),
-            ("🟪", "NM", "Nghỉ mát"),
-            ("🟪", "TS", "Nghỉ thai sản"),
-            ("🟦", "VS", "Nghỉ vợ sinh"),
-            ("🟨", "TV", "Thử việc"),
-            ("🟠", "K/P, P/K", "Kết hợp làm việc & phép"),
-            ("🔵", "K/H, H/K", "Kết hợp làm việc & hội họp"),
-            ("🟣", "K/TQ, TQ/K", "Kết hợp làm việc & tham quan"),
-            ("🟤", "K/NM, NM/K", "Kết hợp làm việc & nghỉ mát"),
-            ("🟡", "K/TS, TS/K", "Kết hợp làm việc & thai sản"),
-            ("🟢", "K/VR, VR/K", "Kết hợp làm việc & hiếu hỷ"),
-            ("🔴", "K/O, O/K", "Kết hợp làm việc & ốm"),
-            ("⚫", "K/ĐT, ĐT/K", "Kết hợp làm việc & đào tạo"),
-            ("⚪", "K/L, L/K", "Kết hợp làm việc & lễ, tết")
-        ]
-        df_legend = pd.DataFrame(legend_data, columns=["Emoji", "Ký hiệu", "Diễn giải"])
-        half = len(df_legend)//2 + len(df_legend)%2
-        col1, col2 = st.columns(2)
-        with col1:
-            st.dataframe(df_legend.iloc[:half], hide_index=True, use_container_width=True)
-        with col2:
-            st.dataframe(df_legend.iloc[half:], hide_index=True, use_container_width=True)
 
 
     elif choice == "Thống kê công việc":
