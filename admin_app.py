@@ -1338,11 +1338,16 @@ def admin_app(user):
             height=650,
             key=f"attendance_{month_str}",
             column_config={
-                "username": st.column_config.TextColumn("Tên đăng nhập (ẩn)", disabled=True, help="Giữ để lưu DB", visible=False),
+                "username": st.column_config.TextColumn(
+                    "Tên đăng nhập (ẩn)",
+                    disabled=True,
+                    help="Giữ để lưu DB",
+                    width="small",          # ✅ tuỳ chọn: thu nhỏ cột
+                ),
                 "User": st.column_config.TextColumn("Nhân viên", disabled=True),
                 **{c: st.column_config.SelectboxColumn(c, options=[add_emoji(x) for x in code_options]) for c in day_cols}
             },
-            column_order=["username", "User"] + day_cols,
+            column_order=["username", "User"] + day_cols,   # giữ cột username để còn lưu DB
         )
 
 
