@@ -1532,7 +1532,7 @@ def admin_app(user):
 
                                 payload = {
                                     "months": months,
-                                    "data": json.dumps(data_all, ensure_ascii=False)
+                                    "data": data_all
                                 }
                                 supabase.table("attendance_new").update(payload).eq("username", uname).execute()
 
@@ -1547,7 +1547,8 @@ def admin_app(user):
                                 "username": uname,
                                 "display_name": display_name,
                                 "months": [month_str],
-                                "data": json.dumps({month_str: codes}, ensure_ascii=False)
+                                "data": {month_str: codes}
+
                             }
                             supabase.table("attendance_new").insert(payload).execute()
 
