@@ -1065,18 +1065,23 @@ def admin_app(user):
                                     full_note = (f"{time_block} {date_part} {note_txt}").strip()
 
                                     # tính lại khối lượng theo giờ
-                                    st_dt = _parse_time(start_val)
-                                    en_dt = _parse_time(end_val)
-                                    update_data = {"note": full_note}
 
-                                    if st_dt and en_dt:
-                                        if en_dt < st_dt:  # ca qua ngày
-                                            en_dt = en_dt.replace(day=st_dt.day + 1)
-                                        hours = (en_dt - st_dt).total_seconds() / 3600
+                                    # --- Tính lại khối lượng theo đúng hàm chuẩn ---
+                                    try:
+                                        # Lấy ngày từ phần date_part (đã có dạng "(2025-10-16 - 2025-10-17)")
+                                        date_match = re.findall(r"\d{4}-\d{2}-\d{2}", date_part)
+                                        if len(date_match) == 2:
+                                            s_date = datetime.date.fromisoformat(date_match[0])
+                                            e_date = datetime.date.fromisoformat(date_match[1])
+                                        else:
+                                            s_date = e_date = datetime.date.today()
+
+                                        hours = calc_hours(s_date, e_date, start_val, end_val)
                                         if hours > 0:
                                             update_data["khoi_luong"] = round(hours, 2)
-                                            # cập nhật ngay trên UI
                                             edited_cong.at[i, "Khối lượng (giờ)"] = round(hours, 2)
+                                    except Exception as e:
+                                        st.warning(f"Lỗi tính khối lượng: {e}")
 
                                     supabase.table("tasks").update(update_data).eq("id", tid).execute()
 
