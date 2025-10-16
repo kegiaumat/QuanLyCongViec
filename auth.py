@@ -302,15 +302,23 @@ def show_indirect_task_form(role, supabase, username, users=None):
 
 
 def show_indirect_task_table(role, supabase, username, df_tasks):
-    """
-    Hiển thị & cho phép chỉnh sửa công việc gián tiếp (chung cho admin/user/project)
-    """
     st.subheader("🗂️ Danh sách công việc gián tiếp")
 
-    df_show = df_tasks[df_tasks["project"] == "Công việc gián tiếp"].copy()
-    if df_show.empty:
-        st.info("Chưa có công việc gián tiếp nào.")
+    # 🔧 Kiểm tra nếu DataFrame rỗng
+    if df_tasks is None or df_tasks.empty:
+        st.info("🟡 Hiện chưa có công việc gián tiếp nào được ghi nhận.")
         return
+
+    # 🔧 Một số bảng có thể không có cột 'project'
+    if "project" in df_tasks.columns:
+        df_show = df_tasks[df_tasks["project"] == "Công việc gián tiếp"].copy()
+    else:
+        df_show = df_tasks.copy()
+
+    if df_show.empty:
+        st.info("🟡 Hiện chưa có công việc gián tiếp nào được ghi nhận.")
+        return
+
 
     # --- Hàm tách giờ, ngày, note ---
     def split_times(note_text: str):
