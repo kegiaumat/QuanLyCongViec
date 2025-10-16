@@ -1444,23 +1444,23 @@ def admin_app(user):
 
                     # --- Hàm bỏ emoji ---
                     def remove_emoji(txt):
-                        """Giữ nguyên emoji (🟩 🟧 ...) và ký hiệu phía sau."""
+                        """Loại emoji, chỉ giữ ký hiệu (K, P, K:2, ...)"""
                         if not txt:
                             return ""
                         if isinstance(txt, str):
+                            # Xoá toàn bộ emoji và ký tự màu
+                            txt = re.sub(r"[\U0001F300-\U0001FAFF]", "", txt)  # Xoá emoji Unicode
+                            for sym in ["🟩", "🟥", "🟦", "🟧", "🟨", "🟫", "🟪", "⬛"]:
+                                txt = txt.replace(sym, "")
                             return txt.strip()
                         return ""
 
-
-
-
-                    # --- Lấy dữ liệu mới: chỉ lưu đến ngày hiện tại ---
                     def cell_to_code(cell):
-                        """Giữ nguyên emoji trong ô (ví dụ: 🟧 K:2 → 🟧 K:2)."""
+                        """Chuyển ô có emoji (🟧 K:2) → ký hiệu thuần (K:2)."""
                         if cell is None:
                             return ""
                         s = str(cell).strip()
-                        return s
+                        return remove_emoji(s)
 
 
 
