@@ -1017,16 +1017,11 @@ def admin_app(user):
 
                         col1, col2 = st.columns([1,1])
 
-                        with col1:
-                            
-                            
-                            
-                            
-                            
+                        with col1:                                 
                             if st.button(f"💾 Lưu cập nhật công nhật của {u}", key=f"save_cong_{u}"):
                                 from datetime import date, time as dtime
 
-                                def _fmt_time(t):  # -> "HH:MM"
+                                def _fmt_time(t):
                                     if isinstance(t, dtime):
                                         return t.strftime("%H:%M")
                                     s = str(t).strip()
@@ -1037,38 +1032,25 @@ def admin_app(user):
                                             pass
                                     return ""
 
-                                def _parse_time(t):  # -> datetime hoặc None
-                                    if isinstance(t, dtime):
-                                        return datetime.datetime.combine(date.today(), t)
-                                    s = str(t).strip()
-                                    for fmt in ("%H:%M", "%H:%M:%S"):
-                                        try:
-                                            return datetime.datetime.strptime(s, fmt)
-                                        except Exception:
-                                            pass
-                                    return None
-
                                 for i, row in edited_cong.iterrows():
                                     tid = int(df_cong.iloc[i]["id"])
+                                    update_data = {}  # ✅ phải có dòng này
 
                                     start_val = row.get("Giờ bắt đầu")
                                     end_val   = row.get("Giờ kết thúc")
                                     note_txt  = str(row.get("Ghi chú") or "").strip()
 
-                                    # lấy date cũ từ bản gốc đã parse
                                     date_part = df_cong_show.loc[i, "__date_part"] if "__date_part" in df_cong_show.columns else ""
 
-                                    # ghép lại note: "⏰ HH:MM - HH:MM (ngày cũ) + phần ghi chú"
+                                    # Ghép lại ghi chú đầy đủ
                                     s_str = _fmt_time(start_val)
                                     e_str = _fmt_time(end_val)
                                     time_block = f"⏰ {s_str} - {e_str}".strip() if s_str and e_str else ""
                                     full_note = (f"{time_block} {date_part} {note_txt}").strip()
+                                    update_data["note"] = full_note
 
-                                    # tính lại khối lượng theo giờ
-
-                                    # --- Tính lại khối lượng theo đúng hàm chuẩn ---
+                                    # --- Tính lại khối lượng bằng hàm chuẩn ---
                                     try:
-                                        # Lấy ngày từ phần date_part (đã có dạng "(2025-10-16 - 2025-10-17)")
                                         date_match = re.findall(r"\d{4}-\d{2}-\d{2}", date_part)
                                         if len(date_match) == 2:
                                             s_date = datetime.date.fromisoformat(date_match[0])
@@ -1083,10 +1065,13 @@ def admin_app(user):
                                     except Exception as e:
                                         st.warning(f"Lỗi tính khối lượng: {e}")
 
-                                    supabase.table("tasks").update(update_data).eq("id", tid).execute()
+                                    # --- Ghi vào database ---
+                                    if update_data:
+                                        supabase.table("tasks").update(update_data).eq("id", tid).execute()
 
                                 st.success(f"✅ Đã cập nhật công nhật của {u}")
                                 st.rerun()
+
 
 
 
