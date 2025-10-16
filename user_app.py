@@ -134,8 +134,32 @@ def user_app(user):
 
 
             col1, col2 = st.columns([2, 1])
-            with col1:
+             with col1:
                 if st.button("💾 Lưu thay đổi"):
+                    from datetime import time, date
+
+                    def _fmt_time(t):  # -> "HH:MM"
+                        if isinstance(t, time):
+                            return t.strftime("%H:%M")
+                        s = str(t).strip()
+                        for fmt in ("%H:%M", "%H:%M:%S"):
+                            try:
+                                return datetime.strptime(s, fmt).strftime("%H:%M")
+                            except Exception:
+                                pass
+                        return ""
+
+                    def _parse_time(t):  # -> datetime (today + time) hoặc None
+                        if isinstance(t, time):
+                            return datetime.combine(date.today(), t)
+                        s = str(t).strip()
+                        for fmt in ("%H:%M", "%H:%M:%S"):
+                            try:
+                                return datetime.strptime(s, fmt)
+                            except Exception:
+                                pass
+                        return None
+
                     for i, row in edited.iterrows():
                         task_id = int(df_tasks.iloc[i]["id"])
                         update_data = {}
@@ -145,44 +169,35 @@ def user_app(user):
                         end_time = row.get("Giờ kết thúc", "")
                         note_text = str(row.get("Ghi chú", "")).strip()
 
-                        # 🧹 Giữ lại phần ngày nếu có (ví dụ: (2025-10-15 - 2025-10-15))
+                        # 🧹 Giữ lại phần ngày nếu có
                         match_date = re.search(r"\(\d{4}-\d{2}-\d{2}\s*-\s*\d{4}-\d{2}-\d{2}\)", note_text)
                         date_part = match_date.group(0) if match_date else ""
 
-                        # 🧹 Xóa phần giờ cũ và phần ngày cũ để tránh lặp
-                        note_text = re.sub(r"^⏰\s*\d{2}:\d{2}\s*-\s*\d{2}:\d{2}", "", note_text)
+                        # 🧹 Xóa phần giờ cũ + ngày cũ để tránh lặp
+                        note_text = re.sub(r"^⏰\s*\d{2}:\d{2}(?::\d{2})?\s*-\s*\d{2}:\d{2}(?::\d{2})?", "", note_text)
                         note_text = re.sub(r"\(\d{4}-\d{2}-\d{2}\s*-\s*\d{4}-\d{2}-\d{2}\)", "", note_text).strip()
 
-                        # 🕒 Gắn lại giờ mới và phần ngày (nếu có)
-                        if start_time and end_time:
-                            start_str = start_time.strftime("%H:%M") if hasattr(start_time, "strftime") else str(start_time)
-                            end_str = end_time.strftime("%H:%M") if hasattr(end_time, "strftime") else str(end_time)
+                        # 🕒 Ghép lại ghi chú mới
+                        start_str = _fmt_time(start_time)
+                        end_str = _fmt_time(end_time)
+                        if start_str and end_str:
                             new_note = f"⏰ {start_str} - {end_str} {date_part} {note_text}".strip()
                         else:
                             new_note = note_text
-
                         update_data["note"] = new_note
 
-                        # 🧮 Tự động tính lại khối lượng (giờ)
-                        if start_time and end_time:
-                            try:
-                                fmt = "%H:%M"
-                                start_dt = datetime.strptime(str(start_time), fmt)
-                                end_dt = datetime.strptime(str(end_time), fmt)
+                        # 🧮 Tính lại khối lượng (giờ)
+                        st_dt = _parse_time(start_time)
+                        en_dt = _parse_time(end_time)
+                        if st_dt and en_dt:
+                            if en_dt < st_dt:
+                                en_dt = en_dt.replace(day=st_dt.day + 1)
+                            hours = (en_dt - st_dt).total_seconds() / 3600
+                            if hours > 0:
+                                update_data["khoi_luong"] = round(hours, 2)
+                                df_show.at[i, "Khối lượng (giờ)"] = round(hours, 2)
 
-                                # Nếu giờ kết thúc < giờ bắt đầu → sang ngày hôm sau
-                                if end_dt < start_dt:
-                                    end_dt = end_dt.replace(day=start_dt.day + 1)
-
-                                hours = (end_dt - start_dt).total_seconds() / 3600
-                                if hours > 0:
-                                    update_data["khoi_luong"] = round(hours, 2)
-                                    df_show.at[i, "Khối lượng (giờ)"] = round(hours, 2)
-
-                            except Exception as e:
-                                st.warning(f"Lỗi tính khối lượng: {e}")
-
-                        # 📊 Cập nhật tiến độ (nếu có)
+                        # 📊 Tiến độ
                         if "Tiến độ (%)" in row and not pd.isna(row["Tiến độ (%)"]):
                             update_data["progress"] = float(row["Tiến độ (%)"])
 
@@ -192,6 +207,7 @@ def user_app(user):
 
                     st.success("✅ Đã cập nhật giờ, ghi chú và khối lượng!")
                     st.rerun()
+
 
 
             with col2:
