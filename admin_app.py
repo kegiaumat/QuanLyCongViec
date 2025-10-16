@@ -181,12 +181,12 @@ def admin_app(user):
         with col1:
             if st.button("💾 Update"):
                 changed_count = 0
+
                 for i, row in edited_users.iterrows():
                     username = row["Tên đăng nhập"]
                     original = df_users.loc[df_users["Tên đăng nhập"] == username].iloc[0]
                     update_data = {}
 
-                    # So sánh từng trường — chỉ update nếu có thay đổi
                     for col, db_field in [
                         ("Tên hiển thị", "display_name"),
                         ("Ngày sinh", "dob"),
@@ -197,22 +197,21 @@ def admin_app(user):
                         new_val = row[col]
                         old_val = original[col]
 
-                        # Chuẩn hóa dữ liệu trước khi so sánh
-                        if col == "Ngày sinh" and pd.notna(new_val):
-                            new_val = str(new_val)
-                        elif col == "Vai trò" and isinstance(new_val, list):
+                        # Chuẩn hóa dữ liệu kiểu list
+                        if col == "Vai trò" and isinstance(new_val, list):
                             new_val = ", ".join(new_val)
-                        elif col in ["Chủ nhiệm dự án", "Chủ trì dự án"]:
-                            if isinstance(new_val, list):
-                                new_val = "|".join(new_val)
-                            elif isinstance(new_val, str):
-                                new_val = new_val.strip()
+                        if col in ["Chủ nhiệm dự án", "Chủ trì dự án"] and isinstance(new_val, list):
+                            new_val = "|".join(new_val)
 
-                        # Chuyển None → chuỗi rỗng để so sánh an toàn
-                        if str(new_val or "") != str(old_val or ""):
+                        # Chuẩn hóa None / NaT / rỗng
+                        if pd.isna(new_val): new_val = None
+                        if pd.isna(old_val): old_val = None
+
+                        # So sánh theo giá trị thực, không ép kiểu chuỗi
+                        if new_val != old_val:
                             update_data[db_field] = new_val
 
-                    # ✅ Chỉ gửi lệnh update nếu có thay đổi
+                    # ✅ Chỉ update khi có thay đổi
                     if update_data:
                         try:
                             supabase.table("users").update(update_data).eq("username", username).execute()
@@ -226,6 +225,7 @@ def admin_app(user):
                     st.session_state.df_users = load_users_cached()
                 else:
                     st.info("ℹ️ Không có user nào thay đổi, không cần cập nhật.")
+
 
 
         # === Nút xóa ===
