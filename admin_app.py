@@ -7,7 +7,7 @@ import json
 from auth import get_connection, calc_hours, get_projects, add_user, hash_password, add_project
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 import io  # đảm bảo có import này ở đầu file
-
+import re
 # ====== CACHE DỮ LIỆU TỪ SUPABASE ======
 @st.cache_data(ttl=15)
 def load_users_cached():
@@ -889,16 +889,25 @@ def admin_app(user):
 
                     # ====== Công nhật ======
                     if not df_cong.empty:
-                        import re
+
                         def split_times(note_text: str):
                             if not isinstance(note_text, str):
-                                return "", "", ""
-                            m = re.search(r'(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})', note_text)
+                                return "", "", note_text
+                            # match HH:MM hoặc HH:MM:SS
+                            m = re.search(r'(\d{1,2}:\d{2}(?::\d{2})?)\s*[-–]\s*(\d{1,2}:\d{2}(?::\d{2})?)', note_text)
                             if not m:
                                 return "", "", note_text
+
                             start, end = m.group(1), m.group(2)
-                            note_rest = re.sub(r'⏰\s*' + re.escape(m.group(0)), "", note_text).strip()
+
+                            # bỏ phần "⏰ … - … (YYYY-MM-DD -/→ YYYY-MM-DD)" nếu có
+                            note_rest = re.sub(
+                                r'⏰\s*\d{1,2}:\d{2}(?::\d{2})?\s*[-–]\s*\d{1,2}:\d{2}(?::\d{2})?(?:\s*\(\d{4}-\d{2}-\d{2}\s*[–\-→]\s*\d{4}-\d{2}-\d{2}\))?',
+                                "",
+                                note_text
+                            ).strip()
                             return start, end, note_rest
+
 
                         rows = []
                         for _, r in df_cong.iterrows():
