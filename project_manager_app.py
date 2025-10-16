@@ -378,6 +378,19 @@ def project_manager_app(user):
                 data = supabase.table("tasks").select("id, task, khoi_luong, deadline, note, progress")\
                     .eq("project", project).eq("assignee", username).execute()
                 my_tasks = pd.DataFrame(data.data)
+                # 🧹 Loại bỏ trùng lặp thời gian hiển thị trong note (nếu có)
+                if not my_tasks.empty and "note" in my_tasks.columns:
+                    cleaned_notes = []
+                    for n in my_tasks["note"]:
+                        if isinstance(n, str):
+                            # Nếu note chứa 2 lần cùng mẫu thời gian — giữ 1
+                            parts = n.split("⏰")
+                            if len(parts) > 2:
+                                n = "⏰" + parts[1].strip()
+                            cleaned_notes.append(n.strip())
+                        else:
+                            cleaned_notes.append("")
+                    my_tasks["note"] = cleaned_notes
 
                 if my_tasks.empty:
                     st.warning("⚠️ Bạn chưa có công việc nào trong dự án này.")
