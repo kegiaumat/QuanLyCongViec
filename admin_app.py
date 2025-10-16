@@ -7,8 +7,6 @@ import json
 from auth import get_connection, calc_hours, get_projects, add_user, hash_password, add_project
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 import io  # đảm bảo có import này ở đầu file
-import re
-import time
 
 # ====== CACHE DỮ LIỆU TỪ SUPABASE ======
 @st.cache_data(ttl=15)
@@ -17,10 +15,6 @@ def load_users_cached():
     data = supabase.table("users").select("id, username, display_name, dob, role, project_manager_of, project_leader_of").execute()
     return pd.DataFrame(data.data)
 
-def load_users_fresh():
-    supabase = get_connection()
-    data = supabase.table("users").select("*").execute()
-    return pd.DataFrame(data.data)
 @st.cache_data(ttl=15)
 def load_projects_cached():
     supabase = get_connection()
@@ -42,10 +36,6 @@ def refresh_all_cache():
 
 st.set_page_config(layout="wide")
 
-def load_projects_fresh():
-    supabase = get_connection()
-    data = supabase.table("projects").select("id, name, deadline, project_type, design_step").execute()
-    return pd.DataFrame(data.data)
 
 
 
@@ -139,14 +129,8 @@ def admin_app(user):
         # === Chuẩn hóa dữ liệu ===
         df_users["Ngày sinh"] = pd.to_datetime(df_users["Ngày sinh"], errors="coerce").dt.date
         df_users["Xóa?"] = df_users["Xóa?"].fillna(False).astype(bool)
-        # 🧹 Chuẩn hóa dữ liệu vai trò và danh sách dự án
         for col in ["Vai trò", "Chủ nhiệm dự án", "Chủ trì dự án"]:
             df_users[col] = df_users[col].astype(str).fillna("")
-
-        # ✅ Chuyển dữ liệu dự án từ chuỗi -> danh sách (để MultiSelectColumn hiểu)
-        for col in ["Chủ nhiệm dự án", "Chủ trì dự án"]:
-            df_users[col] = df_users[col].apply(lambda x: x.split("|") if x else [])
-
 
         # === Bảng chỉnh sửa ===
         edited_users = st.data_editor(
@@ -168,9 +152,8 @@ def admin_app(user):
                     options=role_options,
                     help="Có thể chọn nhiều vai trò (user, admin, Chủ nhiệm dự án, Chủ trì dự án)"
                 ),
-                "Chủ nhiệm dự án": st.column_config.MultiselectColumn("Chủ nhiệm dự án", options=project_options),
-                "Chủ trì dự án": st.column_config.MultiselectColumn("Chủ trì dự án", options=project_options),
-
+                "Chủ nhiệm dự án": st.column_config.SelectboxColumn("Chủ nhiệm dự án", options=project_options),
+                "Chủ trì dự án": st.column_config.SelectboxColumn("Chủ trì dự án", options=project_options),
                 "Xóa?": st.column_config.CheckboxColumn("Xóa?", help="Tick để đánh dấu user cần xoá")
             }
         )
@@ -179,10 +162,8 @@ def admin_app(user):
 
         # === Nút cập nhật ===
         with col1:
-
             if st.button("💾 Update"):
                 changed_count = 0
-
                 for i, row in edited_users.iterrows():
                     username = row["Tên đăng nhập"]
                     original = df_users.loc[df_users["Tên đăng nhập"] == username].iloc[0]
@@ -198,26 +179,15 @@ def admin_app(user):
                         new_val = row[col]
                         old_val = original[col]
 
-                        # Chuẩn hóa list -> string
-                        if isinstance(new_val, list):
-                            new_val = "|".join(map(str, new_val))
-                        if isinstance(old_val, list):
-                            old_val = "|".join(map(str, old_val))
+                        # --- Chuyển ngày sang string để JSON serializable ---
+                        if col == "Ngày sinh" and pd.notna(new_val):
+                            new_val = str(new_val)
+                        elif col == "Vai trò" and isinstance(new_val, list):
+                            new_val = ", ".join(new_val)
 
-                        # Chuẩn hóa None, NaN, 'None', rỗng
-                        def clean_value(v):
-                            if pd.isna(v) or v in ["None", "nan", "", None, "NaT"]:
-                                return None
-                            return str(v).strip()
-
-                        new_val = clean_value(new_val)
-                        old_val = clean_value(old_val)
-
-                        # So sánh sâu bằng json để loại bỏ khác kiểu (vd "1" vs 1)
-                        if json.dumps(new_val, ensure_ascii=False) != json.dumps(old_val, ensure_ascii=False):
+                        if str(new_val) != str(old_val):
                             update_data[db_field] = new_val
 
-                    # ✅ Chỉ update nếu có thay đổi
                     if update_data:
                         try:
                             supabase.table("users").update(update_data).eq("username", username).execute()
@@ -228,12 +198,10 @@ def admin_app(user):
                 if changed_count > 0:
                     st.success(f"✅ Đã cập nhật {changed_count} user có thay đổi.")
                     refresh_all_cache()
+                    # Reload lại cache sau update
                     st.session_state.df_users = load_users_cached()
                 else:
                     st.info("ℹ️ Không có user nào thay đổi, không cần cập nhật.")
-
-
-
 
         # === Nút xóa ===
         with col2:
@@ -260,12 +228,9 @@ def admin_app(user):
                             supabase.table("users").delete().eq("username", row["Tên đăng nhập"]).execute()
                         st.success("🗑️ Đã xoá user được chọn")
                         refresh_all_cache()
-                        # 👉 Dùng hàm mới để tải lại dữ liệu tươi
-                        st.session_state.df_users = load_users_fresh()
-                        df_users = st.session_state.df_users.copy()
+                        # Reload lại cache sau xoá
+                        st.session_state.df_users = load_users_cached()
                         st.session_state.confirm_delete = False
-                        st.rerun()
-
                 with c2:
                     if st.button("❌ No, huỷ"):
                         st.info("Đã huỷ thao tác xoá")
@@ -471,11 +436,6 @@ def admin_app(user):
                 add_project(project_name, project_deadline, project_type, design_step)
                 st.success(f"✅ Đã thêm dự án: {project_name}")
                 refresh_all_cache()
-                st.session_state["df_projects"] = load_projects_fresh()
-                df_projects = st.session_state["df_projects"].copy()
-                st.rerun()
-
-
             except Exception as e:
                 if "duplicate key" in str(e).lower():
                     st.error("⚠️ Dự án đã tồn tại")
@@ -563,7 +523,7 @@ def admin_app(user):
                                 for user in data_users.data:
                                     username = user["username"]
                                     csv_vals = user.get(colu) or ""
-                                    parts = [p.strip() for p in re.split(r"[|,]", csv_vals) if p.strip()]
+                                    parts = [p.strip() for p in csv_vals.split(",") if p.strip()]
                                     changed = False
                                     for i, p in enumerate(parts):
                                         if p == old_name:
@@ -578,24 +538,19 @@ def admin_app(user):
                     st.success("✅ Đã cập nhật thông tin dự án")
                     refresh_all_cache()
 
-            # ===== Xóa dự án =====
+            # ===== Xóa =====
             with col2:
-                # Dùng biến session để nhớ trạng thái xác nhận
-                if "confirm_delete" not in st.session_state:
-                    st.session_state["confirm_delete"] = None
-
                 if st.button("❌ Xóa dự án", key="delete_project_btn"):
                     to_delete = edited_proj[edited_proj["Xóa?"] == True]
                     if to_delete.empty:
-                        st.warning("⚠️ Bạn chưa tick dự án nào để xoá.")
+                        st.warning("⚠️ Bạn chưa tick dự án nào để xoá")
                     else:
                         st.session_state["confirm_delete"] = to_delete["name"].tolist()
 
-            # Hiển thị xác nhận chỉ khi người dùng vừa bấm nút và có dữ liệu
-            if st.session_state.get("confirm_delete"):
+            # ===== Hộp xác nhận xoá =====
+            if "confirm_delete" in st.session_state:
                 proj_list = st.session_state["confirm_delete"]
-                proj_names = ", ".join(map(str, proj_list))
-                st.error(f"⚠️ Bạn có chắc muốn xoá {len(proj_list)} dự án sau: {proj_names} ?")
+                st.error(f"⚠️ Bạn có chắc muốn xoá {len(proj_list)} dự án sau: {', '.join(proj_list)} ?")
 
                 c1, c2 = st.columns(2)
                 with c1:
@@ -603,31 +558,26 @@ def admin_app(user):
                         for proj_name in proj_list:
                             supabase.table("tasks").delete().eq("project", proj_name).execute()
                             supabase.table("projects").delete().eq("name", proj_name).execute()
-
-                            # Cập nhật lại trường project_manager_of / project_leader_of trong users
                             for colu in ("project_manager_of", "project_leader_of"):
+                                
                                 data_users = supabase.table("users").select(f"username, {colu}").not_.is_(colu, None).execute()
                                 for user in data_users.data:
                                     username = user["username"]
                                     csv_vals = user.get(colu) or ""
-                                    parts = [p.strip() for p in re.split(r"[|,]", csv_vals) if p.strip()]
+                                    parts = [p.strip() for p in csv_vals.split(",") if p.strip()]
                                     parts = [p for p in parts if p != proj_name]
                                     new_csv = ",".join(parts) if parts else None
                                     supabase.table("users").update({colu: new_csv}).eq("username", username).execute()
 
-                        st.success("🗑️ Đã xoá các dự án được chọn.")
+                        
+                        st.success("🗑️ Đã xoá các dự án được chọn")
+                        del st.session_state["confirm_delete"]
                         refresh_all_cache()
-                        st.session_state["df_projects"] = load_projects_fresh()
-                        st.session_state["confirm_delete"] = None
-                        df_projects = st.session_state["df_projects"].copy()
-                        st.rerun()
-
 
                 with c2:
                     if st.button("❌ No, huỷ", key="confirm_delete_no"):
-                        st.info("Đã huỷ thao tác xoá.")
-                        st.session_state["confirm_delete"] = None
-
+                        st.info("Đã huỷ thao tác xoá")
+                        del st.session_state["confirm_delete"]
         else:
             st.info("⚠️ Chưa có dự án nào")
 
@@ -939,48 +889,28 @@ def admin_app(user):
 
                     # ====== Công nhật ======
                     if not df_cong.empty:
+                        import re
                         def split_times(note_text: str):
-                            """Tách giờ, ngày và phần ghi chú từ note"""
                             if not isinstance(note_text, str):
-                                return "", "", "", ""
-                            block_re = r'⏰\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*[-–]\s*(\d{1,2}:\d{2}(?::\d{2})?)'
-                            date_re  = r'\(\d{4}-\d{2}-\d{2}\s*-\s*\d{4}-\d{2}-\d{2}\)'
-                            full_re  = rf'{block_re}\s*(?:{date_re})?'
-                            m = re.search(full_re, note_text)
+                                return "", "", ""
+                            m = re.search(r'(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})', note_text)
                             if not m:
-                                m = re.search(block_re, note_text)
-                            start = m.group(1) if m else ""
-                            end   = m.group(2) if m else ""
-                            dm = re.search(date_re, note_text)
-                            date_part = dm.group(0) if dm else ""
-                            note_rest = re.sub(full_re, "", note_text).strip()
-                            return start, end, date_part, note_rest
-
-
-
-
+                                return "", "", note_text
+                            start, end = m.group(1), m.group(2)
+                            note_rest = re.sub(r'⏰\s*' + re.escape(m.group(0)), "", note_text).strip()
+                            return start, end, note_rest
 
                         rows = []
                         for _, r in df_cong.iterrows():
-                            stime, etime, date_part, note_rest = split_times(r.get("note", ""))
-
-                            # 🧩 Hiển thị ghi chú đầy đủ giờ và ngày (như user_app)
-                            if stime and etime:
-                                full_note_display = f"⏰ {stime} - {etime} {date_part} {note_rest}".strip()
-                            else:
-                                full_note_display = note_rest.strip()
-
+                            stime, etime, note_rest = split_times(r.get("note", ""))
                             rows.append({
                                 "ID": r["id"],
                                 "Công việc": r["task"],
                                 "Giờ bắt đầu": stime,
                                 "Giờ kết thúc": etime,
-                                "Ghi chú": full_note_display,  # hiển thị đầy đủ
-                                "__note_raw": note_rest,        # lưu lại phần ghi chú gốc
-                                "__date_part": date_part,       # giữ ngày để khi lưu ghép lại
+                                "Ghi chú": note_rest,
                                 "Tiến độ (%)": int(pd.to_numeric(r.get("progress", 0), errors="coerce") or 0),
                             })
-
                         df_cong_show = pd.DataFrame(rows)
 
                         config = {
@@ -1003,19 +933,16 @@ def admin_app(user):
                         df_cong_show_display["Xóa?"] = False
 
                         # ✅ Chuyển chuỗi "HH:MM" sang kiểu datetime.time để tương thích với TimeColumn
-                        
                         def to_time(x):
                             if isinstance(x, datetime.time):
                                 return x
                             if isinstance(x, str) and x.strip():
-                                parts = x.split(":")
                                 try:
-                                    h = int(parts[0]); m = int(parts[1])  # bỏ qua giây nếu có
+                                    h, m = map(int, x.split(":"))
                                     return datetime.time(h, m)
                                 except Exception:
                                     return None
                             return None
-
 
                         df_cong_show_display["Giờ bắt đầu"] = df_cong_show_display["Giờ bắt đầu"].apply(to_time)
                         df_cong_show_display["Giờ kết thúc"] = df_cong_show_display["Giờ kết thúc"].apply(to_time)
@@ -1041,63 +968,42 @@ def admin_app(user):
 
                         col1, col2 = st.columns([1,1])
 
-                        with col1:                                 
+                        with col1:
+                            
+                            
+                            
+                            
                             if st.button(f"💾 Lưu cập nhật công nhật của {u}", key=f"save_cong_{u}"):
-                                from datetime import date, time as dtime
-
-                                def _fmt_time(t):
-                                    if isinstance(t, dtime):
-                                        return t.strftime("%H:%M")
-                                    s = str(t).strip()
-                                    for fmt in ("%H:%M", "%H:%M:%S"):
-                                        try:
-                                            return datetime.datetime.strptime(s, fmt).strftime("%H:%M")
-                                        except Exception:
-                                            pass
-                                    return ""
-
                                 for i, row in edited_cong.iterrows():
                                     tid = int(df_cong.iloc[i]["id"])
-                                    update_data = {}  # ✅ phải có dòng này
 
+                                    # Lấy dữ liệu từ bảng
                                     start_val = row.get("Giờ bắt đầu")
-                                    end_val   = row.get("Giờ kết thúc")
-                                    note_txt  = str(row.get("Ghi chú") or "").strip()
+                                    end_val = row.get("Giờ kết thúc")
+                                    note_txt = str(row.get("Ghi chú") or "").strip()
+                                    new_qty = float(row.get("Khối lượng (giờ)") or 0)
 
-                                    date_part = df_cong_show.loc[i, "__date_part"] if "__date_part" in df_cong_show.columns else ""
+                                    # Nếu là datetime.time thì format sang HH:MM
+                                    time_part = ""
+                                    if isinstance(start_val, datetime.time) and isinstance(end_val, datetime.time):
+                                        s_str = start_val.strftime("%H:%M")
+                                        e_str = end_val.strftime("%H:%M")
+                                        time_part = f"⏰ {s_str} - {e_str}"
+                                    elif isinstance(start_val, str) and isinstance(end_val, str):
+                                        # fallback nếu TimeColumn trả về string (trường hợp hiếm)
+                                        time_part = f"⏰ {start_val} - {end_val}"
 
-                                    # Ghép lại ghi chú đầy đủ
-                                    s_str = _fmt_time(start_val)
-                                    e_str = _fmt_time(end_val)
-                                    time_block = f"⏰ {s_str} - {e_str}".strip() if s_str and e_str else ""
-                                    full_note = (f"{time_block} {date_part} {note_txt}").strip()
-                                    update_data["note"] = full_note
+                                    # Gộp giờ + ghi chú
+                                    full_note = (time_part + (" " if time_part and note_txt else "") + note_txt).strip()
 
-                                    # --- Tính lại khối lượng bằng hàm chuẩn ---
-                                    try:
-                                        date_match = re.findall(r"\d{4}-\d{2}-\d{2}", date_part)
-                                        if len(date_match) == 2:
-                                            s_date = datetime.date.fromisoformat(date_match[0])
-                                            e_date = datetime.date.fromisoformat(date_match[1])
-                                        else:
-                                            s_date = e_date = datetime.date.today()
-
-                                        hours = calc_hours(s_date, e_date, start_val, end_val)
-                                        if hours > 0:
-                                            update_data["khoi_luong"] = round(hours, 2)
-                                            edited_cong.at[i, "Khối lượng (giờ)"] = round(hours, 2)
-                                    except Exception as e:
-                                        st.warning(f"Lỗi tính khối lượng: {e}")
-
-                                    # --- Ghi vào database ---
-                                    if update_data:
-                                        supabase.table("tasks").update(update_data).eq("id", tid).execute()
+                                    # Update Supabase
+                                    supabase.table("tasks").update({
+                                        "khoi_luong": new_qty,
+                                        "note": full_note
+                                    }).eq("id", tid).execute()
 
                                 st.success(f"✅ Đã cập nhật công nhật của {u}")
-                                st.toast("💾 Dữ liệu đã được lưu!", icon="💾")
-
-                                # Đặt cờ báo vừa lưu để reload 1 lần duy nhất
-                                st.session_state.just_saved = True
+                                st.rerun()
 
 
 
@@ -1255,21 +1161,19 @@ def admin_app(user):
 
         # ==== DANH SÁCH KÝ HIỆU (chỉ ký tự, không emoji) ====
         code_options = [
-            "K", "K:2", "P", "H", "TQ", "BD", "L", "O", "VR",
+            "K", "P", "H", "TQ", "BD", "L", "O", "VR",
             "NM", "TS", "VS", "TV",
             "K/P", "P/K", "K/H", "H/K", "K/TQ", "TQ/K", "K/NM", "NM/K",
             "K/TS", "TS/K", "K/VR", "VR/K", "K/O", "O/K",
             "K/ĐT", "ĐT/K", "K/L", "L/K", ""
         ]
 
-
         # ==== MAP EMOJI ====
         emoji_map = {
-            "K": "🟩", "K:2": "🟧", "P": "🟥", "H": "🟦", "TQ": "🟨", "BD": "🟧",
+            "K": "🟩", "P": "🟥", "H": "🟦", "TQ": "🟨", "BD": "🟧",
             "L": "🟫", "O": "🟩", "VR": "⬛", "NM": "🟪", "TS": "🟪",
             "VS": "🟦", "TV": "🟨"
         }
-
 
         def add_emoji(val: str):
             """Thêm emoji vào ký hiệu"""
@@ -1287,8 +1191,7 @@ def admin_app(user):
         for _, u in df_users.iterrows():
             uname = u.get("username", "")            # ← Dùng username thật để so sánh DB
             display_name = u.get("display_name", "") # ← Dùng để hiển thị
-            record = df_att[df_att["username"].astype(str).str.strip() == str(uname).strip()]
-
+            record = df_att[df_att["username"] == uname]
 
 
             user_data = {}
@@ -1328,9 +1231,6 @@ def admin_app(user):
         df_display = pd.DataFrame(rows)
         day_cols = [c for c in df_display.columns if "/" in c]
         df_display = df_display[["username", "User"] + day_cols]
-        # 🔧 Chuẩn hoá username để tránh sai lệch khi so sánh
-        df_display["username"] = df_display["username"].astype(str).str.strip()
-        df_display["User"] = df_display["User"].astype(str).str.strip()
 
 
         # ==== HIỂN THỊ BẢNG CHẤM CÔNG ====
@@ -1342,19 +1242,18 @@ def admin_app(user):
             height=650,
             key=f"attendance_{month_str}",
             column_config={
+                # Có trong dữ liệu để lưu, nhưng disabled
                 "username": st.column_config.TextColumn(
-                    "Tên đăng nhập (ẩn)",
+                    "Username",
                     disabled=True,
-                    help="Giữ để lưu DB",
-                    width="small",          # ✅ tuỳ chọn: thu nhỏ cột
+                    help="Ẩn nội bộ để lưu DB"
                 ),
                 "User": st.column_config.TextColumn("Nhân viên", disabled=True),
                 **{c: st.column_config.SelectboxColumn(c, options=[add_emoji(x) for x in code_options]) for c in day_cols}
             },
-            column_order=["username", "User"] + day_cols,   # giữ cột username để còn lưu DB
+            # Chỉ hiển thị cột 'User' và các cột ngày -> 'username' sẽ KHÔNG hiện ra
+            column_order=["User"] + day_cols,
         )
-
-
 
 
         # ==== GHI CHÚ THÁNG (dùng user NoteData) ====
@@ -1401,7 +1300,6 @@ def admin_app(user):
                 "P/K","H/K","TQ/K","NM/K","O/K","TS/K","VS/K","VR/K","ĐT/K","L/K",
                 "K/P","K/H","K/TQ","K/NM","K/O","K/TS","K/VS","K/VR","K/ĐT","K/L"
             )*0.5
-            total_K += cnt("K:2") * 0.5            
             total_H = cnt("H")
             total_P = cnt("P")
             total_BHXH = cnt("O","TS","VS")
@@ -1435,7 +1333,6 @@ def admin_app(user):
                 inserted_users = []
                 skipped_users = []
                 errors = []
-                st.write("🔍 Dữ liệu gửi lên:", edited_df.head())
 
                 for _, row in edited_df.iterrows():
                     uname = row["username"]      # Lấy username thật để lưu
@@ -1444,73 +1341,46 @@ def admin_app(user):
 
                     # --- Hàm bỏ emoji ---
                     def remove_emoji(txt):
-                        """Loại emoji, giữ nguyên ký hiệu chuẩn (ổn định hơn cho Streamlit)"""
-                        if not txt:
+                        if not isinstance(txt, str):
                             return ""
-                        if isinstance(txt, str):
-                            txt = txt.strip()
-                            # Nếu chỉ có emoji, trả về rỗng
-                            txt = re.sub(r"[\U0001F300-\U0001FAFF]", "", txt)  # xoá emoji
-                            txt = txt.replace("🟩", "").replace("🟥", "").replace("🟦", "").replace("🟧", "").replace("🟨", "").replace("🟫", "").replace("🟪", "").replace("⬛", "")
-                            txt = txt.strip()
-                            return txt
-                        return ""
-
+                        return txt.split()[-1] if " " in txt else txt
 
                     # --- Lấy dữ liệu mới: chỉ lưu đến ngày hiện tại ---
-                    def cell_to_code(cell):
-                        """Chuyển '🟩 K', '🟥 P', '🟩 K/🟥 P', '🟧 K:2' ... => 'K', 'P', 'K/P', 'K:2'"""
-                        if cell is None:
-                            return ""
-                        s = str(cell).strip()
-                        if not s:
-                            return ""
-                        # loại emoji và khoảng trắng
-                        s = re.sub(r"[\U0001F300-\U0001FAFF]", "", s)
-                        s = re.sub(r"\s+", " ", s).strip()
-                        # nếu là "🟧 K:2" → còn lại "K:2"
-                        parts = [p.strip() for p in s.split("/")]
-                        cleaned = []
-                        for p in parts:
-                            if " " in p:
-                                p = p.split(" ", 1)[-1]
-                            cleaned.append(p.strip())
-                        return "/".join(cleaned)
-
-
                     codes = {}
                     for col in day_cols:
+                        if not isinstance(row[col], str):
+                            continue
                         try:
                             day = int(col.split("/")[0])
                             date_in_month = selected_month.replace(day=day).date()
-                            if date_in_month <= today:
-                                val = cell_to_code(row.get(col))
-                                codes[f"{day:02d}"] = val
+                            if date_in_month <= today:  # chỉ lưu <= hôm nay
+                                codes[f"{day:02d}"] = remove_emoji(row[col])
                         except Exception:
-                            pass
-
-                    print("✅", uname, codes)
+                            continue  # bỏ qua nếu lỗi parsing
 
                     # --- Bỏ qua nếu hoàn toàn không có dữ liệu ---
                     # --- Nếu bảng công rỗng (DB trống) => vẫn insert mới để khởi tạo ---
-                    record = df_att[df_att["username"].astype(str).str.strip() == str(uname).strip()]
+                    record = df_att[df_att["username"] == uname]
 
-
-                    if len(record) == 0:
-                        # user chưa có dữ liệu trong DB -> luôn insert dữ liệu thật
+                    if not codes and len(record) == 0:
+                        # user chưa có dữ liệu trong DB -> tạo bản ghi trống để khởi tạo
                         payload = {
                             "username": uname,
+                            "display_name": display_name,
                             "months": [month_str],
-                            "data": {month_str: codes}
+                            "data": {month_str: {}}
                         }
                         supabase.table("attendance_new").insert(payload).execute()
                         inserted_users.append(uname)
                         continue
 
+                    elif not codes:
+                        skipped_users.append(uname)
+                        continue
+
 
                     # --- Đọc record hiện có trong DB ---
-                    record = df_att[df_att["username"].astype(str).str.strip() == str(uname).strip()]
-
+                    record = df_att[df_att["username"] == uname]
 
                     try:
                         if len(record) > 0:
@@ -1523,58 +1393,35 @@ def admin_app(user):
                             old_month_data = data_all.get(month_str, {})
                             has_changed = False
 
-                            # --- So sánh kỹ dữ liệu mới & cũ ---                            
-                            def normalize(v):
-                                if v in [None, "None", "nan", "NaN"]:
-                                    return ""
-                                return str(v).strip()
+                            # --- So sánh kỹ dữ liệu mới & cũ ---
+                            for d, v in codes.items():
+                                if old_month_data.get(d) != v:
+                                    has_changed = True
+                                    break
+                            if not has_changed and set(old_month_data.keys()) != set(codes.keys()):
+                                has_changed = True
 
-                            # Ép lại dữ liệu JSON thành dict Python thật sự
-                            try:
-                                old_json = json.loads(json.dumps(old_month_data or {}, ensure_ascii=False))
-                            except Exception:
-                                old_json = old_month_data or {}
-
-                            try:
-                                new_json = json.loads(json.dumps(codes or {}, ensure_ascii=False))
-                            except Exception:
-                                new_json = codes or {}
-
-                            # Đưa về dạng chuẩn { '01': 'K', '02': 'K:2', ... }
-                            old_clean = {str(k).zfill(2): normalize(v) for k, v in old_json.items()}
-                            new_clean = {str(k).zfill(2): normalize(v) for k, v in new_json.items()}
-
-                            # ✅ So sánh từng ngày để bắt đúng thay đổi
-                            diff_days = [d for d in new_clean if new_clean.get(d) != old_clean.get(d)]
-                            has_changed = len(diff_days) > 0 or len(old_clean) != len(new_clean)
-
+                            # --- Update nếu có thay đổi ---
                             if has_changed:
                                 data_all[month_str] = codes
                                 if month_str not in months:
                                     months.append(month_str)
-
-                                payload = {
-                                    "months": months,
-                                    "data": data_all
-                                }
-                                supabase.table("attendance_new").update(payload).eq("username", str(uname).strip()).execute()
-
-
+                                payload = {"months": months, "data": data_all}
+                                supabase.table("attendance_new").update(payload).eq("username", uname).execute()
                                 updated_users.append(uname)
                             else:
                                 skipped_users.append(uname)
-
 
                         else:
                             # --- User chưa có dữ liệu -> insert mới ---
                             payload = {
                                 "username": uname,
+                                "display_name": display_name,  # tùy chọn, chỉ để xem
                                 "months": [month_str],
                                 "data": {month_str: codes}
-
                             }
-                            supabase.table("attendance_new").insert(payload).execute()
 
+                            supabase.table("attendance_new").insert(payload).execute()
                             inserted_users.append(uname)
 
                     except Exception as e:
@@ -1645,7 +1492,6 @@ def admin_app(user):
                 return c
 
             total_K = cnt("K") - cnt("K/P", "K/H", "K/TQ", "K/NM", "K/O", "K/TS", "K/VR", "K/ĐT", "K/L") * 0.5
-            total_K += cnt("K:2") * 0.5
             total_H = cnt("H")
             total_P = cnt("P")
             total_BHXH = cnt("O", "TS", "VS")
@@ -2072,9 +1918,3 @@ def admin_app(user):
                 st.markdown("### 👤 Thống kê chi tiết theo người dùng")
                 st.dataframe(styled_user, width="stretch")
         
-
-    # 🔁 Nếu vừa lưu xong, đợi 0.5s rồi reload lại một lần
-    if st.session_state.get("just_saved"):
-        time.sleep(0.5)
-        st.session_state.just_saved = False
-        st.rerun()
