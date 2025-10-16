@@ -6,7 +6,7 @@ import pandas as pd
 import datetime
 from datetime import date, datetime, time, timedelta
 from supabase import create_client, Client
-
+import re
 SUPABASE_URL = "https://gvmolpovpsxvfgheoase.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd2bW9scG92cHN4dmZnaGVvYXNlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk1MDQ4OTcsImV4cCI6MjA3NTA4MDg5N30.XVEn1cxLRsGG9Yqw8hdrs62Kh3FXoXeKRSwpyGUApkc"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -249,3 +249,126 @@ def add_project(name, deadline, project_type="group", design_step=None):
         }).execute()
     except Exception as e:
         raise ValueError(f"Lỗi khi thêm dự án: {e}")
+
+
+# ==========================================================
+# 🧩 CÔNG VIỆC GIÁN TIẾP — DÙNG CHUNG CHO ADMIN, USER, PROJECT
+# ==========================================================
+
+def show_indirect_task_form(role, supabase, username, users=None):
+    """
+    Hiển thị form giao việc gián tiếp (admin, user, project)
+    """
+    st.subheader("➕ Thêm công việc gián tiếp")
+
+    with st.form(key=f"{role}_add_indirect"):
+        task_name = st.text_input("Tên công việc")
+        start_time = st.time_input("Giờ bắt đầu", datetime.time(8, 0))
+        end_time = st.time_input("Giờ kết thúc", datetime.time(17, 0))
+        note = st.text_area("Ghi chú")
+
+        # Nếu là admin hoặc project manager thì có thể chọn người khác
+        if role in ["admin", "project"]:
+            assignee = st.selectbox("Người được giao", users)
+        else:
+            assignee = username
+
+        submitted = st.form_submit_button("💾 Lưu công việc")
+
+        if submitted:
+            start_str = start_time.strftime("%H:%M")
+            end_str = end_time.strftime("%H:%M")
+            today = datetime.date.today()
+            note_text = f"⏰ {start_str} - {end_str} ({today} - {today}) {note}".strip()
+
+            # Tính khối lượng
+            from auth import calc_hours
+            hours = calc_hours(today, today, start_time, end_time)
+
+            data = {
+                "project": "Công việc gián tiếp",
+                "task": task_name.strip(),
+                "assignee": assignee,
+                "note": note_text,
+                "khoi_luong": round(hours, 2),
+                "progress": 0,
+                "created_by": username,
+            }
+
+            supabase.table("tasks").insert(data).execute()
+            st.success(f"✅ Đã thêm công gián tiếp cho {assignee}")
+            st.toast("💾 Đã lưu công việc gián tiếp!", icon="💾")
+            st.session_state.just_saved = True
+
+
+def show_indirect_task_table(role, supabase, username, df_tasks):
+    """
+    Hiển thị & cho phép chỉnh sửa công việc gián tiếp (chung cho admin/user/project)
+    """
+    st.subheader("🗂️ Danh sách công việc gián tiếp")
+
+    df_show = df_tasks[df_tasks["project"] == "Công việc gián tiếp"].copy()
+    if df_show.empty:
+        st.info("Chưa có công việc gián tiếp nào.")
+        return
+
+    # --- Hàm tách giờ, ngày, note ---
+    def split_times(note_text: str):
+        if not isinstance(note_text, str):
+            return "", "", "", ""
+        block_re = r'⏰\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*[-–]\s*(\d{1,2}:\d{2}(?::\d{2})?)'
+        date_re  = r'\(\d{4}-\d{2}-\d{2}\s*-\s*\d{4}-\d{2}-\d{2}\)'
+        full_re  = rf'{block_re}\s*(?:{date_re})?'
+        m = re.search(full_re, note_text)
+        if not m:
+            m = re.search(block_re, note_text)
+        start = m.group(1) if m else ""
+        end = m.group(2) if m else ""
+        dm = re.search(date_re, note_text)
+        date_part = dm.group(0) if dm else ""
+        note_rest = re.sub(full_re, "", note_text).strip()
+        return start, end, date_part, note_rest
+
+    df_show[["Giờ bắt đầu", "Giờ kết thúc", "Ngày", "Ghi chú"]] = df_show["note"].apply(
+        lambda x: pd.Series(split_times(x))
+    )
+
+    edited = st.data_editor(
+        df_show[["task", "Giờ bắt đầu", "Giờ kết thúc", "Ghi chú", "khoi_luong"]],
+        key=f"{role}_indirect_edit",
+        use_container_width=True
+    )
+
+    if st.button("💾 Lưu thay đổi", key=f"{role}_save_indirect"):
+        for i, row in edited.iterrows():
+            task_id = int(df_show.iloc[i]["id"])
+            update_data = {}
+            start_time = row.get("Giờ bắt đầu", "")
+            end_time = row.get("Giờ kết thúc", "")
+            note_text = str(row.get("Ghi chú", "")).strip()
+            date_part = df_show.iloc[i]["Ngày"]
+
+            # Ghi chú mới
+            if start_time and end_time:
+                start_str = str(start_time)
+                end_str = str(end_time)
+                new_note = f"⏰ {start_str} - {end_str} {date_part} {note_text}".strip()
+            else:
+                new_note = note_text
+
+            update_data["note"] = new_note
+
+            # --- Tính lại khối lượng ---
+            try:
+                from auth import calc_hours
+                today = datetime.date.today()
+                hours = calc_hours(today, today, start_time, end_time)
+                if hours > 0:
+                    update_data["khoi_luong"] = round(hours, 2)
+            except Exception as e:
+                st.warning(f"Lỗi tính khối lượng: {e}")
+
+            supabase.table("tasks").update(update_data).eq("id", task_id).execute()
+
+        st.success("✅ Đã cập nhật công việc gián tiếp!")
+        st.session_state.just_saved = True
