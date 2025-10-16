@@ -57,9 +57,8 @@ def logout_user():
     cookies.save()
 
     # Hiển thị thông báo và dừng để tránh auto-login lại
-    st.success("✅ Đã đăng xuất thành công! Vui lòng reload lại trang nếu chưa thấy thay đổi.")
-    st.stop()
-
+    st.success("✅ Đã đăng xuất thành công!")
+    st.rerun()
 
 
 
