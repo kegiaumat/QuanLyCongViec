@@ -1444,38 +1444,41 @@ def admin_app(user):
 
                     # --- Hàm bỏ emoji ---
                     def remove_emoji(txt):
-                        """Loại emoji, giữ nguyên ký hiệu chuẩn (ổn định hơn cho Streamlit)"""
+                        """Loại emoji, nhưng giữ nguyên ký hiệu sau nó (vd: 🟧K:2 -> K:2)."""
                         if not txt:
                             return ""
                         if isinstance(txt, str):
-                            txt = txt.strip()
-                            # Nếu chỉ có emoji, trả về rỗng
-                            txt = re.sub(r"[\U0001F300-\U0001FAFF]", "", txt)  # xoá emoji
-                            txt = txt.replace("🟩", "").replace("🟥", "").replace("🟦", "").replace("🟧", "").replace("🟨", "").replace("🟫", "").replace("🟪", "").replace("⬛", "")
-                            txt = txt.strip()
+                            # Thêm khoảng trắng sau khi xoá emoji để không dính ký hiệu
+                            txt = re.sub(r"[\U0001F300-\U0001FAFF]", " ", txt)  # xoá emoji → chèn khoảng trắng
+                            for sym in ["🟩", "🟥", "🟦", "🟧", "🟨", "🟫", "🟪", "⬛"]:
+                                txt = txt.replace(sym, " ")
+                            txt = re.sub(r"\s+", " ", txt).strip()
                             return txt
                         return ""
 
 
+
                     # --- Lấy dữ liệu mới: chỉ lưu đến ngày hiện tại ---
                     def cell_to_code(cell):
-                        """Chuyển '🟩 K', '🟥 P', '🟩 K/🟥 P', '🟧 K:2' ... => 'K', 'P', 'K/P', 'K:2'"""
+                        """Chuyển '🟩 K', '🟥 P', '🟧 K:2', '🟩 K/🟥 P' ... => 'K', 'P', 'K:2', 'K/P'"""
                         if cell is None:
                             return ""
                         s = str(cell).strip()
                         if not s:
                             return ""
-                        # loại emoji và khoảng trắng
-                        s = re.sub(r"[\U0001F300-\U0001FAFF]", "", s)
-                        s = re.sub(r"\s+", " ", s).strip()
-                        # nếu là "🟧 K:2" → còn lại "K:2"
+
+                        # loại emoji nhưng giữ ký tự sau emoji
+                        s = remove_emoji(s)
+
                         parts = [p.strip() for p in s.split("/")]
                         cleaned = []
                         for p in parts:
+                            p = p.strip()
                             if " " in p:
-                                p = p.split(" ", 1)[-1]
-                            cleaned.append(p.strip())
-                        return "/".join(cleaned)
+                                p = p.split(" ", 1)[-1]  # lấy ký hiệu cuối cùng
+                            cleaned.append(p)
+                        return "/".join(cleaned).strip()
+
 
 
                     codes = {}
@@ -1752,6 +1755,7 @@ def admin_app(user):
 
         legend_data = [
             ("🟩", "K", "01 ngày làm việc"),
+            ("🟧", "K:2", "1/2 ngày làm việc"),
             ("🟥", "P", "Nghỉ phép"),
             ("🟦", "H", "Hội họp"),
             ("🟨", "TQ", "Tham quan, học tập"),
