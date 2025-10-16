@@ -4,6 +4,7 @@ import pandas as pd
 import plotly.express as px
 from auth import get_connection
 
+import re
 
 from datetime import datetime, date, time, timedelta
 from auth import calc_hours
