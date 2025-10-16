@@ -139,8 +139,14 @@ def admin_app(user):
         # === Chuẩn hóa dữ liệu ===
         df_users["Ngày sinh"] = pd.to_datetime(df_users["Ngày sinh"], errors="coerce").dt.date
         df_users["Xóa?"] = df_users["Xóa?"].fillna(False).astype(bool)
+        # 🧹 Chuẩn hóa dữ liệu vai trò và danh sách dự án
         for col in ["Vai trò", "Chủ nhiệm dự án", "Chủ trì dự án"]:
             df_users[col] = df_users[col].astype(str).fillna("")
+
+        # ✅ Chuyển dữ liệu dự án từ chuỗi -> danh sách (để MultiSelectColumn hiểu)
+        for col in ["Chủ nhiệm dự án", "Chủ trì dự án"]:
+            df_users[col] = df_users[col].apply(lambda x: x.split("|") if x else [])
+
 
         # === Bảng chỉnh sửa ===
         edited_users = st.data_editor(
