@@ -529,14 +529,24 @@ def project_manager_app(user):
                             update_data["note"] = new_note
 
                             # 🧮 Tính lại khối lượng (giờ)
-                            st_dt = _parse_time(start_time)
-                            en_dt = _parse_time(end_time)
-                            if st_dt and en_dt:
-                                if en_dt < st_dt:
-                                    en_dt = en_dt.replace(day=st_dt.day + 1)
-                                hours = (en_dt - st_dt).total_seconds() / 3600
-                                if hours > 0:
-                                    update_data["khoi_luong"] = round(hours, 2)
+                            try:
+                                # Lấy ngày từ note nếu có (dạng "(YYYY-MM-DD - YYYY-MM-DD)")
+                                match_date = re.search(r"\((\d{4}-\d{2}-\d{2})\s*-\s*(\d{4}-\d{2}-\d{2})\)", note_text)
+                                if match_date:
+                                    start_date_str, end_date_str = match_date.groups()
+                                    start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+                                    end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+                                else:
+                                    # Nếu không có trong note thì mặc định cùng ngày hôm nay
+                                    start_date = end_date = date.today()
+
+                                # Dùng hàm chuẩn calc_hours từ auth.py
+                                total_hours = calc_hours(start_date, end_date, start_time, end_time)
+                                if total_hours > 0:
+                                    update_data["khoi_luong"] = round(total_hours, 2)
+                            except Exception as e:
+                                st.warning(f"⚠️ Lỗi tính khối lượng cho dòng {i+1}: {e}")
+
 
                             supabase.table("tasks").update(update_data).eq("id", tid).execute()
 
