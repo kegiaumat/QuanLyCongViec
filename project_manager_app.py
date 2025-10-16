@@ -474,13 +474,12 @@ def project_manager_app(user):
 
                     if st.button("➕ Thêm công nhật cho tôi", key="add_self_cong_btn"):
                         total_hours = calc_hours(start_date, end_date, start_time, end_time)
+                        # 📝 Tạo ghi chú gọn, chỉ thêm 1 lần
+                        if note.strip():
+                            note_txt = f"⏰ {start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')} ({start_date} - {end_date}) {note.strip()}"
+                        else:
+                            note_txt = f"⏰ {start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')} ({start_date} - {end_date})"
 
-                        note_txt = f"⏰ {start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')} ({start_date} - {end_date}) {note}"
-
-
-
-                        if note:
-                            note_txt += f"\n{note}"
 
                         supabase.table("tasks").insert({
                             "project": project,
