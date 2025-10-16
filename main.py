@@ -25,7 +25,8 @@ def check_login(username, password):
     supabase = get_connection()
     data = supabase.table("users") \
         .select("id, username, display_name, dob, password, role") \
-        .eq("username", u).execute()
+        .ilike("username", u).execute()
+
 
     if not data.data:
         return None
@@ -197,7 +198,7 @@ def main():
         with tab_register:
             new_user = st.text_input("Tên đăng nhập mới", key="reg_username")
             new_display = st.text_input("Tên hiển thị", key="reg_display")
-            new_dob = st.date_input("Ngày sinh", value=datetime.date(1985, 12, 11))
+            new_dob = st.date_input("Ngày sinh", value=datetime.date(1985, 11, 12))
             new_pass = st.text_input("Mật khẩu", type="password", key="reg_password")
             confirm_pass = st.text_input("Nhập lại mật khẩu", type="password", key="reg_confirm_password")
 
