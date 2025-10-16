@@ -62,8 +62,12 @@ def logout_user():
 
 
 
-def role_display(role: str) -> str:
-    return {"admin": "Admin", "project_manager": "Quản lý dự án", "user": "Nhân viên"}.get(role, role.capitalize())
+def role_display(role) -> str:
+    if isinstance(role, list):
+        role = ", ".join(str(r).capitalize() for r in role)
+    elif isinstance(role, str):
+        role = role.capitalize()
+    return role
 
 
 # ==================== TRANG HỒ SƠ ====================
@@ -247,10 +251,17 @@ def main():
         if current_page == "profile":
             profile_page(user)
         else:
-            role = (user[5] or "")
-            if "admin" in role.lower():
+            role = user[5] or ""
+            role_list = []
+
+            if isinstance(role, str):
+                role_list = [r.strip().lower() for r in role.split(",")]
+            elif isinstance(role, list):
+                role_list = [str(r).lower() for r in role]
+
+            if any("admin" in r for r in role_list):
                 admin_app(user)
-            elif ("Chủ nhiệm dự án" in role) or ("Chủ trì dự án" in role) or ("project_manager" in role):
+            elif any(("chủ nhiệm dự án" in r) or ("chủ trì dự án" in r) or ("project_manager" in r) for r in role_list):
                 project_manager_app(user)
             else:
                 user_app(user)
