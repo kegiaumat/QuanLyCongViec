@@ -917,40 +917,53 @@ def admin_app(user):
                     if not df_cong.empty:
 
                         def split_times(note_text: str):
+                            """
+                            Trả về:
+                              - start: 'HH:MM' | ''
+                              - end:   'HH:MM' | ''
+                              - date_part: '(YYYY-MM-DD - YYYY-MM-DD)' | ''
+                              - note_rest: phần còn lại sau khi bỏ '⏰ ...' và '(...)'
+                            """
                             if not isinstance(note_text, str):
-                                return "", "", note_text
+                                return "", "", "", ""
 
-                            # Nhận cả HH:MM hoặc HH:MM:SS và giữ nguyên phần ngày trong ngoặc
-                            pattern = r'(⏰\s*\d{1,2}:\d{2}(?::\d{2})?\s*[-–]\s*\d{1,2}:\d{2}(?::\d{2})?\s*\([^)]+\))'
-                            m = re.search(pattern, note_text)
+                            # block giờ: HH:MM hoặc HH:MM:SS
+                            block_re = r'⏰\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*[-–]\s*(\d{1,2}:\d{2}(?::\d{2})?)'
+                            date_re  = r'\(\d{4}-\d{2}-\d{2}\s*[-–]\s*\d{4}-\d{2}-\d{2}\)'
+                            full_re  = rf'⏰\s*(\d{{1,2}}:\d{{2}}(?::\d{{2}})?)\s*[-–]\s*(\d{{1,2}}:\d{{2}}(?::\d{{2}})?)\s*(?:{date_re})?'
+
                             if not m:
-                                return "", "", note_text
+                                # Thử lại nếu thiếu ký tự '⏰'
+                                m = re.search(block_re, note_text)
 
-                            # phần đầy đủ có đồng hồ + ngày
-                            full_time_part = m.group(1)
+                            start = m.group(1) if m else ""
+                            end   = m.group(2) if m else ""
 
-                            # tách riêng giờ bắt đầu và kết thúc để hiển thị cột
-                            sub_m = re.search(r'(\d{1,2}:\d{2}(?::\d{2})?).*[-–].*(\d{1,2}:\d{2}(?::\d{2})?)', full_time_part)
-                            start = sub_m.group(1) if sub_m else ""
-                            end = sub_m.group(2) if sub_m else ""
+                            dm = re.search(date_re, note_text)
+                            date_part = dm.group(0) if dm else ""
 
-                            # Giữ nguyên phần có đồng hồ trong ghi chú (không xóa đi nữa)
-                            return start, end, note_text
+                            # bỏ '⏰ ... (ngày)' ở đầu ghi chú
+                            note_rest = re.sub(full_re, '', note_text).strip()
+
+
+                            return start, end, date_part, note_rest
 
 
 
 
                         rows = []
                         for _, r in df_cong.iterrows():
-                            stime, etime, note_rest = split_times(r.get("note", ""))
+                            stime, etime, date_part, note_rest = split_times(r.get("note", ""))
                             rows.append({
                                 "ID": r["id"],
                                 "Công việc": r["task"],
                                 "Giờ bắt đầu": stime,
                                 "Giờ kết thúc": etime,
                                 "Ghi chú": note_rest,
+                                "__date_part": date_part,   # giữ ngày để khi lưu ghép lại
                                 "Tiến độ (%)": int(pd.to_numeric(r.get("progress", 0), errors="coerce") or 0),
                             })
+
                         df_cong_show = pd.DataFrame(rows)
 
                         config = {
@@ -1016,38 +1029,66 @@ def admin_app(user):
                             
                             
                             
+                            
                             if st.button(f"💾 Lưu cập nhật công nhật của {u}", key=f"save_cong_{u}"):
+                                from datetime import date, time as dtime
+
+                                def _fmt_time(t):  # -> "HH:MM"
+                                    if isinstance(t, dtime):
+                                        return t.strftime("%H:%M")
+                                    s = str(t).strip()
+                                    for fmt in ("%H:%M", "%H:%M:%S"):
+                                        try:
+                                            return datetime.datetime.strptime(s, fmt).strftime("%H:%M")
+                                        except Exception:
+                                            pass
+                                    return ""
+
+                                def _parse_time(t):  # -> datetime hoặc None
+                                    if isinstance(t, dtime):
+                                        return datetime.datetime.combine(date.today(), t)
+                                    s = str(t).strip()
+                                    for fmt in ("%H:%M", "%H:%M:%S"):
+                                        try:
+                                            return datetime.datetime.strptime(s, fmt)
+                                        except Exception:
+                                            pass
+                                    return None
+
                                 for i, row in edited_cong.iterrows():
                                     tid = int(df_cong.iloc[i]["id"])
 
-                                    # Lấy dữ liệu từ bảng
                                     start_val = row.get("Giờ bắt đầu")
-                                    end_val = row.get("Giờ kết thúc")
-                                    note_txt = str(row.get("Ghi chú") or "").strip()
-                                    new_qty = float(row.get("Khối lượng (giờ)") or 0)
+                                    end_val   = row.get("Giờ kết thúc")
+                                    note_txt  = str(row.get("Ghi chú") or "").strip()
 
-                                    # Nếu là datetime.time thì format sang HH:MM
-                                    time_part = ""
-                                    if isinstance(start_val, datetime.time) and isinstance(end_val, datetime.time):
-                                        s_str = start_val.strftime("%H:%M")
-                                        e_str = end_val.strftime("%H:%M")
-                                        time_part = f"⏰ {s_str} - {e_str}"
-                                    elif isinstance(start_val, str) and isinstance(end_val, str):
-                                        # fallback nếu TimeColumn trả về string (trường hợp hiếm)
-                                        time_part = f"⏰ {start_val} - {end_val}"
+                                    # lấy date cũ từ bản gốc đã parse
+                                    date_part = df_cong_show.loc[i, "__date_part"] if "__date_part" in df_cong_show.columns else ""
 
-                                    # Gộp giờ + ghi chú
-                                    full_note = (time_part + (" " if time_part and note_txt else "") + note_txt).strip()
+                                    # ghép lại note: "⏰ HH:MM - HH:MM (ngày cũ) + phần ghi chú"
+                                    s_str = _fmt_time(start_val)
+                                    e_str = _fmt_time(end_val)
+                                    time_block = f"⏰ {s_str} - {e_str}".strip() if s_str and e_str else ""
+                                    full_note = (f"{time_block} {date_part} {note_txt}").strip()
 
-                                    # Update Supabase
-                                    supabase.table("tasks").update({
-                                        "khoi_luong": new_qty,
-                                        "note": full_note
-                                    }).eq("id", tid).execute()
+                                    # tính lại khối lượng theo giờ
+                                    st_dt = _parse_time(start_val)
+                                    en_dt = _parse_time(end_val)
+                                    update_data = {"note": full_note}
+
+                                    if st_dt and en_dt:
+                                        if en_dt < st_dt:  # ca qua ngày
+                                            en_dt = en_dt.replace(day=st_dt.day + 1)
+                                        hours = (en_dt - st_dt).total_seconds() / 3600
+                                        if hours > 0:
+                                            update_data["khoi_luong"] = round(hours, 2)
+                                            # cập nhật ngay trên UI
+                                            edited_cong.at[i, "Khối lượng (giờ)"] = round(hours, 2)
+
+                                    supabase.table("tasks").update(update_data).eq("id", tid).execute()
 
                                 st.success(f"✅ Đã cập nhật công nhật của {u}")
                                 st.rerun()
-
 
 
 
