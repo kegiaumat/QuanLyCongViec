@@ -76,23 +76,6 @@ def user_app(user):
         show_indirect_task_form("user", supabase, username)
 
 
-
-            with col2:
-                if st.button("🗑️ Xóa các dòng đã chọn", key="delete_my_tasks_btn"):
-                    ids_to_delete = [
-                        int(df_tasks.iloc[i]["id"])
-                        for i, row in edited.iterrows()
-                        if row.get("Chọn")
-                    ]
-                    if ids_to_delete:
-                        for tid in ids_to_delete:
-                            supabase.table("tasks").delete().eq("id", tid).execute()
-                        
-                        st.success(f"✅ Đã xóa {len(ids_to_delete)} dòng")
-                        st.rerun()
-                    else:
-                        st.warning("⚠️ Chưa chọn dòng nào để xóa")
-
         # ======= Tự thêm công việc (nếu public) =======
         if is_public:
             st.markdown("---")
