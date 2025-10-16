@@ -87,10 +87,13 @@ def user_app(user):
             }
             df_show = df_tasks.rename(columns=rename_map).drop(columns=["id"])
             df_show["Chọn"] = False
-            # Chèn hai cột Giờ bắt đầu / Giờ kết thúc vào vị trí mong muốn
-            if "Giờ bắt đầu" in df_tasks.columns and "Giờ kết thúc" in df_tasks.columns:
+            # Thêm 2 cột giờ bắt đầu/kết thúc nếu chưa có
+            if "Giờ bắt đầu" in df_tasks.columns and "Giờ bắt đầu" not in df_show.columns:
                 df_show.insert(1, "Giờ bắt đầu", df_tasks["Giờ bắt đầu"])
+
+            if "Giờ kết thúc" in df_tasks.columns and "Giờ kết thúc" not in df_show.columns:
                 df_show.insert(2, "Giờ kết thúc", df_tasks["Giờ kết thúc"])
+
 
             # Nếu public -> bỏ Tiến độ, Deadline
             if is_public:
