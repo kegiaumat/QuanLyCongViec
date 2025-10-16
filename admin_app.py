@@ -1475,7 +1475,6 @@ def admin_app(user):
                         # user chưa có dữ liệu trong DB -> tạo bản ghi trống để khởi tạo
                         payload = {
                             "username": uname,
-                            "display_name": display_name,
                             "months": [month_str],
                             "data": {month_str: {}}
                         }
