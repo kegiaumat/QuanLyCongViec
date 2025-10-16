@@ -395,20 +395,21 @@ def project_manager_app(user):
             data = supabase.table("tasks").select("id, task, khoi_luong, deadline, note, progress")\
                 .eq("project", project).eq("assignee", username).execute()
             my_tasks = pd.DataFrame(data.data)
-            
-            
-            # 🧹 Làm sạch ghi chú: loại bỏ lặp giờ/ngày nếu có
+                        
+            # 🧹 Làm sạch ghi chú: loại bỏ trùng lặp giờ/ngày nếu có
             if not my_tasks.empty and "note" in my_tasks.columns:
                 def clean_note(n: str):
                     if not isinstance(n, str) or not n.strip():
                         return ""
-                    # Nếu có nhiều hơn 1 ký hiệu "⏰", chỉ giữ đoạn đầu tiên
-                    parts = n.split("⏰")
-                    if len(parts) > 2:
-                        return "⏰" + parts[1].strip()  # giữ phần đầu tiên
+                    # Giữ lại duy nhất phần đầu chứa "⏰ HH:MM - HH:MM (...)" nếu xuất hiện nhiều
+                    matches = re.findall(r"⏰\s*\d{2}:\d{2}\s*-\s*\d{2}:\d{2}.*?\)", n)
+                    if len(matches) > 1:
+                        rest = n.split(matches[-1])[-1].strip()
+                        return f"{matches[0]} {rest}".strip()
                     return n.strip()
 
                 my_tasks["note"] = my_tasks["note"].map(clean_note)
+
 
 
 
@@ -600,8 +601,7 @@ def project_manager_app(user):
                 use_container_width=True
             )
 
-    finally:
-            pass 
+
 
 
 
