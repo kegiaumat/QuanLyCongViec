@@ -179,6 +179,7 @@ def admin_app(user):
 
         # === Nút cập nhật ===
         with col1:
+
             if st.button("💾 Update"):
                 changed_count = 0
 
@@ -197,28 +198,26 @@ def admin_app(user):
                         new_val = row[col]
                         old_val = original[col]
 
-                        # Chuẩn hóa danh sách về chuỗi
-                        if col == "Vai trò" and isinstance(new_val, list):
-                            new_val = ", ".join(new_val)
-                        if col in ["Chủ nhiệm dự án", "Chủ trì dự án"] and isinstance(new_val, list):
-                            new_val = "|".join(new_val)
+                        # Chuẩn hóa list -> string
+                        if isinstance(new_val, list):
+                            new_val = "|".join(map(str, new_val))
+                        if isinstance(old_val, list):
+                            old_val = "|".join(map(str, old_val))
 
-                        # Chuẩn hóa None, NaN, 'None', chuỗi trống
-                        def normalize_value(v):
-                            if isinstance(v, (list, dict)):
-                                return v
-                            if pd.isna(v) or v in [None, "None", "nan", "", "NaT"]:
+                        # Chuẩn hóa None, NaN, 'None', rỗng
+                        def clean_value(v):
+                            if pd.isna(v) or v in ["None", "nan", "", None, "NaT"]:
                                 return None
                             return str(v).strip()
 
-                        new_val = normalize_value(new_val)
-                        old_val = normalize_value(old_val)
+                        new_val = clean_value(new_val)
+                        old_val = clean_value(old_val)
 
-                        # Chỉ coi là khác nếu giá trị thật sự thay đổi
-                        if new_val != old_val:
+                        # So sánh sâu bằng json để loại bỏ khác kiểu (vd "1" vs 1)
+                        if json.dumps(new_val, ensure_ascii=False) != json.dumps(old_val, ensure_ascii=False):
                             update_data[db_field] = new_val
 
-                    # ✅ Chỉ update user nào có thay đổi thật
+                    # ✅ Chỉ update nếu có thay đổi
                     if update_data:
                         try:
                             supabase.table("users").update(update_data).eq("username", username).execute()
