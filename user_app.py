@@ -140,19 +140,20 @@ def user_app(user):
                         task_id = int(df_tasks.iloc[i]["id"])
                         update_data = {}
 
-                        # Lấy giờ và ghi chú
+                        # 🕒 Lấy giờ và ghi chú
                         start_time = row.get("Giờ bắt đầu", "")
                         end_time = row.get("Giờ kết thúc", "")
                         note_text = str(row.get("Ghi chú", "")).strip()
 
-                        # 🧹 Xóa phần giờ cũ trong ghi chú (nếu có)                        
+                        # 🧹 Giữ lại phần ngày nếu có (ví dụ: (2025-10-15 - 2025-10-15))
                         match_date = re.search(r"\(\d{4}-\d{2}-\d{2}\s*-\s*\d{4}-\d{2}-\d{2}\)", note_text)
                         date_part = match_date.group(0) if match_date else ""
 
-                        # 🧹 Xóa phần giờ cũ trong ghi chú, chỉ giữ phần ngày và nội dung sau
-                        note_text = re.sub(r"^⏰\s*\d{2}:\d{2}\s*-\s*\d{2}:\d{2}", "", note_text).strip()
+                        # 🧹 Xóa phần giờ cũ và phần ngày cũ để tránh lặp
+                        note_text = re.sub(r"^⏰\s*\d{2}:\d{2}\s*-\s*\d{2}:\d{2}", "", note_text)
+                        note_text = re.sub(r"\(\d{4}-\d{2}-\d{2}\s*-\s*\d{4}-\d{2}-\d{2}\)", "", note_text).strip()
 
-                        # 🕒 Gắn lại giờ mới và phần ngày
+                        # 🕒 Gắn lại giờ mới và phần ngày (nếu có)
                         if start_time and end_time:
                             start_str = start_time.strftime("%H:%M") if hasattr(start_time, "strftime") else str(start_time)
                             end_str = end_time.strftime("%H:%M") if hasattr(end_time, "strftime") else str(end_time)
@@ -162,59 +163,35 @@ def user_app(user):
 
                         update_data["note"] = new_note
 
-                        # 🧮 Tính lại khối lượng (giờ)
+                        # 🧮 Tự động tính lại khối lượng (giờ)
                         if start_time and end_time:
                             try:
                                 fmt = "%H:%M"
                                 start_dt = datetime.strptime(str(start_time), fmt)
                                 end_dt = datetime.strptime(str(end_time), fmt)
 
-                                # Nếu kết thúc < bắt đầu → sang ngày hôm sau
+                                # Nếu giờ kết thúc < giờ bắt đầu → sang ngày hôm sau
                                 if end_dt < start_dt:
                                     end_dt = end_dt.replace(day=start_dt.day + 1)
 
                                 hours = (end_dt - start_dt).total_seconds() / 3600
                                 if hours > 0:
                                     update_data["khoi_luong"] = round(hours, 2)
-                                    # Cập nhật ngay trên DataFrame hiển thị
                                     df_show.at[i, "Khối lượng (giờ)"] = round(hours, 2)
+
                             except Exception as e:
                                 st.warning(f"Lỗi tính khối lượng: {e}")
 
-
-                        update_data["note"] = new_note
-
-                        # ⏱️ Tự động tính lại khối lượng (giờ)
-                        if start_time and end_time:
-                            try:
-                                fmt = "%H:%M"
-                                start_dt = datetime.strptime(str(start_time), fmt)
-                                end_dt = datetime.strptime(str(end_time), fmt)
-
-                                # Nếu giờ kết thúc nhỏ hơn giờ bắt đầu → coi là sang ngày hôm sau
-                                if end_dt < start_dt:
-                                    end_dt = end_dt.replace(day=start_dt.day + 1)
-
-                                hours = (end_dt - start_dt).total_seconds() / 3600
-                                if hours > 0:
-                                    update_data["khoi_luong"] = round(hours, 2)
-                                    df_show.at[i, "Khối lượng (giờ)"] = round(hours, 2)
-
-
-                            except Exception:
-                                pass
-
-                        # Cập nhật tiến độ (nếu có)
+                        # 📊 Cập nhật tiến độ (nếu có)
                         if "Tiến độ (%)" in row and not pd.isna(row["Tiến độ (%)"]):
                             update_data["progress"] = float(row["Tiến độ (%)"])
 
-                        # Ghi vào database
+                        # 💾 Ghi xuống database
                         if update_data:
                             supabase.table("tasks").update(update_data).eq("id", task_id).execute()
 
                     st.success("✅ Đã cập nhật giờ, ghi chú và khối lượng!")
                     st.rerun()
-
 
 
             with col2:
