@@ -538,23 +538,24 @@ def admin_app(user):
                     st.success("✅ Đã cập nhật thông tin dự án")
                     refresh_all_cache()
 
-            # ===== Xóa =====
+            # ===== Xóa dự án =====
             with col2:
+                # Dùng biến session để nhớ trạng thái xác nhận
+                if "confirm_delete" not in st.session_state:
+                    st.session_state["confirm_delete"] = None
+
                 if st.button("❌ Xóa dự án", key="delete_project_btn"):
                     to_delete = edited_proj[edited_proj["Xóa?"] == True]
                     if to_delete.empty:
-                        st.warning("⚠️ Bạn chưa tick dự án nào để xoá")
+                        st.warning("⚠️ Bạn chưa tick dự án nào để xoá.")
                     else:
                         st.session_state["confirm_delete"] = to_delete["name"].tolist()
 
-            # ===== Hộp xác nhận xoá =====
-            if "confirm_delete" in st.session_state:
+            # Hiển thị xác nhận chỉ khi người dùng vừa bấm nút và có dữ liệu
+            if st.session_state.get("confirm_delete"):
                 proj_list = st.session_state["confirm_delete"]
-                if not proj_list:
-                    st.warning("⚠️ Không có dự án nào được chọn để xoá.")
-                else:
-                    proj_names = ", ".join(map(str, proj_list))
-                    st.error(f"⚠️ Bạn có chắc muốn xoá {len(proj_list)} dự án sau: {proj_names} ?")
+                proj_names = ", ".join(map(str, proj_list))
+                st.error(f"⚠️ Bạn có chắc muốn xoá {len(proj_list)} dự án sau: {proj_names} ?")
 
                 c1, c2 = st.columns(2)
                 with c1:
@@ -562,8 +563,9 @@ def admin_app(user):
                         for proj_name in proj_list:
                             supabase.table("tasks").delete().eq("project", proj_name).execute()
                             supabase.table("projects").delete().eq("name", proj_name).execute()
+
+                            # Cập nhật lại trường project_manager_of / project_leader_of trong users
                             for colu in ("project_manager_of", "project_leader_of"):
-                                
                                 data_users = supabase.table("users").select(f"username, {colu}").not_.is_(colu, None).execute()
                                 for user in data_users.data:
                                     username = user["username"]
@@ -573,15 +575,16 @@ def admin_app(user):
                                     new_csv = ",".join(parts) if parts else None
                                     supabase.table("users").update({colu: new_csv}).eq("username", username).execute()
 
-                        
-                        st.success("🗑️ Đã xoá các dự án được chọn")
-                        del st.session_state["confirm_delete"]
+                        st.success("🗑️ Đã xoá các dự án được chọn.")
+                        st.session_state["confirm_delete"] = None
                         refresh_all_cache()
+                        st.rerun()
 
                 with c2:
                     if st.button("❌ No, huỷ", key="confirm_delete_no"):
-                        st.info("Đã huỷ thao tác xoá")
-                        del st.session_state["confirm_delete"]
+                        st.info("Đã huỷ thao tác xoá.")
+                        st.session_state["confirm_delete"] = None
+
         else:
             st.info("⚠️ Chưa có dự án nào")
 
