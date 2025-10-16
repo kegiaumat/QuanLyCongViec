@@ -1458,20 +1458,25 @@ def admin_app(user):
 
 
                     # --- Lấy dữ liệu mới: chỉ lưu đến ngày hiện tại ---
-                    # --- Lấy dữ liệu mới: chỉ lưu đến ngày hiện tại ---
                     def cell_to_code(cell):
-                        """Chuyển '🟩 K', '🟥 P', '🟩 K/🟥 P' ... => 'K', 'P', 'K/P'"""
+                        """Chuyển '🟩 K', '🟥 P', '🟩 K/🟥 P', '🟧 K:2' ... => 'K', 'P', 'K/P', 'K:2'"""
                         if cell is None:
                             return ""
                         s = str(cell).strip()
                         if not s:
                             return ""
+                        # loại emoji và khoảng trắng
+                        s = re.sub(r"[\U0001F300-\U0001FAFF]", "", s)
+                        s = re.sub(r"\s+", " ", s).strip()
+                        # nếu là "🟧 K:2" → còn lại "K:2"
                         parts = [p.strip() for p in s.split("/")]
-                        normalized = []
+                        cleaned = []
                         for p in parts:
-                            toks = p.split()
-                            normalized.append(toks[-1] if toks else "")
-                        return "/".join(normalized).strip()
+                            if " " in p:
+                                p = p.split(" ", 1)[-1]
+                            cleaned.append(p.strip())
+                        return "/".join(cleaned)
+
 
                     codes = {}
                     for col in day_cols:
