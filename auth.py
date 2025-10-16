@@ -263,8 +263,9 @@ def show_indirect_task_form(role, supabase, username, users=None):
 
     with st.form(key=f"{role}_add_indirect"):
         task_name = st.text_input("Tên công việc")
-        start_time = st.time_input("Giờ bắt đầu", datetime.time(8, 0))
-        end_time = st.time_input("Giờ kết thúc", datetime.time(17, 0))
+        start_time = st.time_input("Giờ bắt đầu", time(8, 0))
+
+        end_time   = st.time_input("Giờ kết thúc", time(17, 0))
         note = st.text_area("Ghi chú")
 
         # Nếu là admin hoặc project manager thì có thể chọn người khác
@@ -278,7 +279,8 @@ def show_indirect_task_form(role, supabase, username, users=None):
         if submitted:
             start_str = start_time.strftime("%H:%M")
             end_str = end_time.strftime("%H:%M")
-            today = datetime.date.today()
+            today = date.today()
+
             note_text = f"⏰ {start_str} - {end_str} ({today} - {today}) {note}".strip()
 
             # Tính khối lượng
@@ -369,7 +371,8 @@ def show_indirect_task_table(role, supabase, username, df_tasks):
             # --- Tính lại khối lượng ---
             try:
                 from auth import calc_hours
-                today = datetime.date.today()
+                today = date.today()
+
                 hours = calc_hours(today, today, start_time, end_time)
                 if hours > 0:
                     update_data["khoi_luong"] = round(hours, 2)
