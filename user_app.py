@@ -145,16 +145,42 @@ def user_app(user):
                         end_time = row.get("Giờ kết thúc", "")
                         note_text = str(row.get("Ghi chú", "")).strip()
 
-                        # 🧹 Xóa phần giờ cũ trong ghi chú (nếu có)
-                        note_text = re.sub(r"^⏰\s*\d{2}:\d{2}\s*-\s*\d{2}:\d{2}.*?\)", "", note_text).strip()
+                        # 🧹 Xóa phần giờ cũ trong ghi chú (nếu có)                        
+                        match_date = re.search(r"\(\d{4}-\d{2}-\d{2}\s*-\s*\d{4}-\d{2}-\d{2}\)", note_text)
+                        date_part = match_date.group(0) if match_date else ""
 
-                        # 🕒 Tạo ghi chú mới với giờ mới
+                        # 🧹 Xóa phần giờ cũ trong ghi chú, chỉ giữ phần ngày và nội dung sau
+                        note_text = re.sub(r"^⏰\s*\d{2}:\d{2}\s*-\s*\d{2}:\d{2}", "", note_text).strip()
+
+                        # 🕒 Gắn lại giờ mới và phần ngày
                         if start_time and end_time:
                             start_str = start_time.strftime("%H:%M") if hasattr(start_time, "strftime") else str(start_time)
                             end_str = end_time.strftime("%H:%M") if hasattr(end_time, "strftime") else str(end_time)
-                            new_note = f"⏰ {start_str} - {end_str} {note_text}".strip()
+                            new_note = f"⏰ {start_str} - {end_str} {date_part} {note_text}".strip()
                         else:
                             new_note = note_text
+
+                        update_data["note"] = new_note
+
+                        # 🧮 Tính lại khối lượng (giờ)
+                        if start_time and end_time:
+                            try:
+                                fmt = "%H:%M"
+                                start_dt = datetime.strptime(str(start_time), fmt)
+                                end_dt = datetime.strptime(str(end_time), fmt)
+
+                                # Nếu kết thúc < bắt đầu → sang ngày hôm sau
+                                if end_dt < start_dt:
+                                    end_dt = end_dt.replace(day=start_dt.day + 1)
+
+                                hours = (end_dt - start_dt).total_seconds() / 3600
+                                if hours > 0:
+                                    update_data["khoi_luong"] = round(hours, 2)
+                                    # Cập nhật ngay trên DataFrame hiển thị
+                                    df_show.at[i, "Khối lượng (giờ)"] = round(hours, 2)
+                            except Exception as e:
+                                st.warning(f"Lỗi tính khối lượng: {e}")
+
 
                         update_data["note"] = new_note
 
