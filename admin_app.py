@@ -1458,17 +1458,32 @@ def admin_app(user):
 
 
                     # --- Lấy dữ liệu mới: chỉ lưu đến ngày hiện tại ---
+                    # --- Lấy dữ liệu mới: chỉ lưu đến ngày hiện tại ---
+                    def cell_to_code(cell):
+                        """Chuyển '🟩 K', '🟥 P', '🟩 K/🟥 P' ... => 'K', 'P', 'K/P'"""
+                        if cell is None:
+                            return ""
+                        s = str(cell).strip()
+                        if not s:
+                            return ""
+                        parts = [p.strip() for p in s.split("/")]
+                        normalized = []
+                        for p in parts:
+                            toks = p.split()
+                            normalized.append(toks[-1] if toks else "")
+                        return "/".join(normalized).strip()
+
                     codes = {}
                     for col in day_cols:
-                        if not isinstance(row[col], str):
-                            continue
                         try:
                             day = int(col.split("/")[0])
                             date_in_month = selected_month.replace(day=day).date()
-                            if date_in_month <= today:  # chỉ lưu <= hôm nay
-                                codes[f"{day:02d}"] = remove_emoji(row[col])
+                            if date_in_month <= today:
+                                val = cell_to_code(row.get(col))
+                                codes[f"{day:02d}"] = val
                         except Exception:
-                            continue  # bỏ qua nếu lỗi parsing
+                            pass
+
                     print("✅", uname, codes)
 
                     # --- Bỏ qua nếu hoàn toàn không có dữ liệu ---
@@ -1553,7 +1568,6 @@ def admin_app(user):
                             # --- User chưa có dữ liệu -> insert mới ---
                             payload = {
                                 "username": uname,
-                                "display_name": display_name,
                                 "months": [month_str],
                                 "data": {month_str: codes}
 
