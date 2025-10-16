@@ -85,22 +85,39 @@ def project_manager_app(user):
     # st.set_page_config(layout="wide")
     supabase = get_connection()
     try:
-        supabase.table("users").update({"last_seen": datetime.utcnow().isoformat()}).eq("username", user[1]).execute()
+        # 🕒 Cập nhật thời điểm truy cập cuối cùng của user
+        supabase.table("users").update(
+            {"last_seen": datetime.utcnow().isoformat()}
+        ).eq("username", user[1]).execute()
+    except Exception as e:
+        st.warning(f"⚠️ Không thể cập nhật thời gian truy cập: {e}")
 
+    # 🧭 Tải danh sách người dùng
+    try:
         data = supabase.table("users").select("username, display_name").execute()
         df_users = pd.DataFrame(data.data)
-        user_map = dict(zip(df_users["username"], df_users["display_name"]))
+    except Exception as e:
+        st.error(f"❌ Lỗi khi tải danh sách người dùng: {e}")
+        df_users = pd.DataFrame(columns=["username", "display_name"])
 
-        username = user[1]
+    # ✅ Kiểm tra dữ liệu tránh KeyError
+    if df_users.empty or "username" not in df_users.columns:
+        st.error("⚠️ Không tải được danh sách người dùng. Vui lòng kiểm tra kết nối Supabase hoặc bảng 'users'.")
+        return
 
-        managed = _load_managed_projects(supabase, username)
-        projects_df = _load_visible_projects(supabase, managed, username)
+    # 🧩 Tạo map username → display_name (nếu thiếu display_name thì fallback bằng username)
+    user_map = dict(zip(df_users["username"], df_users.get("display_name", df_users["username"])))
 
-        if projects_df.empty:
-            st.warning("⚠️ Chưa có dự án nào bạn có quyền xem hoặc quản lý.")
-            return
+    username = user[1]
 
-        choice = st.sidebar.radio("Chức năng", ["Quản lý Giao Việc", "Thống kê Công Việc"])
+    managed = _load_managed_projects(supabase, username)
+    projects_df = _load_visible_projects(supabase, managed, username)
+
+    if projects_df.empty:
+        st.warning("⚠️ Chưa có dự án nào bạn có quyền xem hoặc quản lý.")
+        return
+
+    choice = st.sidebar.radio("Chức năng", ["Quản lý Giao Việc", "Thống kê Công Việc"])
 
         # ===========================================================
         # 1) QUẢN LÝ GIAO VIỆC / NHIỆM VỤ CỦA TÔI
@@ -378,19 +395,22 @@ def project_manager_app(user):
                 data = supabase.table("tasks").select("id, task, khoi_luong, deadline, note, progress")\
                     .eq("project", project).eq("assignee", username).execute()
                 my_tasks = pd.DataFrame(data.data)
-                # 🧹 Loại bỏ trùng lặp thời gian hiển thị trong note (nếu có)
+                
+                
+                # 🧹 Làm sạch ghi chú: loại bỏ lặp giờ/ngày nếu có
                 if not my_tasks.empty and "note" in my_tasks.columns:
-                    cleaned_notes = []
-                    for n in my_tasks["note"]:
-                        if isinstance(n, str):
-                            # Nếu note chứa 2 lần cùng mẫu thời gian — giữ 1
-                            parts = n.split("⏰")
-                            if len(parts) > 2:
-                                n = "⏰" + parts[1].strip()
-                            cleaned_notes.append(n.strip())
-                        else:
-                            cleaned_notes.append("")
-                    my_tasks["note"] = cleaned_notes
+                    def clean_note(n: str):
+                        if not isinstance(n, str) or not n.strip():
+                            return ""
+                        # Nếu có nhiều hơn 1 ký hiệu "⏰", chỉ giữ đoạn đầu tiên
+                        parts = n.split("⏰")
+                        if len(parts) > 2:
+                            return "⏰" + parts[1].strip()  # giữ phần đầu tiên
+                        return n.strip()
+
+                    my_tasks["note"] = my_tasks["note"].map(clean_note)
+
+
 
                 if my_tasks.empty:
                     st.warning("⚠️ Bạn chưa có công việc nào trong dự án này.")
