@@ -632,7 +632,13 @@ def project_manager_app(user):
         
         data = supabase.table("tasks").select("*").in_("project", selected_projects).execute()
         df = pd.DataFrame(data.data)
-        df["assignee"] = df["assignee"].map(user_map).fillna(df["assignee"])
+
+        # 🛡️ Kiểm tra cột assignee để tránh KeyError
+        if "assignee" in df.columns:
+            df["assignee"] = df["assignee"].map(user_map).fillna(df["assignee"])
+        else:
+            st.warning("⚠️ Dữ liệu tasks không có cột 'assignee'. Vui lòng kiểm tra bảng 'tasks' trên Supabase.")
+            df["assignee"] = "Không xác định"
 
         if df.empty:
             st.info("⚠️ Không có dữ liệu công việc.")
