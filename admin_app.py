@@ -1496,10 +1496,32 @@ def admin_app(user):
                                     return ""
                                 return str(v).strip()
 
-                            old_clean = {k: normalize(v) for k, v in (old_month_data or {}).items()}
-                            new_clean = {k: normalize(v) for k, v in (codes or {}).items()}
+                            
+                            # --- So sánh kỹ dữ liệu mới & cũ (ổn định hơn) ---
+                            def normalize(v):
+                                if v in [None, "None", "nan", "NaN"]:
+                                    return ""
+                                return str(v).strip()
 
-                            has_changed = old_clean != new_clean
+                            try:
+                                old_json = json.loads(json.dumps(old_month_data or {}, ensure_ascii=False))
+                            except Exception:
+                                old_json = old_month_data or {}
+
+                            try:
+                                new_json = json.loads(json.dumps(codes or {}, ensure_ascii=False))
+                            except Exception:
+                                new_json = codes or {}
+
+                            old_clean = {str(k).zfill(2): normalize(v) for k, v in old_json.items()}
+                            new_clean = {str(k).zfill(2): normalize(v) for k, v in new_json.items()}
+
+                            # ✅ Nếu khác độ dài hoặc có ngày thay đổi, coi là khác
+                            if len(old_clean) != len(new_clean):
+                                has_changed = True
+                            else:
+                                has_changed = any(new_clean.get(k) != old_clean.get(k) for k in new_clean)
+
 
 
                             # --- Update nếu có thay đổi ---
