@@ -117,11 +117,21 @@ def project_manager_app(user):
             is_manager = project in managed
 
             # Chuẩn hoá job_catalog: NULL -> 'group'
-            supabase.table("job_catalog").update({"project_type": "group"}).is_("project_type", None).execute()
+            # ✅ An toàn hơn: Chuẩn hoá job_catalog để tránh lỗi NULL / mất kết nối
+            try:
+                supabase.table("job_catalog").update({"project_type": "group"}).is_("project_type", None).execute()
+            except Exception:
+                st.warning("⚠️ Không thể chuẩn hoá dữ liệu job_catalog, thử lại sau.")
 
-            # Danh mục công việc cho loại dự án
-            data = supabase.table("job_catalog").select("id, name, unit, parent_id").eq("project_type", proj_type).execute()
-            jobs = pd.DataFrame(data.data)
+            # ✅ Lấy danh mục công việc an toàn
+            try:
+                data = supabase.table("job_catalog").select("id, name, unit, parent_id") \
+                    .eq("project_type", proj_type).execute()
+                jobs = pd.DataFrame(data.data)
+            except Exception as e:
+                st.error(f"❌ Lỗi khi tải danh mục công việc: {e}")
+                st.stop()
+
             parent_jobs = jobs[jobs["parent_id"].isnull()].sort_values("name")
 
             # =======================================================
