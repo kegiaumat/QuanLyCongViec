@@ -74,6 +74,22 @@ def user_app(user):
             return "", ""
 
         df_tasks["Giờ bắt đầu"], df_tasks["Giờ kết thúc"] = zip(*df_tasks["note"].map(extract_times))
+        # Chuyển "HH:MM" -> datetime.time để dùng được với TimeColumn
+        def _to_time(x):
+            if x is None or str(x).strip() == "":
+                return None
+            try:
+                # đúng định dạng HH:MM
+                return pd.to_datetime(str(x), format="%H:%M").time()
+            except Exception:
+                try:
+                    # fallback nếu về sau dữ liệu có giây HH:MM:SS
+                    return pd.to_datetime(str(x)).time()
+                except Exception:
+                    return None
+
+        df_tasks["Giờ bắt đầu"] = df_tasks["Giờ bắt đầu"].map(_to_time)
+        df_tasks["Giờ kết thúc"] = df_tasks["Giờ kết thúc"].map(_to_time)
 
         if df_tasks.empty:
             st.warning("⚠️ Bạn chưa có công việc nào trong dự án này.")
