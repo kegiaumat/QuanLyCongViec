@@ -1255,7 +1255,7 @@ def admin_app(user):
 
         # ==== DANH SÁCH KÝ HIỆU (chỉ ký tự, không emoji) ====
         code_options = [
-            "K", "K/2", "P", "H", "TQ", "BD", "L", "O", "VR",
+            "K", "K:2", "P", "H", "TQ", "BD", "L", "O", "VR",
             "NM", "TS", "VS", "TV",
             "K/P", "P/K", "K/H", "H/K", "K/TQ", "TQ/K", "K/NM", "NM/K",
             "K/TS", "TS/K", "K/VR", "VR/K", "K/O", "O/K",
@@ -1265,7 +1265,7 @@ def admin_app(user):
 
         # ==== MAP EMOJI ====
         emoji_map = {
-            "K": "🟩", "K/2": "🟧", "P": "🟥", "H": "🟦", "TQ": "🟨", "BD": "🟧",
+            "K": "🟩", "K:2": "🟧", "P": "🟥", "H": "🟦", "TQ": "🟨", "BD": "🟧",
             "L": "🟫", "O": "🟩", "VR": "⬛", "NM": "🟪", "TS": "🟪",
             "VS": "🟦", "TV": "🟨"
         }
@@ -1396,7 +1396,7 @@ def admin_app(user):
                 "P/K","H/K","TQ/K","NM/K","O/K","TS/K","VS/K","VR/K","ĐT/K","L/K",
                 "K/P","K/H","K/TQ","K/NM","K/O","K/TS","K/VS","K/VR","K/ĐT","K/L"
             )*0.5
-            total_K += cnt("K/2") * 0.5            
+            total_K += cnt("K:2") * 0.5            
             total_H = cnt("H")
             total_P = cnt("P")
             total_BHXH = cnt("O","TS","VS")
@@ -1589,7 +1589,7 @@ def admin_app(user):
                 return c
 
             total_K = cnt("K") - cnt("K/P", "K/H", "K/TQ", "K/NM", "K/O", "K/TS", "K/VR", "K/ĐT", "K/L") * 0.5
-            total_K += cnt("K/2") * 0.5
+            total_K += cnt("K:2") * 0.5
             total_H = cnt("H")
             total_P = cnt("P")
             total_BHXH = cnt("O", "TS", "VS")
