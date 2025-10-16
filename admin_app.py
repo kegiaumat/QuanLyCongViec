@@ -1438,9 +1438,17 @@ def admin_app(user):
 
                     # --- Hàm bỏ emoji ---
                     def remove_emoji(txt):
-                        if not isinstance(txt, str):
+                        """Loại emoji, giữ nguyên ký hiệu chuẩn"""
+                        if not txt:
                             return ""
-                        return txt.split()[-1] if " " in txt else txt
+                        if isinstance(txt, str):
+                            txt = txt.strip()
+                            # Nếu dạng "🟩 K" hoặc "🟧 K:2"
+                            if " " in txt:
+                                return txt.split(" ")[-1].strip()
+                            return txt
+                        return ""
+
 
                     # --- Lấy dữ liệu mới: chỉ lưu đến ngày hiện tại ---
                     codes = {}
@@ -1454,6 +1462,7 @@ def admin_app(user):
                                 codes[f"{day:02d}"] = remove_emoji(row[col])
                         except Exception:
                             continue  # bỏ qua nếu lỗi parsing
+                    print("✅", uname, codes)
 
                     # --- Bỏ qua nếu hoàn toàn không có dữ liệu ---
                     # --- Nếu bảng công rỗng (DB trống) => vẫn insert mới để khởi tạo ---
