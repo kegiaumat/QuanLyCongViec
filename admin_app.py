@@ -1469,7 +1469,9 @@ def admin_app(user):
                     for col in day_cols:
                         try:
                             day = int(col.split("/")[0])
-                            date_in_month = selected_month.replace(day=day).date()
+                            base_date = selected_month.date() if hasattr(selected_month, "date") else selected_month
+
+                            date_in_month = selected_month.replace(day=day)
                             if date_in_month <= today:
                                 val = cell_to_code(row.get(col))
                                 codes[f"{day:02d}"] = val
