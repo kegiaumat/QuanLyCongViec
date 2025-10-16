@@ -630,7 +630,8 @@ def project_manager_app(user):
 
         qmarks = ",".join(["%s"] * len(selected_projects))
         
-        data = supabase.table("tasks").select("*").in_("project", selected_projects).execute()
+        # ✅ Lấy đầy đủ cột bao gồm assignee để tránh KeyError
+        data = supabase.table("tasks").select("id, project, task, assignee, khoi_luong, note, progress, created_at, deadline").in_("project", selected_projects).execute()
         df = pd.DataFrame(data.data)
 
         # 🛡️ Kiểm tra cột assignee để tránh KeyError
