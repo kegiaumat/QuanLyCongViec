@@ -893,20 +893,24 @@ def admin_app(user):
                         def split_times(note_text: str):
                             if not isinstance(note_text, str):
                                 return "", "", note_text
-                            # match HH:MM hoặc HH:MM:SS
-                            m = re.search(r'(\d{1,2}:\d{2}(?::\d{2})?)\s*[-–]\s*(\d{1,2}:\d{2}(?::\d{2})?)', note_text)
+
+                            # match giờ (có hoặc không có giây) + ngày trong ngoặc (nếu có)
+                            pattern = r'⏰\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*[-–]\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*(\([^)]+\))?'
+                            m = re.search(pattern, note_text)
                             if not m:
                                 return "", "", note_text
 
                             start, end = m.group(1), m.group(2)
+                            date_part = m.group(3) or ""  # phần ngày trong ngoặc
 
-                            # bỏ phần "⏰ … - … (YYYY-MM-DD -/→ YYYY-MM-DD)" nếu có
-                            note_rest = re.sub(
-                                r'⏰\s*\d{1,2}:\d{2}(?::\d{2})?\s*[-–]\s*\d{1,2}:\d{2}(?::\d{2})?(?:\s*\(\d{4}-\d{2}-\d{2}\s*[–\-→]\s*\d{4}-\d{2}-\d{2}\))?',
-                                "",
-                                note_text
-                            ).strip()
+                            # ✅ Giữ nguyên phần ngày
+                            time_part = f"⏰ {start} - {end} {date_part}".strip()
+
+                            # Bỏ phần "⏰ ... (ngày)" ra khỏi ghi chú, chỉ để lại nội dung sau
+                            note_rest = re.sub(pattern, "", note_text).strip()
+
                             return start, end, note_rest
+
 
 
                         rows = []
