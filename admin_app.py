@@ -939,13 +939,21 @@ def admin_app(user):
                         rows = []
                         for _, r in df_cong.iterrows():
                             stime, etime, date_part, note_rest = split_times(r.get("note", ""))
+
+                            # 🧩 Hiển thị ghi chú đầy đủ giờ và ngày (như user_app)
+                            if stime and etime:
+                                full_note_display = f"⏰ {stime} - {etime} {date_part} {note_rest}".strip()
+                            else:
+                                full_note_display = note_rest.strip()
+
                             rows.append({
                                 "ID": r["id"],
                                 "Công việc": r["task"],
                                 "Giờ bắt đầu": stime,
                                 "Giờ kết thúc": etime,
-                                "Ghi chú": note_rest,
-                                "__date_part": date_part,   # giữ ngày để khi lưu ghép lại
+                                "Ghi chú": full_note_display,  # hiển thị đầy đủ
+                                "__note_raw": note_rest,        # lưu lại phần ghi chú gốc
+                                "__date_part": date_part,       # giữ ngày để khi lưu ghép lại
                                 "Tiến độ (%)": int(pd.to_numeric(r.get("progress", 0), errors="coerce") or 0),
                             })
 
