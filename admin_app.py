@@ -197,24 +197,28 @@ def admin_app(user):
                         new_val = row[col]
                         old_val = original[col]
 
-                        # Chuẩn hóa dữ liệu kiểu list
+                        # Chuẩn hóa danh sách về chuỗi
                         if col == "Vai trò" and isinstance(new_val, list):
                             new_val = ", ".join(new_val)
                         if col in ["Chủ nhiệm dự án", "Chủ trì dự án"] and isinstance(new_val, list):
                             new_val = "|".join(new_val)
 
-                        # Chuẩn hóa None / NaT / rỗng
-                        if not isinstance(new_val, (list, dict)) and pd.isna(new_val):
-                            new_val = None
-                        if not isinstance(old_val, (list, dict)) and pd.isna(old_val):
-                            old_val = None
+                        # Chuẩn hóa None, NaN, 'None', chuỗi trống
+                        def normalize_value(v):
+                            if isinstance(v, (list, dict)):
+                                return v
+                            if pd.isna(v) or v in [None, "None", "nan", "", "NaT"]:
+                                return None
+                            return str(v).strip()
 
+                        new_val = normalize_value(new_val)
+                        old_val = normalize_value(old_val)
 
-                        # So sánh theo giá trị thực, không ép kiểu chuỗi
+                        # Chỉ coi là khác nếu giá trị thật sự thay đổi
                         if new_val != old_val:
                             update_data[db_field] = new_val
 
-                    # ✅ Chỉ update khi có thay đổi
+                    # ✅ Chỉ update user nào có thay đổi thật
                     if update_data:
                         try:
                             supabase.table("users").update(update_data).eq("username", username).execute()
@@ -228,6 +232,7 @@ def admin_app(user):
                     st.session_state.df_users = load_users_cached()
                 else:
                     st.info("ℹ️ Không có user nào thay đổi, không cần cập nhật.")
+
 
 
 
