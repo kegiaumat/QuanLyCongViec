@@ -894,22 +894,23 @@ def admin_app(user):
                             if not isinstance(note_text, str):
                                 return "", "", note_text
 
-                            # match giờ (có hoặc không có giây) + ngày trong ngoặc (nếu có)
-                            pattern = r'⏰\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*[-–]\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*(\([^)]+\))?'
+                            # Nhận cả HH:MM hoặc HH:MM:SS và giữ nguyên phần ngày trong ngoặc
+                            pattern = r'(⏰\s*\d{1,2}:\d{2}(?::\d{2})?\s*[-–]\s*\d{1,2}:\d{2}(?::\d{2})?\s*\([^)]+\))'
                             m = re.search(pattern, note_text)
                             if not m:
                                 return "", "", note_text
 
-                            start, end = m.group(1), m.group(2)
-                            date_part = m.group(3) or ""  # phần ngày trong ngoặc
+                            # phần đầy đủ có đồng hồ + ngày
+                            full_time_part = m.group(1)
 
-                            # ✅ Giữ nguyên phần ngày
-                            time_part = f"⏰ {start} - {end} {date_part}".strip()
+                            # tách riêng giờ bắt đầu và kết thúc để hiển thị cột
+                            sub_m = re.search(r'(\d{1,2}:\d{2}(?::\d{2})?).*[-–].*(\d{1,2}:\d{2}(?::\d{2})?)', full_time_part)
+                            start = sub_m.group(1) if sub_m else ""
+                            end = sub_m.group(2) if sub_m else ""
 
-                            # Bỏ phần "⏰ ... (ngày)" ra khỏi ghi chú, chỉ để lại nội dung sau
-                            note_rest = re.sub(pattern, "", note_text).strip()
+                            # Giữ nguyên phần có đồng hồ trong ghi chú (không xóa đi nữa)
+                            return start, end, note_text
 
-                            return start, end, note_rest
 
 
 
