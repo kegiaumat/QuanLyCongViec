@@ -122,483 +122,483 @@ def project_manager_app(user):
         # ===========================================================
         # 1) QUẢN LÝ GIAO VIỆC / NHIỆM VỤ CỦA TÔI
         # ===========================================================
-        if choice == "Quản lý Giao Việc":
-            st.subheader("📝 Quản lý & Nhiệm vụ")
+    if choice == "Quản lý Giao Việc":
+        st.subheader("📝 Quản lý & Nhiệm vụ")
 
-            # Chọn dự án
-            project = st.selectbox("Chọn dự án", projects_df["name"].tolist(), key="pm_proj_select")
-            prow = projects_df.loc[projects_df["name"] == project].iloc[0]
-            proj_deadline = prow["deadline"]
-            proj_type = (prow["project_type"] or "group").strip().lower()
-            is_public = (proj_type == "public")
-            is_manager = project in managed
+        # Chọn dự án
+        project = st.selectbox("Chọn dự án", projects_df["name"].tolist(), key="pm_proj_select")
+        prow = projects_df.loc[projects_df["name"] == project].iloc[0]
+        proj_deadline = prow["deadline"]
+        proj_type = (prow["project_type"] or "group").strip().lower()
+        is_public = (proj_type == "public")
+        is_manager = project in managed
 
-            # Chuẩn hoá job_catalog: NULL -> 'group'
-            # ✅ An toàn hơn: Chuẩn hoá job_catalog để tránh lỗi NULL / mất kết nối
-            try:
-                supabase.table("job_catalog").update({"project_type": "group"}).is_("project_type", None).execute()
-            except Exception:
-                st.warning("⚠️ Không thể chuẩn hoá dữ liệu job_catalog, thử lại sau.")
+        # Chuẩn hoá job_catalog: NULL -> 'group'
+        # ✅ An toàn hơn: Chuẩn hoá job_catalog để tránh lỗi NULL / mất kết nối
+        try:
+            supabase.table("job_catalog").update({"project_type": "group"}).is_("project_type", None).execute()
+        except Exception:
+            st.warning("⚠️ Không thể chuẩn hoá dữ liệu job_catalog, thử lại sau.")
 
-            # ✅ Lấy danh mục công việc an toàn
-            try:
-                data = supabase.table("job_catalog").select("id, name, unit, parent_id") \
-                    .eq("project_type", proj_type).execute()
-                jobs = pd.DataFrame(data.data)
-            except Exception as e:
-                st.error(f"❌ Lỗi khi tải danh mục công việc: {e}")
-                st.stop()
+        # ✅ Lấy danh mục công việc an toàn
+        try:
+            data = supabase.table("job_catalog").select("id, name, unit, parent_id") \
+                .eq("project_type", proj_type).execute()
+            jobs = pd.DataFrame(data.data)
+        except Exception as e:
+            st.error(f"❌ Lỗi khi tải danh mục công việc: {e}")
+            st.stop()
 
-            parent_jobs = jobs[jobs["parent_id"].isnull()].sort_values("name")
+        parent_jobs = jobs[jobs["parent_id"].isnull()].sort_values("name")
 
-            # =======================================================
-            # A. QUẢN LÝ DỰ ÁN: giao việc + xem/sửa toàn bộ công việc
-            # =======================================================
-            if is_manager:
-                st.info("🔐 Bạn là **Quản lý dự án** này — có quyền giao việc cho mọi người.")
+        # =======================================================
+        # A. QUẢN LÝ DỰ ÁN: giao việc + xem/sửa toàn bộ công việc
+        # =======================================================
+        if is_manager:
+            st.info("🔐 Bạn là **Quản lý dự án** này — có quyền giao việc cho mọi người.")
 
-                # ---- Giao nhiều việc cùng lúc ----
-                all_users_display = df_users["display_name"].tolist()
-                assignee_display = st.selectbox("Giao việc cho", all_users_display, key="pm_assignee")
-                assignee = df_users.loc[df_users["display_name"] == assignee_display, "username"].iloc[0]
+            # ---- Giao nhiều việc cùng lúc ----
+            all_users_display = df_users["display_name"].tolist()
+            assignee_display = st.selectbox("Giao việc cho", all_users_display, key="pm_assignee")
+            assignee = df_users.loc[df_users["display_name"] == assignee_display, "username"].iloc[0]
 
 
-                if "pm_rows" not in st.session_state:
-                    st.session_state.pm_rows = [0]
+            if "pm_rows" not in st.session_state:
+                st.session_state.pm_rows = [0]
 
-                st.markdown("**Nhập các dòng giao việc**")
-                h1, h2, h3, h4, h5 = st.columns([2, 2, 2, 2, 2])
-                h1.markdown("**Đầu mục**")
-                h2.markdown("**Công việc**")
+            st.markdown("**Nhập các dòng giao việc**")
+            h1, h2, h3, h4, h5 = st.columns([2, 2, 2, 2, 2])
+            h1.markdown("**Đầu mục**")
+            h2.markdown("**Công việc**")
 
-                if is_public:
-                    h3.markdown("**Giờ bắt đầu**")
-                    h4.markdown("**Giờ kết thúc**")
+            if is_public:
+                h3.markdown("**Giờ bắt đầu**")
+                h4.markdown("**Giờ kết thúc**")
+            else:
+                h3.markdown("**Khối lượng**")
+                h4.markdown("**Đơn vị**")
+
+            h5.markdown("**Deadline**")
+
+
+            for i, _ in enumerate(st.session_state.pm_rows):
+                c1, c2, c3, c4, c5 = st.columns([2, 2, 2, 2, 2])
+                with c1:
+                    p_choice = st.selectbox(
+                        "", parent_jobs["name"].tolist(),
+                        key=f"pm_parent_{i}", label_visibility="collapsed"
+                    )
+                pid = int(parent_jobs.loc[parent_jobs["name"] == p_choice, "id"].iloc[0])
+                childs = jobs[jobs["parent_id"] == pid].sort_values("name")
+                with c2:
+                    child_choice = st.selectbox(
+                        "", childs["name"].tolist(),
+                        key=f"pm_child_{i}", label_visibility="collapsed"
+                    )
+
+                task_name = child_choice or p_choice
+                unit = jobs.loc[jobs["name"] == task_name, "unit"].iloc[0] if task_name in jobs["name"].values else ""
+
+                if str(unit).strip().lower() == "công":
+                    with c3:
+                        st.time_input("", pd.to_datetime("08:00").time(), key=f"pm_start_{i}", label_visibility="collapsed")
+                    with c4:
+                        st.time_input("", pd.to_datetime("17:00").time(), key=f"pm_end_{i}", label_visibility="collapsed")
+                    with c5:
+                        st.empty()  # không dùng deadline cho công nhật
                 else:
-                    h3.markdown("**Khối lượng**")
-                    h4.markdown("**Đơn vị**")
+                    with c3:
+                        st.number_input("", min_value=0.0, step=0.1, key=f"pm_qty_{i}", label_visibility="collapsed")
+                    with c4:
+                        st.text_input("", value=unit, key=f"pm_unit_{i}", disabled=True, label_visibility="collapsed")
+                    with c5:
+                        default_dl = pd.to_datetime(proj_deadline) if proj_deadline else None
+                        st.date_input("", value=default_dl, key=f"pm_deadline_{i}", label_visibility="collapsed")
 
-                h5.markdown("**Deadline**")
+            st.button("➕ Thêm dòng", key="pm_add_row", on_click=lambda: st.session_state.pm_rows.append(len(st.session_state.pm_rows)))
 
+            note_common = st.text_area("📝 Ghi chú chung", key="pm_note_common")
 
-                for i, _ in enumerate(st.session_state.pm_rows):
-                    c1, c2, c3, c4, c5 = st.columns([2, 2, 2, 2, 2])
-                    with c1:
-                        p_choice = st.selectbox(
-                            "", parent_jobs["name"].tolist(),
-                            key=f"pm_parent_{i}", label_visibility="collapsed"
-                        )
-                    pid = int(parent_jobs.loc[parent_jobs["name"] == p_choice, "id"].iloc[0])
-                    childs = jobs[jobs["parent_id"] == pid].sort_values("name")
-                    with c2:
-                        child_choice = st.selectbox(
-                            "", childs["name"].tolist(),
-                            key=f"pm_child_{i}", label_visibility="collapsed"
-                        )
-
+            if st.button("✅ Giao việc", key="pm_assign_btn"):
+                for i in range(len(st.session_state.pm_rows)):
+                    p_choice = st.session_state.get(f"pm_parent_{i}")
+                    child_choice = st.session_state.get(f"pm_child_{i}")
                     task_name = child_choice or p_choice
+                    if not task_name:
+                        continue
                     unit = jobs.loc[jobs["name"] == task_name, "unit"].iloc[0] if task_name in jobs["name"].values else ""
 
                     if str(unit).strip().lower() == "công":
-                        with c3:
-                            st.time_input("", pd.to_datetime("08:00").time(), key=f"pm_start_{i}", label_visibility="collapsed")
-                        with c4:
-                            st.time_input("", pd.to_datetime("17:00").time(), key=f"pm_end_{i}", label_visibility="collapsed")
-                        with c5:
-                            st.empty()  # không dùng deadline cho công nhật
-                    else:
-                        with c3:
-                            st.number_input("", min_value=0.0, step=0.1, key=f"pm_qty_{i}", label_visibility="collapsed")
-                        with c4:
-                            st.text_input("", value=unit, key=f"pm_unit_{i}", disabled=True, label_visibility="collapsed")
-                        with c5:
-                            default_dl = pd.to_datetime(proj_deadline) if proj_deadline else None
-                            st.date_input("", value=default_dl, key=f"pm_deadline_{i}", label_visibility="collapsed")
-
-                st.button("➕ Thêm dòng", key="pm_add_row", on_click=lambda: st.session_state.pm_rows.append(len(st.session_state.pm_rows)))
-
-                note_common = st.text_area("📝 Ghi chú chung", key="pm_note_common")
-
-                if st.button("✅ Giao việc", key="pm_assign_btn"):
-                    for i in range(len(st.session_state.pm_rows)):
-                        p_choice = st.session_state.get(f"pm_parent_{i}")
-                        child_choice = st.session_state.get(f"pm_child_{i}")
-                        task_name = child_choice or p_choice
-                        if not task_name:
-                            continue
-                        unit = jobs.loc[jobs["name"] == task_name, "unit"].iloc[0] if task_name in jobs["name"].values else ""
-
-                        if str(unit).strip().lower() == "công":
-                            stime = st.session_state.get(f"pm_start_{i}")
-                            etime = st.session_state.get(f"pm_end_{i}")
-                            time_txt = f"⏰ {stime} - {etime}" if stime and etime else ""
-                            note = (note_common + ("\n" if note_common and time_txt else "") + time_txt).strip()
-                            supabase.table("tasks").insert({
-                                "project": project,
-                                "task": task_name,
-                                "assignee": assignee,
-                                "note": note,
-                                "progress": 0
-                            }).execute()
-                        else:
-                            qty = float(st.session_state.get(f"pm_qty_{i}", 0) or 0)
-                            dl_val = st.session_state.get(f"pm_deadline_{i}")
-                            dl = pd.to_datetime(dl_val, errors="coerce")
-                            dl_str = dl.strftime("%Y-%m-%d") if pd.notna(dl) else None
-                            supabase.table("tasks").insert({
-                                "project": project,
-                                "task": task_name,
-                                "assignee": assignee,
-                                "deadline": dl_str,
-                                "khoi_luong": qty,
-                                "note": note_common,
-                                "progress": 0
-                            }).execute()
-                    
-                    st.success("✅ Đã giao việc")
-                    st.rerun()
-
-                # ---- Bảng tất cả công việc: sửa & lưu tiến độ ----
-                # ---- Bảng tất cả công việc: sửa & lưu tiến độ ----
-                st.subheader("📋 Tất cả công việc trong dự án")
-
-                
-                data = supabase.table("tasks").select("id, assignee, task, khoi_luong, deadline, note, progress").eq("project", project).execute()
-                df_all = pd.DataFrame(data.data)
-                df_all["assignee"] = df_all["assignee"].map(user_map).fillna(df_all["assignee"])
-
-                if df_all.empty:
-                    st.info("⚠️ Chưa có công việc nào trong dự án này.")
-                else:
-                    # Đổi tên cột sang tiếng Việt
-                    df_all = df_all.rename(columns={
-                        "id": "ID",
-                        "assignee": "Người thực hiện",
-                        "task": "Công việc",
-                        "khoi_luong": "Khối lượng",
-                        "deadline": "Deadline",
-                        "note": "Ghi chú",
-                        "progress": "Tiến độ (%)",
-                    })
-
-                    # Ép kiểu Deadline về datetime nếu có giá trị
-                    if "Deadline" in df_all.columns:
-                        df_all["Deadline"] = pd.to_datetime(df_all["Deadline"], errors="coerce")
-
-                    # 👉 Tạo bản hiển thị: ẩn cột ID và thêm cột Xóa?
-                    df_display = df_all.drop(columns=["ID"], errors="ignore").copy()
-                    df_display["Xóa?"] = False
-
-                    edited_df = st.data_editor(
-                        df_display,
-                        width="stretch",
-                        key=f"editor_all_{project}",
-                        hide_index=True,
-                        column_config={
-                            "Người thực hiện": st.column_config.TextColumn(disabled=True),
-                            "Công việc": st.column_config.TextColumn(disabled=True),
-                            "Khối lượng": st.column_config.NumberColumn("Khối lượng", min_value=0, step=0.25),
-                            "Deadline": st.column_config.DateColumn("Deadline", format="YYYY-MM-DD"),
-                            "Ghi chú": st.column_config.TextColumn(),
-                            "Tiến độ (%)": st.column_config.NumberColumn("Tiến độ (%)", min_value=0, max_value=100, step=1),
-                            "Xóa?": st.column_config.CheckboxColumn("Xóa?", help="Tick để xóa dòng này")
-                        }
-                    )
-
-                    col1, col2 = st.columns([1, 1])
-
-                    # Nút lưu cập nhật công việc
-                    with col1:                        
-                        if st.button("💾 Lưu cập nhật công việc", key=f"save_all_{project}"):
-                            supabase = get_connection()  # ✅ Tạo lại kết nối Supabase ngay trước khi update
-                        
-                            for i, row in edited_df.iterrows():
-                                task_id = int(df_all.iloc[i]["ID"])
-                                update_data = {}
-
-                                # --- Khối lượng ---
-                                if "Khối lượng" in row and not pd.isna(row["Khối lượng"]):
-                                    try:
-                                        val = float(row["Khối lượng"])
-                                        update_data["khoi_luong"] = int(val) if val.is_integer() else round(val, 2)
-                                    except Exception:
-                                        update_data["khoi_luong"] = 0
-
-                                # --- Tiến độ ---
-                                if "Tiến độ (%)" in row and not pd.isna(row["Tiến độ (%)"]):
-                                    try:
-                                        val = float(row["Tiến độ (%)"])
-                                        update_data["progress"] = int(val) if val.is_integer() else round(val, 2)
-                                    except Exception:
-                                        update_data["progress"] = 0
-
-                                # --- Deadline ---
-                                if "Deadline" in row and pd.notna(row["Deadline"]):
-                                    update_data["deadline"] = pd.to_datetime(row["Deadline"]).strftime("%Y-%m-%d")
-
-                                # --- Ghi chú ---
-                                if "Ghi chú" in row:
-                                    val = row["Ghi chú"]
-                                    if val is None or (isinstance(val, float) and pd.isna(val)):
-                                        val = ""
-                                    else:
-                                        val = str(val).strip()
-                                    update_data["note"] = val
-
-                                # --- Nếu có dữ liệu để cập nhật ---
-                                if update_data:
-                                    try:
-                                        supabase.table("tasks").update(update_data).eq("id", task_id).execute()
-                                    except Exception as e:
-                                        st.error(f"❌ Lỗi khi cập nhật task {task_id}: {e}")
-
-                        
-                            st.success("✅ Đã lưu cập nhật công việc vào cơ sở dữ liệu!")
-                            st.rerun()
-
-
-
-
-
-                    # Nút xóa các dòng đã chọn
-                    with col2:
-                        if st.button("🗑️ Xóa các dòng đã chọn", key=f"delete_all_{project}"):
-                            ids_to_delete = []
-                            for i, row in edited_df.iterrows():
-                                if row.get("Xóa?"):
-                                    ids_to_delete.append(int(df_all.iloc[i]["ID"]))
-                            if ids_to_delete:
-                                for tid in ids_to_delete:
-                                    supabase.table("tasks").delete().eq("id", tid).execute()
-                                
-                                st.success(f"✅ Đã xóa {len(ids_to_delete)} công việc")
-                                st.rerun()
-                            else:
-                                st.warning("⚠️ Chưa chọn dòng nào để xóa")
-
-
-
-            # =======================================================
-            # B. KHÔNG phải quản lý: chỉ sửa việc của mình + thêm ở Public
-            # =======================================================
-            # =======================================================
-            # B. KHÔNG phải quản lý: chỉ sửa việc của mình + thêm ở Public
-            # =======================================================
-            else:
-                st.info(
-                    "👤 Bạn **không phải quản lý** dự án này. "
-                    "Bạn có thể chỉnh **khối lượng** các việc của mình."
-                    + (" Bạn cũng có thể **thêm khối lượng mới** vì đây là dự án **public**." if is_public else "")
-                )
-
-                # ====== Danh sách công việc của chính user ======
-                data = supabase.table("tasks").select("id, task, khoi_luong, deadline, note, progress")\
-                    .eq("project", project).eq("assignee", username).execute()
-                my_tasks = pd.DataFrame(data.data)
-                
-                
-                # 🧹 Làm sạch ghi chú: loại bỏ lặp giờ/ngày nếu có
-                if not my_tasks.empty and "note" in my_tasks.columns:
-                    def clean_note(n: str):
-                        if not isinstance(n, str) or not n.strip():
-                            return ""
-                        # Nếu có nhiều hơn 1 ký hiệu "⏰", chỉ giữ đoạn đầu tiên
-                        parts = n.split("⏰")
-                        if len(parts) > 2:
-                            return "⏰" + parts[1].strip()  # giữ phần đầu tiên
-                        return n.strip()
-
-                    my_tasks["note"] = my_tasks["note"].map(clean_note)
-
-
-
-                if my_tasks.empty:
-                    st.warning("⚠️ Bạn chưa có công việc nào trong dự án này.")
-                else:
-                    # DataFrame hiển thị (ẩn ID nhưng vẫn giữ dữ liệu ID trong my_tasks)
-                    df_show = my_tasks.rename(columns={
-                        "task": "Công việc",
-                        "khoi_luong": "Khối lượng (giờ)" if is_public else "Khối lượng",
-                        "deadline": "Deadline",
-                        "note": "Ghi chú",
-                        "progress": "Tiến độ (%)"
-                    }).drop(columns=["id"])  # 👈 bỏ ID khỏi hiển thị
-
-                    # Thêm cột chọn để xóa
-                    df_show["Chọn"] = False
-
-                    # Nếu dự án Public -> bỏ Deadline và Tiến độ
-                    if is_public:
-                        drop_cols = [c for c in ["Deadline", "Tiến độ (%)"] if c in df_show.columns]
-                        df_show = df_show.drop(columns=drop_cols, errors="ignore")
-
-                    # Hiển thị bảng cho user chỉnh sửa (không có cột ID)
-                    edited = st.data_editor(
-                        df_show,
-                        key="my_tasks_editor",
-                        width="stretch",
-                        hide_index=True,
-                        column_config={
-                            "Công việc": st.column_config.TextColumn(disabled=True),
-                            "Ghi chú": st.column_config.TextColumn(),
-
-                            "Chọn": st.column_config.CheckboxColumn("Xóa?", help="Tick để xóa dòng này")
-                        }
-                    )
-
-                    col1, col2 = st.columns([2, 1])
-                    with col1:
-                        
-                        
-                        if st.button("💾 Lưu khối lượng của tôi", key="save_my_qty_btn"):
-                            for i, row in edited.iterrows():
-                                tid = int(my_tasks.iloc[i]["id"])
-
-                                # Lấy khối lượng tùy theo loại dự án
-                                qty_val = row.get("Khối lượng (giờ)") if is_public else row.get("Khối lượng")
-                                try:
-                                    new_qty = float(qty_val or 0)
-                                    if new_qty.is_integer():
-                                        new_qty = int(new_qty)
-                                except Exception:
-                                    new_qty = 0
-
-                                # Lấy ghi chú (note)
-                                note_val = row.get("Ghi chú")
-                                if note_val is None or (isinstance(note_val, float) and pd.isna(note_val)):
-                                    note_val = ""
-                                else:
-                                    note_val = str(note_val).strip()
-
-                                # Cập nhật cả khối lượng + ghi chú
-                                update_data = {"khoi_luong": new_qty, "note": note_val}
-
-                                supabase.table("tasks").update(update_data).eq("id", tid).execute()
-
-                            st.success("✅ Đã cập nhật khối lượng & ghi chú")
-                            st.rerun()
-
-
-
-                    with col2:
-                        if st.button("🗑️ Xóa các dòng đã chọn", key="delete_my_tasks_btn"):
-                            ids_to_delete = []
-                            for i, row in edited.iterrows():
-                                if row.get("Chọn"):
-                                    ids_to_delete.append(int(my_tasks.iloc[i]["id"]))
-                            if ids_to_delete:
-                                for tid in ids_to_delete:
-                                    supabase.table("tasks").delete().eq("id", tid).execute()
-                                
-                                st.success(f"✅ Đã xóa {len(ids_to_delete)} dòng")
-                                st.rerun()
-                            else:
-                                st.warning("⚠️ Chưa chọn dòng nào để xóa")
-
-                # ====== Tự thêm công việc cho bản thân (nếu Public) ======
-                if is_public:
-                    st.markdown("---")
-                    st.subheader("➕ Thêm khối lượng / công nhật cho bản thân")
-
-                    task_name = st.selectbox("Công việc", jobs["name"].tolist(), key="self_task")
-
-                    # ---- Chọn ngày & giờ (4 cột trên 1 hàng) ----
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        start_date = st.date_input("Ngày bắt đầu", key="my_start_date")
-                    with col2:
-                        start_time = st.time_input("Giờ bắt đầu", time(8, 0), key="my_start_time")
-                    with col3:
-                        end_date = st.date_input("Ngày kết thúc", key="my_end_date", value=start_date)
-                    with col4:
-                        end_time = st.time_input("Giờ kết thúc", time(17, 0), key="my_end_time")
-
-                    note = st.text_area("📝 Ghi chú (tuỳ chọn)", key="my_note")
-
-                    if st.button("➕ Thêm công nhật cho tôi", key="add_self_cong_btn"):
-                        total_hours = calc_hours(start_date, end_date, start_time, end_time)
-                        # 📝 Tạo ghi chú gọn, chỉ thêm 1 lần
-                        if note.strip():
-                            note_txt = f"⏰ {start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')} ({start_date} - {end_date}) {note.strip()}"
-                        else:
-                            note_txt = f"⏰ {start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')} ({start_date} - {end_date})"
-
-
+                        stime = st.session_state.get(f"pm_start_{i}")
+                        etime = st.session_state.get(f"pm_end_{i}")
+                        time_txt = f"⏰ {stime} - {etime}" if stime and etime else ""
+                        note = (note_common + ("\n" if note_common and time_txt else "") + time_txt).strip()
                         supabase.table("tasks").insert({
                             "project": project,
                             "task": task_name,
-                            "assignee": username,
-                            "khoi_luong": total_hours,
-                            "note": note_txt,
+                            "assignee": assignee,
+                            "note": note,
                             "progress": 0
                         }).execute()
-                        
-                        st.success(f"✅ Đã thêm {total_hours} giờ công cho công việc '{task_name}'")
+                    else:
+                        qty = float(st.session_state.get(f"pm_qty_{i}", 0) or 0)
+                        dl_val = st.session_state.get(f"pm_deadline_{i}")
+                        dl = pd.to_datetime(dl_val, errors="coerce")
+                        dl_str = dl.strftime("%Y-%m-%d") if pd.notna(dl) else None
+                        supabase.table("tasks").insert({
+                            "project": project,
+                            "task": task_name,
+                            "assignee": assignee,
+                            "deadline": dl_str,
+                            "khoi_luong": qty,
+                            "note": note_common,
+                            "progress": 0
+                        }).execute()
+                
+                st.success("✅ Đã giao việc")
+                st.rerun()
+
+            # ---- Bảng tất cả công việc: sửa & lưu tiến độ ----
+            # ---- Bảng tất cả công việc: sửa & lưu tiến độ ----
+            st.subheader("📋 Tất cả công việc trong dự án")
+
+            
+            data = supabase.table("tasks").select("id, assignee, task, khoi_luong, deadline, note, progress").eq("project", project).execute()
+            df_all = pd.DataFrame(data.data)
+            df_all["assignee"] = df_all["assignee"].map(user_map).fillna(df_all["assignee"])
+
+            if df_all.empty:
+                st.info("⚠️ Chưa có công việc nào trong dự án này.")
+            else:
+                # Đổi tên cột sang tiếng Việt
+                df_all = df_all.rename(columns={
+                    "id": "ID",
+                    "assignee": "Người thực hiện",
+                    "task": "Công việc",
+                    "khoi_luong": "Khối lượng",
+                    "deadline": "Deadline",
+                    "note": "Ghi chú",
+                    "progress": "Tiến độ (%)",
+                })
+
+                # Ép kiểu Deadline về datetime nếu có giá trị
+                if "Deadline" in df_all.columns:
+                    df_all["Deadline"] = pd.to_datetime(df_all["Deadline"], errors="coerce")
+
+                # 👉 Tạo bản hiển thị: ẩn cột ID và thêm cột Xóa?
+                df_display = df_all.drop(columns=["ID"], errors="ignore").copy()
+                df_display["Xóa?"] = False
+
+                edited_df = st.data_editor(
+                    df_display,
+                    width="stretch",
+                    key=f"editor_all_{project}",
+                    hide_index=True,
+                    column_config={
+                        "Người thực hiện": st.column_config.TextColumn(disabled=True),
+                        "Công việc": st.column_config.TextColumn(disabled=True),
+                        "Khối lượng": st.column_config.NumberColumn("Khối lượng", min_value=0, step=0.25),
+                        "Deadline": st.column_config.DateColumn("Deadline", format="YYYY-MM-DD"),
+                        "Ghi chú": st.column_config.TextColumn(),
+                        "Tiến độ (%)": st.column_config.NumberColumn("Tiến độ (%)", min_value=0, max_value=100, step=1),
+                        "Xóa?": st.column_config.CheckboxColumn("Xóa?", help="Tick để xóa dòng này")
+                    }
+                )
+
+                col1, col2 = st.columns([1, 1])
+
+                # Nút lưu cập nhật công việc
+                with col1:                        
+                    if st.button("💾 Lưu cập nhật công việc", key=f"save_all_{project}"):
+                        supabase = get_connection()  # ✅ Tạo lại kết nối Supabase ngay trước khi update
+                    
+                        for i, row in edited_df.iterrows():
+                            task_id = int(df_all.iloc[i]["ID"])
+                            update_data = {}
+
+                            # --- Khối lượng ---
+                            if "Khối lượng" in row and not pd.isna(row["Khối lượng"]):
+                                try:
+                                    val = float(row["Khối lượng"])
+                                    update_data["khoi_luong"] = int(val) if val.is_integer() else round(val, 2)
+                                except Exception:
+                                    update_data["khoi_luong"] = 0
+
+                            # --- Tiến độ ---
+                            if "Tiến độ (%)" in row and not pd.isna(row["Tiến độ (%)"]):
+                                try:
+                                    val = float(row["Tiến độ (%)"])
+                                    update_data["progress"] = int(val) if val.is_integer() else round(val, 2)
+                                except Exception:
+                                    update_data["progress"] = 0
+
+                            # --- Deadline ---
+                            if "Deadline" in row and pd.notna(row["Deadline"]):
+                                update_data["deadline"] = pd.to_datetime(row["Deadline"]).strftime("%Y-%m-%d")
+
+                            # --- Ghi chú ---
+                            if "Ghi chú" in row:
+                                val = row["Ghi chú"]
+                                if val is None or (isinstance(val, float) and pd.isna(val)):
+                                    val = ""
+                                else:
+                                    val = str(val).strip()
+                                update_data["note"] = val
+
+                            # --- Nếu có dữ liệu để cập nhật ---
+                            if update_data:
+                                try:
+                                    supabase.table("tasks").update(update_data).eq("id", task_id).execute()
+                                except Exception as e:
+                                    st.error(f"❌ Lỗi khi cập nhật task {task_id}: {e}")
+
+                    
+                        st.success("✅ Đã lưu cập nhật công việc vào cơ sở dữ liệu!")
                         st.rerun()
 
 
 
-        # ===========================================================
-        # 2) THỐNG KÊ CÔNG VIỆC (chỉ dự án mình quản lý)
-        # ===========================================================
+
+
+                # Nút xóa các dòng đã chọn
+                with col2:
+                    if st.button("🗑️ Xóa các dòng đã chọn", key=f"delete_all_{project}"):
+                        ids_to_delete = []
+                        for i, row in edited_df.iterrows():
+                            if row.get("Xóa?"):
+                                ids_to_delete.append(int(df_all.iloc[i]["ID"]))
+                        if ids_to_delete:
+                            for tid in ids_to_delete:
+                                supabase.table("tasks").delete().eq("id", tid).execute()
+                            
+                            st.success(f"✅ Đã xóa {len(ids_to_delete)} công việc")
+                            st.rerun()
+                        else:
+                            st.warning("⚠️ Chưa chọn dòng nào để xóa")
+
+
+
+        # =======================================================
+        # B. KHÔNG phải quản lý: chỉ sửa việc của mình + thêm ở Public
+        # =======================================================
+        # =======================================================
+        # B. KHÔNG phải quản lý: chỉ sửa việc của mình + thêm ở Public
+        # =======================================================
         else:
-            st.subheader("📊 Thống kê Công Việc")
-            if not managed:
-                st.info("⚠️ Bạn không phải Chủ nhiệm/Chủ trì dự án nào nên không có dữ liệu thống kê.")
-                return
-
-            all_projects = managed
-            selected_projects = st.multiselect(
-                "Chọn dự án cần thống kê", all_projects, default=all_projects, key="stat_proj_multi"
+            st.info(
+                "👤 Bạn **không phải quản lý** dự án này. "
+                "Bạn có thể chỉnh **khối lượng** các việc của mình."
+                + (" Bạn cũng có thể **thêm khối lượng mới** vì đây là dự án **public**." if is_public else "")
             )
-            if not selected_projects:
-                st.info("⚠️ Không có dữ liệu công việc.")
-                return
 
-            qmarks = ",".join(["%s"] * len(selected_projects))
+            # ====== Danh sách công việc của chính user ======
+            data = supabase.table("tasks").select("id, task, khoi_luong, deadline, note, progress")\
+                .eq("project", project).eq("assignee", username).execute()
+            my_tasks = pd.DataFrame(data.data)
             
-            data = supabase.table("tasks").select("*").in_("project", selected_projects).execute()
-            df = pd.DataFrame(data.data)
-            df["assignee"] = df["assignee"].map(user_map).fillna(df["assignee"])
+            
+            # 🧹 Làm sạch ghi chú: loại bỏ lặp giờ/ngày nếu có
+            if not my_tasks.empty and "note" in my_tasks.columns:
+                def clean_note(n: str):
+                    if not isinstance(n, str) or not n.strip():
+                        return ""
+                    # Nếu có nhiều hơn 1 ký hiệu "⏰", chỉ giữ đoạn đầu tiên
+                    parts = n.split("⏰")
+                    if len(parts) > 2:
+                        return "⏰" + parts[1].strip()  # giữ phần đầu tiên
+                    return n.strip()
 
-            if df.empty:
-                st.info("⚠️ Không có dữ liệu công việc.")
-                return
+                my_tasks["note"] = my_tasks["note"].map(clean_note)
 
-            stat_mode = st.radio("Xem theo", ["Dự án", "Người dùng"], key="stat_mode")
 
-            if stat_mode == "Dự án":
-                proj_summary = df.groupby("project").agg(
-                    Tổng_công_việc=("id", "count"),
-                    Hoàn_thành=("progress", lambda x: (x == 100).sum()),
-                    Chưa_hoàn_thành=("progress", lambda x: (x < 100).sum()),
-                    Tiến_độ_TB=("progress", "mean"),
-                ).reset_index().rename(columns={"project": "Dự án"})
 
-                st.dataframe(
-                    proj_summary.style.format({"Tiến_độ_TB": "{:.0f}%"}).bar(subset=["Tiến_độ_TB"], color="#4CAF50"),
-                    use_container_width=True
-                )
-
-                fig = px.bar(
-                    proj_summary, x="Dự án", y="Tiến_độ_TB", color="Dự án", text="Tiến_độ_TB",
-                    title="Tiến độ các dự án"
-                )
-                fig.update_traces(texttemplate='%{text:.0f}%', textposition="outside")
-                fig.update_layout(yaxis=dict(title="Tiến độ (%)", range=[0, 100]), showlegend=False)
-                st.plotly_chart(fig, use_container_width=True)
+            if my_tasks.empty:
+                st.warning("⚠️ Bạn chưa có công việc nào trong dự án này.")
             else:
-                grouped = df.groupby(["assignee", "project"]).agg(
-                    Tổng_công_việc=("id", "count"),
-                    Hoàn_thành=("progress", lambda x: (x == 100).sum()),
-                    Chưa_hoàn_thành=("progress", lambda x: (x < 100).sum()),
-                    Tiến_độ_TB=("progress", "mean"),
-                ).reset_index().rename(columns={"assignee": "Người dùng", "project": "Dự án"})
+                # DataFrame hiển thị (ẩn ID nhưng vẫn giữ dữ liệu ID trong my_tasks)
+                df_show = my_tasks.rename(columns={
+                    "task": "Công việc",
+                    "khoi_luong": "Khối lượng (giờ)" if is_public else "Khối lượng",
+                    "deadline": "Deadline",
+                    "note": "Ghi chú",
+                    "progress": "Tiến độ (%)"
+                }).drop(columns=["id"])  # 👈 bỏ ID khỏi hiển thị
 
-                st.dataframe(
-                    grouped.style.format({"Tiến_độ_TB": "{:.0f}%"}).bar(subset=["Tiến_độ_TB"], color="#FF9800"),
-                    use_container_width=True
+                # Thêm cột chọn để xóa
+                df_show["Chọn"] = False
+
+                # Nếu dự án Public -> bỏ Deadline và Tiến độ
+                if is_public:
+                    drop_cols = [c for c in ["Deadline", "Tiến độ (%)"] if c in df_show.columns]
+                    df_show = df_show.drop(columns=drop_cols, errors="ignore")
+
+                # Hiển thị bảng cho user chỉnh sửa (không có cột ID)
+                edited = st.data_editor(
+                    df_show,
+                    key="my_tasks_editor",
+                    width="stretch",
+                    hide_index=True,
+                    column_config={
+                        "Công việc": st.column_config.TextColumn(disabled=True),
+                        "Ghi chú": st.column_config.TextColumn(),
+
+                        "Chọn": st.column_config.CheckboxColumn("Xóa?", help="Tick để xóa dòng này")
+                    }
                 )
+
+                col1, col2 = st.columns([2, 1])
+                with col1:
+                    
+                    
+                    if st.button("💾 Lưu khối lượng của tôi", key="save_my_qty_btn"):
+                        for i, row in edited.iterrows():
+                            tid = int(my_tasks.iloc[i]["id"])
+
+                            # Lấy khối lượng tùy theo loại dự án
+                            qty_val = row.get("Khối lượng (giờ)") if is_public else row.get("Khối lượng")
+                            try:
+                                new_qty = float(qty_val or 0)
+                                if new_qty.is_integer():
+                                    new_qty = int(new_qty)
+                            except Exception:
+                                new_qty = 0
+
+                            # Lấy ghi chú (note)
+                            note_val = row.get("Ghi chú")
+                            if note_val is None or (isinstance(note_val, float) and pd.isna(note_val)):
+                                note_val = ""
+                            else:
+                                note_val = str(note_val).strip()
+
+                            # Cập nhật cả khối lượng + ghi chú
+                            update_data = {"khoi_luong": new_qty, "note": note_val}
+
+                            supabase.table("tasks").update(update_data).eq("id", tid).execute()
+
+                        st.success("✅ Đã cập nhật khối lượng & ghi chú")
+                        st.rerun()
+
+
+
+                with col2:
+                    if st.button("🗑️ Xóa các dòng đã chọn", key="delete_my_tasks_btn"):
+                        ids_to_delete = []
+                        for i, row in edited.iterrows():
+                            if row.get("Chọn"):
+                                ids_to_delete.append(int(my_tasks.iloc[i]["id"]))
+                        if ids_to_delete:
+                            for tid in ids_to_delete:
+                                supabase.table("tasks").delete().eq("id", tid).execute()
+                            
+                            st.success(f"✅ Đã xóa {len(ids_to_delete)} dòng")
+                            st.rerun()
+                        else:
+                            st.warning("⚠️ Chưa chọn dòng nào để xóa")
+
+            # ====== Tự thêm công việc cho bản thân (nếu Public) ======
+            if is_public:
+                st.markdown("---")
+                st.subheader("➕ Thêm khối lượng / công nhật cho bản thân")
+
+                task_name = st.selectbox("Công việc", jobs["name"].tolist(), key="self_task")
+
+                # ---- Chọn ngày & giờ (4 cột trên 1 hàng) ----
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    start_date = st.date_input("Ngày bắt đầu", key="my_start_date")
+                with col2:
+                    start_time = st.time_input("Giờ bắt đầu", time(8, 0), key="my_start_time")
+                with col3:
+                    end_date = st.date_input("Ngày kết thúc", key="my_end_date", value=start_date)
+                with col4:
+                    end_time = st.time_input("Giờ kết thúc", time(17, 0), key="my_end_time")
+
+                note = st.text_area("📝 Ghi chú (tuỳ chọn)", key="my_note")
+
+                if st.button("➕ Thêm công nhật cho tôi", key="add_self_cong_btn"):
+                    total_hours = calc_hours(start_date, end_date, start_time, end_time)
+                    # 📝 Tạo ghi chú gọn, chỉ thêm 1 lần
+                    if note.strip():
+                        note_txt = f"⏰ {start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')} ({start_date} - {end_date}) {note.strip()}"
+                    else:
+                        note_txt = f"⏰ {start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')} ({start_date} - {end_date})"
+
+
+                    supabase.table("tasks").insert({
+                        "project": project,
+                        "task": task_name,
+                        "assignee": username,
+                        "khoi_luong": total_hours,
+                        "note": note_txt,
+                        "progress": 0
+                    }).execute()
+                    
+                    st.success(f"✅ Đã thêm {total_hours} giờ công cho công việc '{task_name}'")
+                    st.rerun()
+
+
+
+    # ===========================================================
+    # 2) THỐNG KÊ CÔNG VIỆC (chỉ dự án mình quản lý)
+    # ===========================================================
+    else:
+        st.subheader("📊 Thống kê Công Việc")
+        if not managed:
+            st.info("⚠️ Bạn không phải Chủ nhiệm/Chủ trì dự án nào nên không có dữ liệu thống kê.")
+            return
+
+        all_projects = managed
+        selected_projects = st.multiselect(
+            "Chọn dự án cần thống kê", all_projects, default=all_projects, key="stat_proj_multi"
+        )
+        if not selected_projects:
+            st.info("⚠️ Không có dữ liệu công việc.")
+            return
+
+        qmarks = ",".join(["%s"] * len(selected_projects))
+        
+        data = supabase.table("tasks").select("*").in_("project", selected_projects).execute()
+        df = pd.DataFrame(data.data)
+        df["assignee"] = df["assignee"].map(user_map).fillna(df["assignee"])
+
+        if df.empty:
+            st.info("⚠️ Không có dữ liệu công việc.")
+            return
+
+        stat_mode = st.radio("Xem theo", ["Dự án", "Người dùng"], key="stat_mode")
+
+        if stat_mode == "Dự án":
+            proj_summary = df.groupby("project").agg(
+                Tổng_công_việc=("id", "count"),
+                Hoàn_thành=("progress", lambda x: (x == 100).sum()),
+                Chưa_hoàn_thành=("progress", lambda x: (x < 100).sum()),
+                Tiến_độ_TB=("progress", "mean"),
+            ).reset_index().rename(columns={"project": "Dự án"})
+
+            st.dataframe(
+                proj_summary.style.format({"Tiến_độ_TB": "{:.0f}%"}).bar(subset=["Tiến_độ_TB"], color="#4CAF50"),
+                use_container_width=True
+            )
+
+            fig = px.bar(
+                proj_summary, x="Dự án", y="Tiến_độ_TB", color="Dự án", text="Tiến_độ_TB",
+                title="Tiến độ các dự án"
+            )
+            fig.update_traces(texttemplate='%{text:.0f}%', textposition="outside")
+            fig.update_layout(yaxis=dict(title="Tiến độ (%)", range=[0, 100]), showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            grouped = df.groupby(["assignee", "project"]).agg(
+                Tổng_công_việc=("id", "count"),
+                Hoàn_thành=("progress", lambda x: (x == 100).sum()),
+                Chưa_hoàn_thành=("progress", lambda x: (x < 100).sum()),
+                Tiến_độ_TB=("progress", "mean"),
+            ).reset_index().rename(columns={"assignee": "Người dùng", "project": "Dự án"})
+
+            st.dataframe(
+                grouped.style.format({"Tiến_độ_TB": "{:.0f}%"}).bar(subset=["Tiến_độ_TB"], color="#FF9800"),
+                use_container_width=True
+            )
 
     finally:
             pass 
