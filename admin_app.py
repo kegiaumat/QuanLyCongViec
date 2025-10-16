@@ -1336,23 +1336,33 @@ def admin_app(user):
         # ==== HIỂN THỊ BẢNG CHẤM CÔNG ====
         st.markdown("### 📊 Bảng chấm công")
         edited_df = st.data_editor(
-            df_display,
+            df_display,                         # GIỮ nguyên dataframe có cột 'username'
             hide_index=True,
             use_container_width=True,
             height=650,
             key=f"attendance_{month_str}",
             column_config={
+                # 👇 ẨN HOÀN TOÀN cột username nhưng vẫn giữ trong dữ liệu trả về
                 "username": st.column_config.TextColumn(
-                    "Tên đăng nhập (ẩn)",
+                    "Tên đăng nhập",
                     disabled=True,
-                    help="Giữ để lưu DB",
-                    width="small",          # ✅ tuỳ chọn: thu nhỏ cột
+                    hidden=True,                # <-- điểm mấu chốt
+                    help="Cột ẩn để đối chiếu/gửi DB"
                 ),
                 "User": st.column_config.TextColumn("Nhân viên", disabled=True),
-                **{c: st.column_config.SelectboxColumn(c, options=[add_emoji(x) for x in code_options]) for c in day_cols}
+                **{
+                    c: st.column_config.SelectboxColumn(
+                        c,
+                        options=[add_emoji(x) for x in code_options]
+                    )
+                    for c in day_cols
+                },
             },
-            column_order=["username", "User"] + day_cols,   # giữ cột username để còn lưu DB
+            # 👇 Không đưa 'username' vào order để nó không chiếm chỗ trên UI
+            column_order=["User"] + day_cols,
         )
+
+
 
 
 
