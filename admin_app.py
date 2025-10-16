@@ -204,8 +204,11 @@ def admin_app(user):
                             new_val = "|".join(new_val)
 
                         # Chuẩn hóa None / NaT / rỗng
-                        if pd.isna(new_val): new_val = None
-                        if pd.isna(old_val): old_val = None
+                        if not isinstance(new_val, (list, dict)) and pd.isna(new_val):
+                            new_val = None
+                        if not isinstance(old_val, (list, dict)) and pd.isna(old_val):
+                            old_val = None
+
 
                         # So sánh theo giá trị thực, không ép kiểu chuỗi
                         if new_val != old_val:
