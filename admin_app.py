@@ -1519,6 +1519,10 @@ def admin_app(user):
                                 st.write(f"🔁 {uname}: thay đổi {diff_days}")  # debug log
 
 
+                            if has_changed:
+                                st.write(f"🔁 {uname}: thay đổi {diff_days}")  # debug log
+
+
 
 
                             # --- Update nếu có thay đổi ---
