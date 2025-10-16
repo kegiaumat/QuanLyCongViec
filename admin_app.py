@@ -1530,12 +1530,17 @@ def admin_app(user):
                                 data_all[month_str] = codes
                                 if month_str not in months:
                                     months.append(month_str)
-                                    # ✅ Ép "data" thành JSON string để Supabase lưu đúng vào cột jsonb
-                                    payload = {
-                                        "months": months,
-                                        "data": json.dumps(data_all, ensure_ascii=False)
-                                    }
-                                    supabase.table("attendance_new").update(payload).eq("username", uname).execute()
+
+                                # ✅ Luôn update khi có thay đổi, không phụ thuộc vào tháng mới hay cũ
+                                payload = {
+                                    "months": months,
+                                    "data": json.dumps(data_all, ensure_ascii=False)
+                                }
+                                supabase.table("attendance_new").update(payload).eq("username", uname).execute()
+
+                                updated_users.append(uname)
+                            else:
+                                skipped_users.append(uname)
 
                                 updated_users.append(uname)
                             else:
