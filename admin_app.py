@@ -550,7 +550,11 @@ def admin_app(user):
             # ===== Hộp xác nhận xoá =====
             if "confirm_delete" in st.session_state:
                 proj_list = st.session_state["confirm_delete"]
-                st.error(f"⚠️ Bạn có chắc muốn xoá {len(proj_list)} dự án sau: {', '.join(proj_list)} ?")
+                if not proj_list:
+                    st.warning("⚠️ Không có dự án nào được chọn để xoá.")
+                else:
+                    proj_names = ", ".join(map(str, proj_list))
+                    st.error(f"⚠️ Bạn có chắc muốn xoá {len(proj_list)} dự án sau: {proj_names} ?")
 
                 c1, c2 = st.columns(2)
                 with c1:
