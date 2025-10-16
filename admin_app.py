@@ -1459,7 +1459,7 @@ def admin_app(user):
                 inserted_users = []
                 skipped_users = []
                 errors = []
-                st.write("🔍 Dữ liệu gửi lên:", edited_df.head())
+                
 
                 for _, row in edited_df.iterrows():
                     uname = row["username"]      # Lấy username thật để lưu
