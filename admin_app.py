@@ -1530,8 +1530,13 @@ def admin_app(user):
                                 data_all[month_str] = codes
                                 if month_str not in months:
                                     months.append(month_str)
-                                payload = {"months": months, "data": data_all}
-                                supabase.table("attendance_new").update(payload).eq("username", uname).execute()
+                                    # ✅ Ép "data" thành JSON string để Supabase lưu đúng vào cột jsonb
+                                    payload = {
+                                        "months": months,
+                                        "data": json.dumps(data_all, ensure_ascii=False)
+                                    }
+                                    supabase.table("attendance_new").update(payload).eq("username", uname).execute()
+
                                 updated_users.append(uname)
                             else:
                                 skipped_users.append(uname)
@@ -1540,12 +1545,12 @@ def admin_app(user):
                             # --- User chưa có dữ liệu -> insert mới ---
                             payload = {
                                 "username": uname,
-                                "display_name": display_name,  # tùy chọn, chỉ để xem
+                                "display_name": display_name,
                                 "months": [month_str],
-                                "data": {month_str: codes}
+                                "data": json.dumps({month_str: codes}, ensure_ascii=False)
                             }
-
                             supabase.table("attendance_new").insert(payload).execute()
+
                             inserted_users.append(uname)
 
                     except Exception as e:
