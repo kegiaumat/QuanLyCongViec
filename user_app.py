@@ -69,9 +69,6 @@ def user_app(user):
 
         from auth import show_indirect_task_form, show_indirect_task_table
 
-        # 👇 Hiển thị công việc gián tiếp (user)
-        show_indirect_task_table("user", supabase, username, df_tasks)
-
         # 👇 Form thêm công việc gián tiếp
         show_indirect_task_form("user", supabase, username)
 
