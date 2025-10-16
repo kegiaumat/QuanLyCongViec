@@ -1491,19 +1491,15 @@ def admin_app(user):
                     record = df_att[df_att["username"].astype(str).str.strip() == str(uname).strip()]
 
 
-                    if not codes and len(record) == 0:
-                        # user chưa có dữ liệu trong DB -> tạo bản ghi trống để khởi tạo
+                    if len(record) == 0:
+                        # user chưa có dữ liệu trong DB -> luôn insert dữ liệu thật
                         payload = {
                             "username": uname,
                             "months": [month_str],
-                            "data": {month_str: {}}
+                            "data": {month_str: codes}
                         }
                         supabase.table("attendance_new").insert(payload).execute()
                         inserted_users.append(uname)
-                        continue
-
-                    elif not codes:
-                        skipped_users.append(uname)
                         continue
 
 
