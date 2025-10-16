@@ -23,7 +23,10 @@ def _load_managed_projects(supabase, username: str) -> list[str]:
         for col in ["project_manager_of", "project_leader_of"]:
             val = info.at[0, col]
             if pd.notna(val) and str(val).strip():
-                managed += [p.strip() for p in str(val).split(",") if p.strip()]
+                # ✅ Ưu tiên tách theo dấu |
+                parts = [p.strip() for p in str(val).split("|") if p.strip()]
+                managed += parts
+
     return sorted(set(managed))
 
 

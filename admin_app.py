@@ -162,8 +162,9 @@ def admin_app(user):
                     options=role_options,
                     help="Có thể chọn nhiều vai trò (user, admin, Chủ nhiệm dự án, Chủ trì dự án)"
                 ),
-                "Chủ nhiệm dự án": st.column_config.SelectboxColumn("Chủ nhiệm dự án", options=project_options),
-                "Chủ trì dự án": st.column_config.SelectboxColumn("Chủ trì dự án", options=project_options),
+                "Chủ nhiệm dự án": st.column_config.MultiselectColumn("Chủ nhiệm dự án", options=project_options),
+                "Chủ trì dự án": st.column_config.MultiselectColumn("Chủ trì dự án", options=project_options),
+
                 "Xóa?": st.column_config.CheckboxColumn("Xóa?", help="Tick để đánh dấu user cần xoá")
             }
         )
@@ -178,7 +179,7 @@ def admin_app(user):
                     username = row["Tên đăng nhập"]
                     original = df_users.loc[df_users["Tên đăng nhập"] == username].iloc[0]
                     update_data = {}
-
+                    
                     for col, db_field in [
                         ("Tên hiển thị", "display_name"),
                         ("Ngày sinh", "dob"),
@@ -189,14 +190,20 @@ def admin_app(user):
                         new_val = row[col]
                         old_val = original[col]
 
-                        # --- Chuyển ngày sang string để JSON serializable ---
                         if col == "Ngày sinh" and pd.notna(new_val):
                             new_val = str(new_val)
                         elif col == "Vai trò" and isinstance(new_val, list):
                             new_val = ", ".join(new_val)
+                        elif col in ["Chủ nhiệm dự án", "Chủ trì dự án"]:
+                            # ✅ Dùng ký tự | để phân tách dự án
+                            if isinstance(new_val, list):
+                                new_val = "|".join(new_val)
+                            elif isinstance(new_val, str):
+                                new_val = new_val.strip()
 
                         if str(new_val) != str(old_val):
                             update_data[db_field] = new_val
+
 
                     if update_data:
                         try:
@@ -541,7 +548,7 @@ def admin_app(user):
                                 for user in data_users.data:
                                     username = user["username"]
                                     csv_vals = user.get(colu) or ""
-                                    parts = [p.strip() for p in csv_vals.split(",") if p.strip()]
+                                    parts = [p.strip() for p in re.split(r"[|,]", csv_vals) if p.strip()]
                                     changed = False
                                     for i, p in enumerate(parts):
                                         if p == old_name:
@@ -588,7 +595,7 @@ def admin_app(user):
                                 for user in data_users.data:
                                     username = user["username"]
                                     csv_vals = user.get(colu) or ""
-                                    parts = [p.strip() for p in csv_vals.split(",") if p.strip()]
+                                    parts = [p.strip() for p in re.split(r"[|,]", csv_vals) if p.strip()]
                                     parts = [p for p in parts if p != proj_name]
                                     new_csv = ",".join(parts) if parts else None
                                     supabase.table("users").update({colu: new_csv}).eq("username", username).execute()
