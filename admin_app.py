@@ -441,7 +441,9 @@ def admin_app(user):
                 st.success(f"✅ Đã thêm dự án: {project_name}")
                 refresh_all_cache()
                 st.session_state["df_projects"] = load_projects_fresh()
+                df_projects = st.session_state["df_projects"].copy()
                 st.rerun()
+
 
             except Exception as e:
                 if "duplicate key" in str(e).lower():
@@ -586,6 +588,7 @@ def admin_app(user):
                         refresh_all_cache()
                         st.session_state["df_projects"] = load_projects_fresh()
                         st.session_state["confirm_delete"] = None
+                        df_projects = st.session_state["df_projects"].copy()
                         st.rerun()
 
 
