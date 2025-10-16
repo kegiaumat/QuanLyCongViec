@@ -15,6 +15,10 @@ def load_users_cached():
     data = supabase.table("users").select("id, username, display_name, dob, role, project_manager_of, project_leader_of").execute()
     return pd.DataFrame(data.data)
 
+def load_users_fresh():
+    supabase = get_connection()
+    data = supabase.table("users").select("*").execute()
+    return pd.DataFrame(data.data)
 @st.cache_data(ttl=15)
 def load_projects_cached():
     supabase = get_connection()
@@ -232,9 +236,12 @@ def admin_app(user):
                             supabase.table("users").delete().eq("username", row["Tên đăng nhập"]).execute()
                         st.success("🗑️ Đã xoá user được chọn")
                         refresh_all_cache()
-                        # Reload lại cache sau xoá
-                        st.session_state.df_users = load_users_cached()
+                        # 👉 Dùng hàm mới để tải lại dữ liệu tươi
+                        st.session_state.df_users = load_users_fresh()
+                        df_users = st.session_state.df_users.copy()
                         st.session_state.confirm_delete = False
+                        st.rerun()
+
                 with c2:
                     if st.button("❌ No, huỷ"):
                         st.info("Đã huỷ thao tác xoá")
