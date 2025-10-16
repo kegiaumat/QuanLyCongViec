@@ -893,11 +893,13 @@ def admin_app(user):
                         def split_times(note_text: str):
                             if not isinstance(note_text, str):
                                 return "", "", ""
-                            m = re.search(r'(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})', note_text)
+                            m = re.search(r'(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})(?:.*?\(\d{4}-\d{2}-\d{2}.*?\))?', note_text)
+
                             if not m:
                                 return "", "", note_text
                             start, end = m.group(1), m.group(2)
-                            note_rest = re.sub(r'⏰\s*' + re.escape(m.group(0)), "", note_text).strip()
+                            note_rest = re.sub(r'⏰\s*\d{1,2}:\d{2}\s*[-–]\s*\d{1,2}:\d{2}(?:.*?\(\d{4}-\d{2}-\d{2}.*?\))?', "", note_text).strip()
+
                             return start, end, note_rest
 
                         rows = []
