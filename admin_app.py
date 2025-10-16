@@ -36,6 +36,10 @@ def refresh_all_cache():
 
 st.set_page_config(layout="wide")
 
+def load_projects_fresh():
+    supabase = get_connection()
+    data = supabase.table("projects").select("id, name, deadline, project_type, design_step").execute()
+    return pd.DataFrame(data.data)
 
 
 
@@ -436,6 +440,9 @@ def admin_app(user):
                 add_project(project_name, project_deadline, project_type, design_step)
                 st.success(f"✅ Đã thêm dự án: {project_name}")
                 refresh_all_cache()
+                st.session_state["df_projects"] = load_projects_fresh()
+                st.rerun()
+
             except Exception as e:
                 if "duplicate key" in str(e).lower():
                     st.error("⚠️ Dự án đã tồn tại")
@@ -576,9 +583,11 @@ def admin_app(user):
                                     supabase.table("users").update({colu: new_csv}).eq("username", username).execute()
 
                         st.success("🗑️ Đã xoá các dự án được chọn.")
-                        st.session_state["confirm_delete"] = None
                         refresh_all_cache()
+                        st.session_state["df_projects"] = load_projects_fresh()
+                        st.session_state["confirm_delete"] = None
                         st.rerun()
+
 
                 with c2:
                     if st.button("❌ No, huỷ", key="confirm_delete_no"):
