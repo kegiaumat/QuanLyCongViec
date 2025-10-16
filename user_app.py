@@ -3,7 +3,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 from auth import get_connection, calc_hours
-
+import re
 
 def _load_visible_projects(supabase, username: str) -> pd.DataFrame:
     """
@@ -64,6 +64,16 @@ def user_app(user):
         # ======= Danh sách task của user =======
         data = supabase.table("tasks").select("id, task, khoi_luong, progress, deadline, note").eq("project", project).eq("assignee", username).execute()
         df_tasks = pd.DataFrame(data.data)
+        
+
+        # === Tách giờ bắt đầu và kết thúc từ note nếu có dạng "⏰ 08:00 - 17:00 (...)" ===
+        def extract_times(note):
+            match = re.search(r"(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})", str(note))
+            if match:
+                return match.group(1), match.group(2)
+            return "", ""
+
+        df_tasks["Giờ bắt đầu"], df_tasks["Giờ kết thúc"] = zip(*df_tasks["note"].map(extract_times))
 
         if df_tasks.empty:
             st.warning("⚠️ Bạn chưa có công việc nào trong dự án này.")
@@ -77,6 +87,10 @@ def user_app(user):
             }
             df_show = df_tasks.rename(columns=rename_map).drop(columns=["id"])
             df_show["Chọn"] = False
+            # Chèn hai cột Giờ bắt đầu / Giờ kết thúc vào vị trí mong muốn
+            if "Giờ bắt đầu" in df_tasks.columns and "Giờ kết thúc" in df_tasks.columns:
+                df_show.insert(1, "Giờ bắt đầu", df_tasks["Giờ bắt đầu"])
+                df_show.insert(2, "Giờ kết thúc", df_tasks["Giờ kết thúc"])
 
             # Nếu public -> bỏ Tiến độ, Deadline
             if is_public:
@@ -92,37 +106,62 @@ def user_app(user):
                 hide_index=True,
                 column_config={
                     "Công việc": st.column_config.TextColumn(disabled=True),
+                    "Giờ bắt đầu": st.column_config.TimeColumn("Giờ bắt đầu", format="HH:mm"),
+                    "Giờ kết thúc": st.column_config.TimeColumn("Giờ kết thúc", format="HH:mm"),
                     "Ghi chú": st.column_config.TextColumn(),
-
                     "Chọn": st.column_config.CheckboxColumn("Xóa?", help="Tick để xóa dòng này"),
                 },
             )
 
+
             col1, col2 = st.columns([2, 1])
             with col1:
                 if st.button("💾 Lưu thay đổi"):
-                    for i, row in edited.iterrows():   # ✅ dùng đúng biến 'edited'
+                    for i, row in edited.iterrows():
                         task_id = int(df_tasks.iloc[i]["id"])
                         update_data = {}
 
-                        # Cập nhật khối lượng (nếu có)
-                        if "Khối lượng (giờ)" in row and not pd.isna(row["Khối lượng (giờ)"]):
-                            update_data["khoi_luong"] = float(row["Khối lượng (giờ)"])
+                        # Lấy giờ và ghi chú
+                        start_time = row.get("Giờ bắt đầu", "")
+                        end_time = row.get("Giờ kết thúc", "")
+                        note_text = str(row.get("Ghi chú", "")).strip()
 
-                        # Cập nhật ghi chú (nếu có)
-                        if "Ghi chú" in row and isinstance(row["Ghi chú"], str):
-                            update_data["note"] = row["Ghi chú"]
+                        # 🧹 Xóa phần giờ cũ trong ghi chú (nếu có)
+                        note_text = re.sub(r"^⏰\s*\d{2}:\d{2}\s*-\s*\d{2}:\d{2}.*?\)", "", note_text).strip()
+
+                        # 🕒 Tạo ghi chú mới với giờ mới
+                        if start_time and end_time:
+                            start_str = start_time.strftime("%H:%M") if hasattr(start_time, "strftime") else str(start_time)
+                            end_str = end_time.strftime("%H:%M") if hasattr(end_time, "strftime") else str(end_time)
+                            new_note = f"⏰ {start_str} - {end_str} {note_text}".strip()
+                        else:
+                            new_note = note_text
+
+                        update_data["note"] = new_note
+
+                        # ⏱️ Tự động tính lại khối lượng (giờ)
+                        if start_time and end_time:
+                            try:
+                                fmt = "%H:%M"
+                                start_dt = datetime.strptime(str(start_time), fmt)
+                                end_dt = datetime.strptime(str(end_time), fmt)
+                                hours = (end_dt - start_dt).seconds / 3600
+                                if hours > 0:
+                                    update_data["khoi_luong"] = round(hours, 2)
+                            except Exception:
+                                pass
 
                         # Cập nhật tiến độ (nếu có)
                         if "Tiến độ (%)" in row and not pd.isna(row["Tiến độ (%)"]):
                             update_data["progress"] = float(row["Tiến độ (%)"])
 
-                        # Ghi thay đổi vào database
+                        # Ghi vào database
                         if update_data:
                             supabase.table("tasks").update(update_data).eq("id", task_id).execute()
 
-                    st.success("✅ Đã lưu thay đổi vào cơ sở dữ liệu!")
+                    st.success("✅ Đã cập nhật giờ, ghi chú và khối lượng!")
                     st.rerun()
+
 
 
             with col2:
