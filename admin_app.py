@@ -1491,12 +1491,16 @@ def admin_app(user):
                             has_changed = False
 
                             # --- So sánh kỹ dữ liệu mới & cũ ---
-                            for d, v in codes.items():
-                                if old_month_data.get(d) != v:
-                                    has_changed = True
-                                    break
-                            if not has_changed and set(old_month_data.keys()) != set(codes.keys()):
-                                has_changed = True
+                            def normalize(v):
+                                if v in [None, "None", "nan", "NaN"]:
+                                    return ""
+                                return str(v).strip()
+
+                            old_clean = {k: normalize(v) for k, v in (old_month_data or {}).items()}
+                            new_clean = {k: normalize(v) for k, v in (codes or {}).items()}
+
+                            has_changed = old_clean != new_clean
+
 
                             # --- Update nếu có thay đổi ---
                             if has_changed:
