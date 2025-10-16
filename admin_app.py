@@ -1516,22 +1516,10 @@ def admin_app(user):
                             has_changed = len(diff_days) > 0 or len(old_clean) != len(new_clean)
 
                             if has_changed:
-                                st.write(f"🔁 {uname}: thay đổi {diff_days}")  # debug log
-
-
-                            if has_changed:
-                                st.write(f"🔁 {uname}: thay đổi {diff_days}")  # debug log
-
-
-
-
-                            # --- Update nếu có thay đổi ---
-                            if has_changed:
                                 data_all[month_str] = codes
                                 if month_str not in months:
                                     months.append(month_str)
 
-                                # ✅ Luôn update khi có thay đổi, không phụ thuộc vào tháng mới hay cũ
                                 payload = {
                                     "months": months,
                                     "data": json.dumps(data_all, ensure_ascii=False)
@@ -1542,9 +1530,6 @@ def admin_app(user):
                             else:
                                 skipped_users.append(uname)
 
-                                updated_users.append(uname)
-                            else:
-                                skipped_users.append(uname)
 
                         else:
                             # --- User chưa có dữ liệu -> insert mới ---
