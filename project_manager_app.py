@@ -29,14 +29,23 @@ def _load_managed_projects(supabase, username: str) -> list[str]:
 
 def _load_visible_projects(supabase, managed: list[str], username: str) -> pd.DataFrame:
     """Dự án user có thể thấy: managed + public + dự án có task của user."""
-
-    # Dự án public
-    data = supabase.table("projects").select("id, name, deadline, project_type").eq("project_type", "public").execute()
-    public_df = pd.DataFrame(data.data)
+    try:
+        # Dự án public
+        data = supabase.table("projects").select("id, name, deadline, project_type")\
+            .eq("project_type", "public").execute()
+        public_df = pd.DataFrame(data.data)
+    except Exception:
+        # 🔁 Nếu lỗi, tạo lại kết nối Supabase
+        from auth import get_connection
+        supabase = get_connection()
+        data = supabase.table("projects").select("id, name, deadline, project_type")\
+            .eq("project_type", "public").execute()
+        public_df = pd.DataFrame(data.data)
 
     # Dự án do user quản lý
     if managed:
-        data = supabase.table("projects").select("id, name, deadline, project_type").in_("name", managed).execute()
+        data = supabase.table("projects").select("id, name, deadline, project_type")\
+            .in_("name", managed).execute()
         managed_df = pd.DataFrame(data.data)
     else:
         managed_df = pd.DataFrame(columns=["id", "name", "deadline", "project_type"])
@@ -45,7 +54,8 @@ def _load_visible_projects(supabase, managed: list[str], username: str) -> pd.Da
     data = supabase.table("tasks").select("project").eq("assignee", username).execute()
     assigned_names = list({r["project"] for r in data.data})
     if assigned_names:
-        data = supabase.table("projects").select("id, name, deadline, project_type").in_("name", assigned_names).execute()
+        data = supabase.table("projects").select("id, name, deadline, project_type")\
+            .in_("name", assigned_names).execute()
         assigned_df = pd.DataFrame(data.data)
     else:
         assigned_df = pd.DataFrame(columns=["id", "name", "deadline", "project_type"])
