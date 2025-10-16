@@ -1423,9 +1423,8 @@ def admin_app(user):
 
             total_K = cnt("K") - cnt(
                 "P/K","H/K","TQ/K","NM/K","O/K","TS/K","VS/K","VR/K","ĐT/K","L/K",
-                "K/P","K/H","K/TQ","K/NM","K/O","K/TS","K/VS","K/VR","K/ĐT","K/L"
-            )*0.5
-            total_K += cnt("K:2") * 0.5            
+                "K/P","K/H","K/TQ","K/NM","K/O","K/TS","K/VS","K/VR","K/ĐT","K/L","K:2"
+            )*0.5          
             total_H = cnt("H")
             total_P = cnt("P")
             total_BHXH = cnt("O","TS","VS")
@@ -1659,8 +1658,8 @@ def admin_app(user):
                                 c += 1
                 return c
 
-            total_K = cnt("K") - cnt("K/P", "K/H", "K/TQ", "K/NM", "K/O", "K/TS", "K/VR", "K/ĐT", "K/L") * 0.5
-            total_K += cnt("K:2") * 0.5
+            total_K = cnt("K") - cnt("K/P", "K/H", "K/TQ", "K/NM", "K/O", "K/TS", "K/VR", "K/ĐT", "K/L","K:2") * 0.5
+            
             total_H = cnt("H")
             total_P = cnt("P")
             total_BHXH = cnt("O", "TS", "VS")
