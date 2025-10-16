@@ -1287,7 +1287,8 @@ def admin_app(user):
         for _, u in df_users.iterrows():
             uname = u.get("username", "")            # ← Dùng username thật để so sánh DB
             display_name = u.get("display_name", "") # ← Dùng để hiển thị
-            record = df_att[df_att["username"] == uname]
+            record = df_att[df_att["username"].astype(str).str.strip() == str(uname).strip()]
+
 
 
             user_data = {}
@@ -1327,6 +1328,9 @@ def admin_app(user):
         df_display = pd.DataFrame(rows)
         day_cols = [c for c in df_display.columns if "/" in c]
         df_display = df_display[["username", "User"] + day_cols]
+        # 🔧 Chuẩn hoá username để tránh sai lệch khi so sánh
+        df_display["username"] = df_display["username"].astype(str).str.strip()
+        df_display["User"] = df_display["User"].astype(str).str.strip()
 
 
         # ==== HIỂN THỊ BẢNG CHẤM CÔNG ====
@@ -1469,7 +1473,8 @@ def admin_app(user):
 
                     # --- Bỏ qua nếu hoàn toàn không có dữ liệu ---
                     # --- Nếu bảng công rỗng (DB trống) => vẫn insert mới để khởi tạo ---
-                    record = df_att[df_att["username"] == uname]
+                    record = df_att[df_att["username"].astype(str).str.strip() == str(uname).strip()]
+
 
                     if not codes and len(record) == 0:
                         # user chưa có dữ liệu trong DB -> tạo bản ghi trống để khởi tạo
@@ -1488,7 +1493,8 @@ def admin_app(user):
 
 
                     # --- Đọc record hiện có trong DB ---
-                    record = df_att[df_att["username"] == uname]
+                    record = df_att[df_att["username"].astype(str).str.strip() == str(uname).strip()]
+
 
                     try:
                         if len(record) > 0:
