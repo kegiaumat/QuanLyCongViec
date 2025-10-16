@@ -185,7 +185,8 @@ def admin_app(user):
                     username = row["Tên đăng nhập"]
                     original = df_users.loc[df_users["Tên đăng nhập"] == username].iloc[0]
                     update_data = {}
-                    
+
+                    # So sánh từng trường — chỉ update nếu có thay đổi
                     for col, db_field in [
                         ("Tên hiển thị", "display_name"),
                         ("Ngày sinh", "dob"),
@@ -196,21 +197,22 @@ def admin_app(user):
                         new_val = row[col]
                         old_val = original[col]
 
+                        # Chuẩn hóa dữ liệu trước khi so sánh
                         if col == "Ngày sinh" and pd.notna(new_val):
                             new_val = str(new_val)
                         elif col == "Vai trò" and isinstance(new_val, list):
                             new_val = ", ".join(new_val)
                         elif col in ["Chủ nhiệm dự án", "Chủ trì dự án"]:
-                            # ✅ Dùng ký tự | để phân tách dự án
                             if isinstance(new_val, list):
                                 new_val = "|".join(new_val)
                             elif isinstance(new_val, str):
                                 new_val = new_val.strip()
 
-                        if str(new_val) != str(old_val):
+                        # Chuyển None → chuỗi rỗng để so sánh an toàn
+                        if str(new_val or "") != str(old_val or ""):
                             update_data[db_field] = new_val
 
-
+                    # ✅ Chỉ gửi lệnh update nếu có thay đổi
                     if update_data:
                         try:
                             supabase.table("users").update(update_data).eq("username", username).execute()
@@ -221,10 +223,10 @@ def admin_app(user):
                 if changed_count > 0:
                     st.success(f"✅ Đã cập nhật {changed_count} user có thay đổi.")
                     refresh_all_cache()
-                    # Reload lại cache sau update
                     st.session_state.df_users = load_users_cached()
                 else:
                     st.info("ℹ️ Không có user nào thay đổi, không cần cập nhật.")
+
 
         # === Nút xóa ===
         with col2:
