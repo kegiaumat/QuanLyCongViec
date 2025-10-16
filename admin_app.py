@@ -915,38 +915,23 @@ def admin_app(user):
 
                     # ====== Công nhật ======
                     if not df_cong.empty:
-
                         def split_times(note_text: str):
-                            """
-                            Trả về:
-                              - start: 'HH:MM' | ''
-                              - end:   'HH:MM' | ''
-                              - date_part: '(YYYY-MM-DD - YYYY-MM-DD)' | ''
-                              - note_rest: phần còn lại sau khi bỏ '⏰ ...' và '(...)'
-                            """
+                            """Tách giờ, ngày và phần ghi chú từ note"""
                             if not isinstance(note_text, str):
                                 return "", "", "", ""
-
-                            # block giờ: HH:MM hoặc HH:MM:SS
                             block_re = r'⏰\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*[-–]\s*(\d{1,2}:\d{2}(?::\d{2})?)'
-                            date_re  = r'\(\d{4}-\d{2}-\d{2}\s*[-–]\s*\d{4}-\d{2}-\d{2}\)'
-                            full_re  = rf'⏰\s*(\d{{1,2}}:\d{{2}}(?::\d{{2}})?)\s*[-–]\s*(\d{{1,2}}:\d{{2}}(?::\d{{2}})?)\s*(?:{date_re})?'
-
+                            date_re  = r'\(\d{4}-\d{2}-\d{2}\s*-\s*\d{4}-\d{2}-\d{2}\)'
+                            full_re  = rf'{block_re}\s*(?:{date_re})?'
+                            m = re.search(full_re, note_text)
                             if not m:
-                                # Thử lại nếu thiếu ký tự '⏰'
                                 m = re.search(block_re, note_text)
-
                             start = m.group(1) if m else ""
                             end   = m.group(2) if m else ""
-
                             dm = re.search(date_re, note_text)
                             date_part = dm.group(0) if dm else ""
-
-                            # bỏ '⏰ ... (ngày)' ở đầu ghi chú
-                            note_rest = re.sub(full_re, '', note_text).strip()
-
-
+                            note_rest = re.sub(full_re, "", note_text).strip()
                             return start, end, date_part, note_rest
+
 
 
 
