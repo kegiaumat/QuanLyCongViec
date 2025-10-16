@@ -1498,12 +1498,15 @@ def admin_app(user):
 
                     if len(record) == 0:
                         # user chưa có dữ liệu trong DB -> luôn insert dữ liệu thật
+                       
                         payload = {
                             "username": uname,
                             "months": [month_str],
-                            "data": {month_str: codes}
+                            # ép kiểu để client hiểu đây là JSON chứ không phải string
+                            "data": json.loads(json.dumps({month_str: codes}, ensure_ascii=False))
                         }
                         supabase.table("attendance_new").insert(payload).execute()
+
                         inserted_users.append(uname)
                         continue
 
@@ -1555,7 +1558,7 @@ def admin_app(user):
 
                                 payload = {
                                     "months": months,
-                                    "data": data_all
+                                    "data": json.loads(json.dumps(data_all, ensure_ascii=False))  # ép về dict JSON thật
                                 }
                                 supabase.table("attendance_new").update(payload).eq("username", str(uname).strip()).execute()
 
