@@ -131,8 +131,6 @@ def admin_app(user):
         # === Thêm cột Xóa? ===
         if "Xóa?" not in df_users.columns:
             df_users["Xóa?"] = False
-        # === Thêm cột Đổi mật khẩu ===
-        df_users["Đổi mật khẩu"] = ""
 
         # === Dữ liệu cho selectbox ===
         role_options = ["user", "admin", "Chủ nhiệm dự án", "Chủ trì dự án"]
@@ -164,13 +162,6 @@ def admin_app(user):
                     help="Không thể chỉnh sửa tên đăng nhập"
                 ),
                 "Tên hiển thị": st.column_config.TextColumn("Tên hiển thị"),
-                "Đổi mật khẩu": st.column_config.TextColumn(
-                    "Đổi mật khẩu",
-                    help="Nhập mật khẩu mới để đổi",
-                    type="password"
-
-                ),
-
                 "Ngày sinh": st.column_config.DateColumn("Ngày sinh", format="YYYY-MM-DD"),
                 "Vai trò": st.column_config.MultiselectColumn(
                     "Vai trò",
@@ -226,13 +217,7 @@ def admin_app(user):
                         if json.dumps(new_val, ensure_ascii=False) != json.dumps(old_val, ensure_ascii=False):
                             update_data[db_field] = new_val
 
-                    # ✅ Thêm chức năng đổi mật khẩu
-                    new_pass = row.get("Đổi mật khẩu")
-                    if new_pass and str(new_pass).strip() != "":
-                        hashed = hash_password(str(new_pass).strip())
-                        update_data["password"] = hashed
-
-                    # ✅ Nếu có bất kỳ thay đổi nào → update 1 lần thôi
+                    # ✅ Chỉ update nếu có thay đổi
                     if update_data:
                         try:
                             supabase.table("users").update(update_data).eq("username", username).execute()
@@ -240,14 +225,10 @@ def admin_app(user):
                         except Exception as e:
                             st.error(f"⚠️ Lỗi khi cập nhật {username}: {e}")
 
-                        
                 if changed_count > 0:
                     st.success(f"✅ Đã cập nhật {changed_count} user có thay đổi.")
                     refresh_all_cache()
                     st.session_state.df_users = load_users_cached()
-                    # ✅ Reset trường mật khẩu mới để không hiển thị lại
-                    st.session_state.df_users["Đổi mật khẩu"] = ""
-
                 else:
                     st.info("ℹ️ Không có user nào thay đổi, không cần cập nhật.")
 
