@@ -225,7 +225,13 @@ def admin_app(user):
                         if json.dumps(new_val, ensure_ascii=False) != json.dumps(old_val, ensure_ascii=False):
                             update_data[db_field] = new_val
 
-                    # ✅ Chỉ update nếu có thay đổi
+                    # ✅ Thêm chức năng đổi mật khẩu
+                    new_pass = row.get("Đổi mật khẩu")
+                    if new_pass and str(new_pass).strip() != "":
+                        hashed = hash_password(str(new_pass).strip())
+                        update_data["password"] = hashed
+
+                    # ✅ Nếu có bất kỳ thay đổi nào → update 1 lần thôi
                     if update_data:
                         try:
                             supabase.table("users").update(update_data).eq("username", username).execute()
@@ -233,16 +239,6 @@ def admin_app(user):
                         except Exception as e:
                             st.error(f"⚠️ Lỗi khi cập nhật {username}: {e}")
 
-                    # ✅ Thêm chức năng đổi mật khẩu
-                    new_pass = row.get("Đổi mật khẩu")
-                    if new_pass and str(new_pass).strip() != "":
-                        hashed = hash_password(str(new_pass).strip())
-                        update_data["password"] = hashed
-
-                    # ✅ Chỉ update nếu có thay đổi
-                    if update_data:
-                        supabase.table("users").update(update_data).eq("username", username).execute()
-                        changed_count += 1
                         
                 if changed_count > 0:
                     st.success(f"✅ Đã cập nhật {changed_count} user có thay đổi.")
