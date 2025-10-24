@@ -167,7 +167,8 @@ def admin_app(user):
                 "Đổi mật khẩu": st.column_config.TextColumn(
                     "Đổi mật khẩu",
                     help="Nhập mật khẩu mới để đổi",
-                    password=True
+                    type="password"
+
                 ),
 
                 "Ngày sinh": st.column_config.DateColumn("Ngày sinh", format="YYYY-MM-DD"),
