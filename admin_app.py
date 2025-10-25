@@ -262,7 +262,8 @@ def admin_app(user):
                             supabase.table("users").delete().eq("username", row["Tên đăng nhập"]).execute()
                         st.success("🗑️ Đã xoá user được chọn")
                         refresh_all_cache()
-                        st.session_state.df_users = load_users_fresh()
+                        st.session_state.df_users = load_users_cached()
+
                         st.session_state.confirm_delete = False
                         st.rerun()
 
