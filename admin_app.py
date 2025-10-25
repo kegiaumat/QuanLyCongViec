@@ -175,12 +175,12 @@ def admin_app(user):
             }
         )
 
-        col1, col2 = st.columns(2)
-
+        # col1, col2 = st.columns(2)
+        col1, col2 = st.columns([1,1])
         # === Nút cập nhật ===
         with col1:
 
-            if st.button("💾 Update"):
+            if st.button("💾 Update", key="btn_update_user"):
                 changed_count = 0
 
                 for i, row in edited_users.iterrows():
@@ -237,35 +237,10 @@ def admin_app(user):
 
         # === Nút xóa ===
         with col2:
-            if "confirm_delete" not in st.session_state:
-                st.session_state.confirm_delete = False
-            st.divider()
-            st.subheader("🔐 Đổi mật khẩu User")
+            # if "confirm_delete" not in st.session_state:
+                # st.session_state.confirm_delete = False
 
-            # Danh sách user
-            user_list = df_users["Tên đăng nhập"].tolist()
-            selected_user = st.selectbox("Chọn user", user_list, key="select_user_password")
-
-            new_password = st.text_input("Nhập mật khẩu mới", type="password", key="new_pw")
-
-            if st.button("✅ Đổi mật khẩu", key="btn_change_pw"):
-                if not new_password:
-                    st.warning("⚠️ Bạn chưa nhập mật khẩu mới!")
-                else:
-                    try:
-                        hashed = hash_password(new_password)
-                        supabase.table("users").update({
-                            "password": hashed
-                        }).eq("username", selected_user).execute()
-
-                        st.success(f"✅ Đã đổi mật khẩu cho user **{selected_user}** ✔️")
-                        time.sleep(1)
-                        st.rerun()
-
-                    except Exception as e:
-                        st.error(f"⚠️ Lỗi khi đổi mật khẩu: {e}")
-
-            if st.button("❌ Xóa user"):
+            if st.button("❌ Xóa user", key="btn_delete_user"):
                 to_delete = edited_users[edited_users["Xóa?"] == True]
                 if to_delete.empty:
                     st.warning("⚠️ Bạn chưa tick user nào để xoá.")
@@ -296,6 +271,31 @@ def admin_app(user):
                         st.info("Đã huỷ thao tác xoá")
                         st.session_state.confirm_delete = False
 
+        st.divider()
+        st.subheader("🔐 Đổi mật khẩu User")
+
+        # Danh sách user
+        user_list = df_users["Tên đăng nhập"].tolist()
+        selected_user = st.selectbox("Chọn user", user_list, key="select_user_password")
+
+        new_password = st.text_input("Nhập mật khẩu mới", type="password", key="new_pw")
+
+        if st.button("✅ Đổi mật khẩu", key="btn_change_pw"):
+            if not new_password:
+                st.warning("⚠️ Bạn chưa nhập mật khẩu mới!")
+            else:
+                try:
+                    hashed = hash_password(new_password)
+                    supabase.table("users").update({
+                        "password": hashed
+                    }).eq("username", selected_user).execute()
+
+                    st.success(f"✅ Đã đổi mật khẩu cho user **{selected_user}** ✔️")
+                    time.sleep(1)
+                    st.rerun()
+
+                except Exception as e:
+                    st.error(f"⚠️ Lỗi khi đổi mật khẩu: {e}")
             
     elif choice == "Mục lục công việc":
         st.subheader("📚 Mục lục công việc")
