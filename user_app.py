@@ -64,6 +64,12 @@ def user_app(user):
         # ======= Danh sách task của user =======
         data = supabase.table("tasks").select("id, task, khoi_luong, progress, deadline, note").eq("project", project).eq("assignee", username).execute()
         df_tasks = pd.DataFrame(data.data)
+
+        # ✅ Fix: Nếu user chưa có task ⇒ không xử lý tiếp phần tách giờ
+        if df_tasks.empty:
+            st.warning("⚠️ Bạn chưa có công việc nào trong dự án này.")
+            return
+
         
 
         # === Tách giờ bắt đầu và kết thúc từ note nếu có dạng "⏰ 08:00 - 17:00 (...)" ===
