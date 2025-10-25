@@ -237,8 +237,9 @@ def admin_app(user):
 
         # === Nút xóa ===
         with col2:
-            # if "confirm_delete" not in st.session_state:
-                # st.session_state.confirm_delete = False
+            # ✅ Khởi tạo tránh lỗi
+            if "confirm_delete" not in st.session_state:
+                st.session_state.confirm_delete = False
 
             if st.button("❌ Xóa user", key="btn_delete_user"):
                 to_delete = edited_users[edited_users["Xóa?"] == True]
@@ -248,11 +249,12 @@ def admin_app(user):
                     st.session_state.to_delete = to_delete
                     st.session_state.confirm_delete = True
 
-            # === Hiển thị xác nhận xoá nếu cần ===
-            if st.session_state.confirm_delete:
+            # ✅ Sử dụng get() để tránh lỗi AttributeError
+            if st.session_state.get("confirm_delete", False):
                 to_delete = st.session_state.to_delete
                 st.error(f"⚠️ Bạn có chắc muốn xoá {len(to_delete)} user: "
                          f"{', '.join(to_delete['Tên hiển thị'].tolist())}?")
+
                 c1, c2 = st.columns(2)
                 with c1:
                     if st.button("✅ Yes, xoá ngay"):
@@ -260,9 +262,7 @@ def admin_app(user):
                             supabase.table("users").delete().eq("username", row["Tên đăng nhập"]).execute()
                         st.success("🗑️ Đã xoá user được chọn")
                         refresh_all_cache()
-                        # 👉 Dùng hàm mới để tải lại dữ liệu tươi
                         st.session_state.df_users = load_users_fresh()
-                        df_users = st.session_state.df_users.copy()
                         st.session_state.confirm_delete = False
                         st.rerun()
 
@@ -270,6 +270,7 @@ def admin_app(user):
                     if st.button("❌ No, huỷ"):
                         st.info("Đã huỷ thao tác xoá")
                         st.session_state.confirm_delete = False
+
 
         st.divider()
         st.subheader("🔐 Đổi mật khẩu User")
