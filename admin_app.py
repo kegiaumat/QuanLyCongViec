@@ -1429,12 +1429,29 @@ def admin_app(user):
 
 
         # ==== GHI CHÚ THÁNG (dùng user NoteData) ====
+        # ==== GHI CHÚ THÁNG (dùng user NoteData) ====
         st.markdown("### 📝 Ghi chú tháng")
 
-        note_rec = df_att[df_att["username"] == "NoteData"]
+        # ✅ Nếu df_att trống hoặc chưa có cột username → tạo DataFrame rỗng hợp lệ
+        if df_att.empty or "username" not in df_att.columns:
+            df_att = pd.DataFrame(columns=["username", "data", "months"])
+
+        # ✅ Chỉ lọc NoteData nếu có cột username
+        if "username" in df_att.columns and not df_att.empty:
+            note_rec = df_att[df_att["username"] == "NoteData"]
+        else:
+            note_rec = pd.DataFrame(columns=df_att.columns)
+
         existing_note = ""
         if not note_rec.empty:
             note_data = note_rec.iloc[0].get("data", {}) or {}
+            if isinstance(note_data, str):
+                try:
+                    note_data = json.loads(note_data)
+                except:
+                    note_data = {}
+            existing_note = note_data.get(month_str, "")
+
             if isinstance(note_data, str):
                 try:
                     note_data = json.loads(note_data)
