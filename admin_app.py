@@ -1364,13 +1364,11 @@ def admin_app(user):
         # ==== HIỂN THỊ BẢNG CHẤM CÔNG ====
         st.markdown("### 📊 Bảng chấm công")
 
-        # ✅ Giữ bảng trong session_state để không reset khi rerun
         if "attendance_df" not in st.session_state:
             st.session_state.attendance_df = df_display.copy()
 
         EDITOR_KEY = "attendance_editor"
 
-        # ✅ Dùng form để chặn rerun khi edit cell
         with st.form("attendance_form", clear_on_submit=False):
             edited_df = st.data_editor(
                 st.session_state.attendance_df,
@@ -1393,40 +1391,33 @@ def admin_app(user):
 
             save_clicked = st.form_submit_button("💾 Lưu bảng chấm công & ghi chú")
 
-        # ✅ Chỉ khi nhấn lưu mới cập nhật database
         if save_clicked:
             st.session_state.attendance_df = edited_df.copy()
             updated_count = 0
 
             with st.spinner("🔄 Đang lưu dữ liệu lên Supabase..."):
                 try:
-                    # Lấy dữ liệu hiện tại trên DB
                     res = supabase.table("attendance_new").select("*").execute()
                     df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame()
 
-                    # Duyệt từng user
                     for _, row in edited_df.iterrows():
                         uname = str(row["username"]).strip()
-
-                        # Tạo dữ liệu ngày công
                         data = {col: row[col] for col in day_cols}
-                        record = df_att[
-                            df_att["username"].astype(str).str.strip() == uname
-                        ]
+
+                        record = df_att[df_att["username"].astype(str).str.strip() == uname]
 
                         if record.empty:
                             # insert mới
                             supabase.table("attendance_new").insert({
                                 "username": uname,
-                                "month": month_str,
+                                "months": [month_str],  # ✅ đúng với kiểu text[]
                                 "data": data,
                             }).execute()
                         else:
-                            # update bản ghi cũ
                             rid = record.iloc[0]["id"]
                             supabase.table("attendance_new").update({
                                 "data": data,
-                                "month": month_str,
+                                "months": [month_str],  # ✅ đúng với kiểu text[]
                             }).eq("id", rid).execute()
 
                         updated_count += 1
