@@ -1307,12 +1307,7 @@ def admin_app(user):
 
         # ==== ĐỌC DỮ LIỆU TỪ SUPABASE ====
         res = supabase.table("attendance_new").select("*").execute()
-
-        # ✅ Nếu bảng rỗng, tạo DataFrame có sẵn cột để tránh lỗi
-        if res.data:
-            df_att = pd.DataFrame(res.data)
-        else:
-            df_att = pd.DataFrame(columns=["id", "username", "data", "months", "created_at"])
+        df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["username", "data", "months"])
 
         # ==== GHÉP DỮ LIỆU CHO HIỂN THỊ ====
         rows = []
@@ -1365,98 +1360,61 @@ def admin_app(user):
         df_display["User"] = df_display["User"].astype(str).str.strip()
 
 
-        # ==== HIỂN THỊ BẢNG CHẤM CÔNG (KHÔNG RERUN KHI GÕ) ====
         # ==== HIỂN THỊ BẢNG CHẤM CÔNG ====
         st.markdown("### 📊 Bảng chấm công")
+        edited_df = st.data_editor(
+            df_display,                         # GIỮ nguyên dataframe có cột 'username'
+            hide_index=True,
+            use_container_width=True,
+            height=650,
+            key=f"attendance_{month_str}",
+            column_config={
+                # 👇 ẨN HOÀN TOÀN cột username nhưng vẫn giữ trong dữ liệu trả về
+                "username": st.column_config.TextColumn(
+                    "Tên đăng nhập (ẩn)",
+                    disabled=True,
+                    help="Cột ẩn để lưu DB"
+                ),
 
-        if "attendance_df" not in st.session_state:
-            st.session_state.attendance_df = df_display.copy()
-
-        EDITOR_KEY = "attendance_editor"
-
-        with st.form("attendance_form", clear_on_submit=False):
-            edited_df = st.data_editor(
-                st.session_state.attendance_df,
-                hide_index=True,
-                use_container_width=True,
-                height=650,
-                key=EDITOR_KEY,
-                column_config={
-                    "username": st.column_config.TextColumn("Tên đăng nhập", disabled=True),
-                    "User": st.column_config.TextColumn("Nhân viên", disabled=True),
-                    **{
-                        c: st.column_config.SelectboxColumn(
-                            c, options=[add_emoji(x) for x in code_options]
-                        )
-                        for c in day_cols
-                    },
+                "User": st.column_config.TextColumn("Nhân viên", disabled=True),
+                **{
+                    c: st.column_config.SelectboxColumn(
+                        c,
+                        options=[add_emoji(x) for x in code_options]
+                    )
+                    for c in day_cols
                 },
-                column_order=["User"] + day_cols,
-            )
+            },
+            # 👇 Không đưa 'username' vào order để nó không chiếm chỗ trên UI
+            column_order=["User"] + day_cols,
+        )
 
-            save_clicked = st.form_submit_button("💾 Lưu bảng chấm công & ghi chú")
-
-        if save_clicked:
-            st.session_state.attendance_df = edited_df.copy()
-            updated_count = 0
-
-            with st.spinner("🔄 Đang lưu dữ liệu lên Supabase..."):
-                try:
-                    res = supabase.table("attendance_new").select("*").execute()
-                    df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame()
-
-                    for _, row in edited_df.iterrows():
-                        uname = str(row["username"]).strip()
-                        data = {col: row[col] for col in day_cols}
-
-                        record = df_att[df_att["username"].astype(str).str.strip() == uname]
-
-                        if record.empty:
-                            # insert mới
-                            supabase.table("attendance_new").insert({
-                                "username": uname,
-                                "months": [month_str],  # ✅ đúng với kiểu text[]
-                                "data": data,
-                            }).execute()
-                        else:
-                            rid = record.iloc[0]["id"]
-                            supabase.table("attendance_new").update({
-                                "data": data,
-                                "months": [month_str],  # ✅ đúng với kiểu text[]
-                            }).eq("id", rid).execute()
-
-                        updated_count += 1
-
-                    st.success(f"✅ Đã cập nhật dữ liệu chấm công cho **{updated_count}** tài khoản!")
-                except Exception as e:
-                    st.error(f"❌ Lỗi khi cập nhật dữ liệu: {e}")
+        # Ẩn cột 'username' khỏi giao diện bằng CSS
+        st.markdown(
+            """
+            <style>
+            [data-testid="stColumn"] div[data-testid*="username"] {
+                display: none !important;
+            }
+            th[data-testid*="username"], td[data-testid*="username"] {
+                display: none !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
 
 
 
-        # ==== GHI CHÚ THÁNG (dùng user NoteData) ====
+
+
         # ==== GHI CHÚ THÁNG (dùng user NoteData) ====
         st.markdown("### 📝 Ghi chú tháng")
 
-        # ✅ Nếu df_att trống hoặc chưa có cột username → tạo DataFrame rỗng hợp lệ
-        if df_att.empty or "username" not in df_att.columns:
-            df_att = pd.DataFrame(columns=["username", "data", "months"])
-
-        # ✅ Chỉ lọc NoteData nếu có cột username
-        if "username" in df_att.columns and not df_att.empty:
-            note_rec = df_att[df_att["username"] == "NoteData"]
-        else:
-            note_rec = pd.DataFrame(columns=df_att.columns)
-
+        note_rec = df_att[df_att["username"] == "NoteData"]
         existing_note = ""
         if not note_rec.empty:
             note_data = note_rec.iloc[0].get("data", {}) or {}
-            if isinstance(note_data, str):
-                try:
-                    note_data = json.loads(note_data)
-                except:
-                    note_data = {}
-            existing_note = note_data.get(month_str, "")
-
             if isinstance(note_data, str):
                 try:
                     note_data = json.loads(note_data)
@@ -1515,12 +1473,10 @@ def admin_app(user):
         df_summary = pd.DataFrame(summary_rows)
         st.dataframe(df_summary, hide_index=True, width="stretch")
 
-        # ==== LƯU DỮ LIỆU ====# ✅ Khi nhấn nút lưu, cập nhật lại session_state
-        # st.session_state.attendance_df = edited_df.copy()
-
+        # ==== LƯU DỮ LIỆU ====
         if st.button("💾 Lưu bảng chấm công & ghi chú"):
             with st.spinner("Đang lưu dữ liệu lên Supabase..."):
-                st.session_state.attendance_df = edited_df.copy()
+
                 # --- Lưu bảng công cho từng user ---
                 # --- Lưu bảng công cho từng user ---
                 today = dt.date.today()  # Dùng kiểu date để tránh lỗi so sánh
