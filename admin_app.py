@@ -1307,7 +1307,12 @@ def admin_app(user):
 
         # ==== ĐỌC DỮ LIỆU TỪ SUPABASE ====
         res = supabase.table("attendance_new").select("*").execute()
-        df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["username", "data", "months"])
+
+        # ✅ Nếu bảng rỗng, tạo DataFrame có sẵn cột để tránh lỗi
+        if res.data:
+            df_att = pd.DataFrame(res.data)
+        else:
+            df_att = pd.DataFrame(columns=["id", "username", "data", "months", "created_at"])
 
         # ==== GHÉP DỮ LIỆU CHO HIỂN THỊ ====
         rows = []
