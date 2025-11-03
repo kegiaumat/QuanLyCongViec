@@ -1360,34 +1360,37 @@ def admin_app(user):
         df_display["User"] = df_display["User"].astype(str).str.strip()
 
 
-        # ==== HIỂN THỊ BẢNG CHẤM CÔNG ====
+        # ==== HIỂN THỊ BẢNG CHẤM CÔNG (KHÔNG RERUN KHI GÕ) ====
         st.markdown("### 📊 Bảng chấm công")
-        edited_df = st.data_editor(
-            df_display,                         # GIỮ nguyên dataframe có cột 'username'
-            hide_index=True,
-            use_container_width=True,
-            height=650,
-            key=f"attendance_{month_str}",
-            column_config={
-                # 👇 ẨN HOÀN TOÀN cột username nhưng vẫn giữ trong dữ liệu trả về
-                "username": st.column_config.TextColumn(
-                    "Tên đăng nhập (ẩn)",
-                    disabled=True,
-                    help="Cột ẩn để lưu DB"
-                ),
 
-                "User": st.column_config.TextColumn("Nhân viên", disabled=True),
-                **{
-                    c: st.column_config.SelectboxColumn(
-                        c,
-                        options=[add_emoji(x) for x in code_options]
-                    )
-                    for c in day_cols
+        # ✅ Lưu dữ liệu gốc vào session_state để giữ bảng ổn định giữa các rerun
+        if "attendance_df" not in st.session_state:
+            st.session_state.attendance_df = df_display.copy()
+
+        # ✅ Tạo placeholder để chứa bảng chấm công
+        placeholder = st.empty()
+
+        # ✅ Hiển thị bảng trong container riêng → không rerun toàn app khi chỉnh
+        with placeholder.container():
+            edited_df = st.data_editor(
+                st.session_state.attendance_df,
+                hide_index=True,
+                use_container_width=True,
+                height=650,
+                key=f"attendance_{month_str}",
+                column_config={
+                    "username": st.column_config.TextColumn("Tên đăng nhập (ẩn)", disabled=True),
+                    "User": st.column_config.TextColumn("Nhân viên", disabled=True),
+                    **{
+                        c: st.column_config.SelectboxColumn(c, options=[add_emoji(x) for x in code_options])
+                        for c in day_cols
+                    },
                 },
-            },
-            # 👇 Không đưa 'username' vào order để nó không chiếm chỗ trên UI
-            column_order=["User"] + day_cols,
-        )
+                column_order=["User"] + day_cols,
+            )
+
+        # ✅ Không để app rerun khi chỉ chỉnh bảng
+        st.session_state._set_option("client.showWarningOnRerun", False)
 
         # Ẩn cột 'username' khỏi giao diện bằng CSS
         st.markdown(
@@ -1473,7 +1476,9 @@ def admin_app(user):
         df_summary = pd.DataFrame(summary_rows)
         st.dataframe(df_summary, hide_index=True, width="stretch")
 
-        # ==== LƯU DỮ LIỆU ====
+        # ==== LƯU DỮ LIỆU ====# ✅ Khi nhấn nút lưu, cập nhật lại session_state
+        st.session_state.attendance_df = edited_df.copy()
+
         if st.button("💾 Lưu bảng chấm công & ghi chú"):
             with st.spinner("Đang lưu dữ liệu lên Supabase..."):
 
