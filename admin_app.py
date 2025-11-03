@@ -1364,14 +1364,13 @@ def admin_app(user):
         # ==== HIỂN THỊ BẢNG CHẤM CÔNG (KHÔNG RERUN KHI EDIT CELL) ====
         st.markdown("### 📊 Bảng chấm công")
 
-        # 1️⃣ Khởi tạo dữ liệu nguồn
+        # 1️⃣ Khởi tạo dữ liệu nguồn 1 lần duy nhất
         if "attendance_df" not in st.session_state:
             st.session_state.attendance_df = df_display.copy()
 
-        # 2️⃣ Tạo key cố định cho bảng
         EDITOR_KEY = "attendance_editor"
 
-        # 3️⃣ Bọc editor trong FORM để tránh rerun mỗi khi sửa cell
+        # 2️⃣ Gói bảng trong form để tránh rerun khi sửa cell
         with st.form("attendance_form", clear_on_submit=False):
             edited_df = st.data_editor(
                 st.session_state.attendance_df,
@@ -1383,7 +1382,10 @@ def admin_app(user):
                     "username": st.column_config.TextColumn("Tên đăng nhập (ẩn)", disabled=True),
                     "User": st.column_config.TextColumn("Nhân viên", disabled=True),
                     **{
-                        c: st.column_config.SelectboxColumn(c, options=[add_emoji(x) for x in code_options])
+                        c: st.column_config.SelectboxColumn(
+                            c,
+                            options=[add_emoji(x) for x in code_options],
+                        )
                         for c in day_cols
                     },
                 },
@@ -1392,15 +1394,32 @@ def admin_app(user):
 
             save_clicked = st.form_submit_button("💾 Lưu bảng chấm công & ghi chú")
 
-        # 4️⃣ Cập nhật state và ghi DB chỉ khi nhấn Lưu
+        # 3️⃣ Khi người dùng bấm Lưu, mới thực hiện cập nhật & báo kết quả
         if save_clicked:
             st.session_state.attendance_df = edited_df.copy()
 
             with st.spinner("Đang lưu dữ liệu lên Supabase..."):
-                # Giữ nguyên toàn bộ phần lưu Supabase của bạn ở đây
-                pass  # Xóa dòng này khi bạn dán lại phần lưu dữ liệu cũ
+                updated_count = 0
 
+                for idx, row in edited_df.iterrows():
+                    username = row["username"]
+                    user_data = {
+                        "username": username,
+                        "month": month_str,
+                        "data": {day: row[day] for day in day_cols},
+                    }
 
+                    # Kiểm tra bản ghi đã tồn tại chưa
+                    existing = supabase.table("attendance_new").select("id").eq("username", username).eq("month", month_str).execute()
+                    if existing.data:
+                        supabase.table("attendance_new").update(user_data).eq("id", existing.data[0]["id"]).execute()
+                    else:
+                        supabase.table("attendance_new").insert(user_data).execute()
+                    updated_count += 1
+
+                st.success(f"✅ Đã cập nhật dữ liệu chấm công cho **{updated_count}** tài khoản!")
+
+        # ==== GHI CHÚ THÁNG (dùng user NoteData) ====
 
 
 
