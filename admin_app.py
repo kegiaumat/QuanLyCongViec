@@ -1390,7 +1390,7 @@ def admin_app(user):
             )
 
         # ✅ Không để app rerun khi chỉ chỉnh bảng
-        st.session_state._set_option("client.showWarningOnRerun", False)
+        st.set_option("client.showWarningOnRerun", False)
 
         # Ẩn cột 'username' khỏi giao diện bằng CSS
         st.markdown(
