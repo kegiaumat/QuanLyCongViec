@@ -1368,6 +1368,7 @@ def admin_app(user):
 
         # --- Bọc editor trong FORM để tránh rerun khi edit cell ---
         # --- Bọc editor trong FORM để tránh rerun khi edit cell ---
+        # --- Bọc editor trong FORM để tránh rerun khi edit cell ---
         with st.form("attendance_form", clear_on_submit=False):
             edited_df = st.data_editor(
                 st.session_state.attendance_df,
@@ -1375,11 +1376,23 @@ def admin_app(user):
                 use_container_width=True,
                 height=650,
                 key="attendance_editor",
+                column_config={
+                    "User": st.column_config.TextColumn("Nhân viên", disabled=True),
+                    **{
+                        c: st.column_config.SelectboxColumn(
+                            c,
+                            options=[add_emoji(x) for x in code_options if x.strip()],  # loại bỏ giá trị rỗng
+                            help="Chọn loại công (K, P, H, TQ, NM, ...)"
+                        )
+                        for c in day_cols
+                    },
+                },
                 column_order=["User"] + day_cols,
             )
 
             # Nút Lưu nằm trong form → chỉ rerun khi bấm
             save_clicked = st.form_submit_button("💾 Lưu bảng chấm công & ghi chú")
+
 
 
         # Ẩn cột 'username' khỏi giao diện bằng CSS
