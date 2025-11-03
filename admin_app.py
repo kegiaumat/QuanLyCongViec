@@ -1367,14 +1367,14 @@ def admin_app(user):
             st.session_state.attendance_df = df_display.copy()
 
         # --- Bọc editor trong FORM để tránh rerun khi edit cell ---
+        # --- Bọc editor trong FORM để tránh rerun khi edit cell ---
         with st.form("attendance_form", clear_on_submit=False):
             edited_df = st.data_editor(
                 st.session_state.attendance_df,
                 hide_index=True,
                 use_container_width=True,
                 height=650,
-                key="attendance_editor",  # dùng key cố định để không rerun
-                column_config={...},      # giữ nguyên cấu hình cũ của bạn
+                key="attendance_editor",
                 column_order=["User"] + day_cols,
             )
 
