@@ -1475,11 +1475,11 @@ def admin_app(user):
         st.dataframe(df_summary, hide_index=True, width="stretch")
 
         # ==== LƯU DỮ LIỆU ====# ✅ Khi nhấn nút lưu, cập nhật lại session_state
-        st.session_state.attendance_df = edited_df.copy()
+        # st.session_state.attendance_df = edited_df.copy()
 
         if st.button("💾 Lưu bảng chấm công & ghi chú"):
             with st.spinner("Đang lưu dữ liệu lên Supabase..."):
-
+                st.session_state.attendance_df = edited_df.copy()
                 # --- Lưu bảng công cho từng user ---
                 # --- Lưu bảng công cho từng user ---
                 today = dt.date.today()  # Dùng kiểu date để tránh lỗi so sánh
