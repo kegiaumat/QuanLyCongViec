@@ -1377,7 +1377,7 @@ def admin_app(user):
                 hide_index=True,
                 use_container_width=True,
                 height=650,
-                key=f"attendance_{month_str}",
+                key="attendance_editor",  # key cố định, không thay đổi theo tháng
                 column_config={
                     "username": st.column_config.TextColumn("Tên đăng nhập (ẩn)", disabled=True),
                     "User": st.column_config.TextColumn("Nhân viên", disabled=True),
