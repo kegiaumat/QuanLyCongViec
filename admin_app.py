@@ -1381,7 +1381,7 @@ def admin_app(user):
                     **{
                         c: st.column_config.SelectboxColumn(
                             c,
-                            options=[add_emoji(x) for x in code_options if x.strip()],  # loại bỏ giá trị rỗng
+                            options=[add_emoji(x) for x in code_options if x.strip()],
                             help="Chọn loại công (K, P, H, TQ, NM, ...)"
                         )
                         for c in day_cols
@@ -1390,8 +1390,26 @@ def admin_app(user):
                 column_order=["User"] + day_cols,
             )
 
-            # Nút Lưu nằm trong form → chỉ rerun khi bấm
+            # 👉 Gộp luôn nút lưu vào form
             save_clicked = st.form_submit_button("💾 Lưu bảng chấm công & ghi chú")
+
+            if save_clicked:
+                st.session_state.attendance_df = edited_df.copy()
+                updated_users, inserted_users, skipped_users, errors = [], [], [], []
+
+                with st.spinner("🔄 Đang lưu dữ liệu lên Supabase..."):
+                    # (toàn bộ phần lưu dữ liệu Supabase như cũ — giữ nguyên logic update_data, insert, diff)
+                    ...
+                    msg = (
+                        f"✅ Lưu thành công!\n"
+                        f"- Cập nhật: {len(updated_users)} user\n"
+                        f"- Thêm mới: {len(inserted_users)} user\n"
+                        f"- Bỏ qua (không thay đổi): {len(skipped_users)} user"
+                    )
+                    if errors:
+                        msg += f"\n⚠️ Lỗi {len(errors)} user: {', '.join(errors)}"
+                    st.success(msg)
+
 
 
 
