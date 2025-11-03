@@ -1389,8 +1389,6 @@ def admin_app(user):
                 column_order=["User"] + day_cols,
             )
 
-        # ✅ Không để app rerun khi chỉ chỉnh bảng
-        st.set_option("client.showWarningOnRerun", False)
 
         # Ẩn cột 'username' khỏi giao diện bằng CSS
         st.markdown(
