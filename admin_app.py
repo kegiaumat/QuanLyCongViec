@@ -1362,13 +1362,11 @@ def admin_app(user):
 
         # ==== HIỂN THỊ BẢNG CHẤM CÔNG ====
         st.markdown("### 📊 Bảng chấm công")
-        # --- Lưu dữ liệu gốc vào session_state nếu chưa có ---
+
+        # giữ dữ liệu nguồn trong session_state
         if "attendance_df" not in st.session_state:
             st.session_state.attendance_df = df_display.copy()
 
-        # --- Bọc editor trong FORM để tránh rerun khi edit cell ---
-        # --- Bọc editor trong FORM để tránh rerun khi edit cell ---
-        # --- Bọc editor trong FORM để tránh rerun khi edit cell ---
         with st.form("attendance_form", clear_on_submit=False):
             edited_df = st.data_editor(
                 st.session_state.attendance_df,
@@ -1377,6 +1375,11 @@ def admin_app(user):
                 height=650,
                 key="attendance_editor",
                 column_config={
+                    # 👇 GIỮ cột username trong dữ liệu trả về (disable để không sửa),
+                    #    nhưng không cho hiện trên UI (không đưa vào column_order)
+                    "username": st.column_config.TextColumn(
+                        "Tên đăng nhập (ẩn)", disabled=True, help="Cột ẩn để lưu DB"
+                    ),
                     "User": st.column_config.TextColumn("Nhân viên", disabled=True),
                     **{
                         c: st.column_config.SelectboxColumn(
@@ -1387,28 +1390,131 @@ def admin_app(user):
                         for c in day_cols
                     },
                 },
+                # 👇 không đưa 'username' vào thứ tự hiển thị để nó ẩn khỏi UI
                 column_order=["User"] + day_cols,
             )
 
-            # 👉 Gộp luôn nút lưu vào form
             save_clicked = st.form_submit_button("💾 Lưu bảng chấm công & ghi chú")
+
 
             if save_clicked:
                 st.session_state.attendance_df = edited_df.copy()
+
                 updated_users, inserted_users, skipped_users, errors = [], [], [], []
 
                 with st.spinner("🔄 Đang lưu dữ liệu lên Supabase..."):
-                    # (toàn bộ phần lưu dữ liệu Supabase như cũ — giữ nguyên logic update_data, insert, diff)
-                    ...
+                    # đọc toàn bộ DB hiện có
+                    res = supabase.table("attendance_new").select("*").execute()
+                    df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["username","data","months"])
+
+                    # map nhanh để không filter nhiều lần
+                    db_by_user = {str(r["username"]).strip(): r for _, r in df_att.iterrows()} if not df_att.empty else {}
+
+                    def remove_emoji(txt: str) -> str:
+                        if not isinstance(txt, str):
+                            return ""
+                        # xoá emoji unicode và khoảng trắng thừa
+                        txt = re.sub(r"[\U0001F300-\U0001FAFF]", "", txt)
+                        for sym in ["🟩","🟥","🟦","🟧","🟨","🟫","🟪","⬛"]:
+                            txt = txt.replace(sym, "")
+                        return txt.strip()
+
+                    def cell_to_code(cell):
+                        if cell is None:
+                            return ""
+                        return remove_emoji(str(cell))
+
+                    def norm_codes(d: dict) -> dict:
+                        """Đưa về { '01':'K', '02':'', ... } và coi None == '' """
+                        out = {}
+                        for k, v in (d or {}).items():
+                            kk = f"{int(k):02d}" if str(k).isdigit() else str(k)
+                            vv = "" if v in [None, "None", "nan", "NaN"] else str(v).strip()
+                            out[kk] = vv
+                        return out
+
+                    def equal_month(a: dict, b: dict) -> bool:
+                        """So sánh hai dict codes theo key union; '' và None coi như nhau"""
+                        A, B = norm_codes(a), norm_codes(b)
+                        keys = set(A.keys()) | set(B.keys())
+                        for k in keys:
+                            if (A.get(k, "") or "").strip() != (B.get(k, "") or "").strip():
+                                return False
+                        return True
+
+                    today = dt.date.today()
+
+                    for _, row in edited_df.iterrows():
+                        # 🔐 đảm bảo luôn có username
+                        uname = str(row.get("username") or "").strip()
+                        if not uname:
+                            # fallback: map từ tên hiển thị nếu cần
+                            uname = str(df_display.loc[df_display["User"] == row["User"], "username"].iloc[0]) if "User" in row and not df_display.empty else ""
+                        if not uname:
+                            errors.append(f"Thiếu username cho {row.get('User')}")
+                            continue
+
+                        # build codes mới (đã bỏ emoji)
+                        new_codes = {}
+                        for col in day_cols:
+                            try:
+                                day = int(col.split("/")[0])
+                                date_in_month = selected_month.replace(day=day)
+                                if date_in_month.date() <= today:
+                                    new_codes[f"{day:02d}"] = cell_to_code(row.get(col))
+                            except Exception:
+                                pass
+
+                        # đọc record hiện có
+                        rec = db_by_user.get(uname)
+                        if not rec:
+                            # insert mới
+                            payload = {
+                                "username": uname,
+                                "months": [month_str],
+                                "data": {month_str: new_codes},
+                            }
+                            supabase.table("attendance_new").insert(payload).execute()
+                            inserted_users.append(uname)
+                            continue
+
+                        # so sánh với dữ liệu cũ trong DB
+                        data_all = rec.get("data", {}) or {}
+                        if isinstance(data_all, str):
+                            try:
+                                data_all = json.loads(data_all)
+                            except Exception:
+                                data_all = {}
+
+                        old_codes = data_all.get(month_str, {})  # dict các ngày cũ
+
+                        if not equal_month(old_codes, new_codes):
+                            # có thay đổi → cập nhật
+                            data_all[month_str] = new_codes
+                            months = (rec.get("months") or [])
+                            if month_str not in months:
+                                months.append(month_str)
+
+                            supabase.table("attendance_new").update({
+                                "data": data_all,
+                                "months": months
+                            }).eq("username", uname).execute()
+
+                            updated_users.append(uname)
+                        else:
+                            skipped_users.append(uname)
+
+                    # thông báo kết quả
                     msg = (
-                        f"✅ Lưu thành công!\n"
+                        f"✅ Lưu xong!\n"
                         f"- Cập nhật: {len(updated_users)} user\n"
                         f"- Thêm mới: {len(inserted_users)} user\n"
-                        f"- Bỏ qua (không thay đổi): {len(skipped_users)} user"
+                        f"- Bỏ qua (không đổi): {len(skipped_users)} user"
                     )
                     if errors:
                         msg += f"\n⚠️ Lỗi {len(errors)} user: {', '.join(errors)}"
                     st.success(msg)
+
 
 
 
