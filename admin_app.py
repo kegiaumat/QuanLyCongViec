@@ -1361,83 +1361,35 @@ def admin_app(user):
 
 
         # ==== HIỂN THỊ BẢNG CHẤM CÔNG ====
-        # --- Hiển thị bảng ---
         st.markdown("### 📊 Bảng chấm công")
+        edited_df = st.data_editor(
+            df_display,                         # GIỮ nguyên dataframe có cột 'username'
+            hide_index=True,
+            use_container_width=True,
+            height=650,
+            key=f"attendance_{month_str}",
+            column_config={
+                # 👇 ẨN HOÀN TOÀN cột username nhưng vẫn giữ trong dữ liệu trả về
+                "username": st.column_config.TextColumn(
+                    "Tên đăng nhập (ẩn)",
+                    disabled=True,
+                    help="Cột ẩn để lưu DB"
+                ),
 
-        # Lưu bảng vào session_state để không mất khi rerun
-        if "attendance_df" not in st.session_state:
-            st.session_state.attendance_df = df_display.copy()
-
-        # Form để ngăn rerun mỗi khi edit cell
-        with st.form("attendance_form", clear_on_submit=False):
-            edited_df = st.data_editor(
-                st.session_state.attendance_df,
-                hide_index=True,
-                use_container_width=True,
-                height=650,
-                key="attendance_editor",
-                column_config={
-                    "username": st.column_config.TextColumn(
-                        "Tên đăng nhập (ẩn)", disabled=True
-                    ),
-                    "User": st.column_config.TextColumn("Nhân viên", disabled=True),
-                    **{
-                        c: st.column_config.SelectboxColumn(
-                            c, options=[add_emoji(x) for x in code_options if x.strip()]
-                        )
-                        for c in day_cols
-                    },
+                "User": st.column_config.TextColumn("Nhân viên", disabled=True),
+                **{
+                    c: st.column_config.SelectboxColumn(
+                        c,
+                        options=[add_emoji(x) for x in code_options]
+                    )
+                    for c in day_cols
                 },
-                column_order=["User"] + day_cols,
-            )
-            save_clicked = st.form_submit_button("💾 Lưu bảng chấm công & ghi chú")
+            },
+            # 👇 Không đưa 'username' vào order để nó không chiếm chỗ trên UI
+            column_order=["User"] + day_cols,
+        )
 
-        # --- Lưu dữ liệu khi bấm nút ---
-        if save_clicked:
-            # ✅ Cập nhật session_state trước khi so sánh
-            st.session_state.attendance_df = edited_df.copy()
-            df_to_save = st.session_state.attendance_df.copy()
-
-            updated_users, inserted_users, skipped_users = [], [], []
-
-            with st.spinner("🔄 Đang lưu dữ liệu..."):
-                # Lấy dữ liệu DB hiện tại
-                res = supabase.table("attendance_new").select("*").execute()
-                df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["username","data","months"])
-
-                # Duyệt từng user để so sánh
-                for _, row in df_to_save.iterrows():
-                    uname = str(row["username"]).strip()
-                    new_data = {col: row[col] for col in day_cols}
-                    old_rec = df_att[df_att["username"] == uname]
-
-                    if old_rec.empty:
-                        # Thêm mới
-                        supabase.table("attendance_new").insert({
-                            "username": uname,
-                            "months": [month_str],
-                            "data": new_data
-                        }).execute()
-                        inserted_users.append(uname)
-                    else:
-                        old_data = old_rec.iloc[0].get("data", {})
-                        if json.dumps(old_data, sort_keys=True) != json.dumps(new_data, sort_keys=True):
-                            # Cập nhật nếu khác
-                            rid = old_rec.iloc[0]["id"]
-                            supabase.table("attendance_new").update({
-                                "data": new_data,
-                                "months": [month_str]
-                            }).eq("id", rid).execute()
-                            updated_users.append(uname)
-                        else:
-                            skipped_users.append(uname)
-
-            st.success(f"""✅ Lưu thành công!  
-        - Cập nhật: {len(updated_users)} user  
-        - Thêm mới: {len(inserted_users)} user  
-        - Bỏ qua (không thay đổi): {len(skipped_users)} user""")
-
-        # Ẩn cột username (vẫn giữ trong dữ liệu)
+        # Ẩn cột 'username' khỏi giao diện bằng CSS
         st.markdown(
             """
             <style>
@@ -1449,7 +1401,7 @@ def admin_app(user):
             }
             </style>
             """,
-            unsafe_allow_html=True,
+            unsafe_allow_html=True
         )
 
 
@@ -1522,7 +1474,7 @@ def admin_app(user):
         st.dataframe(df_summary, hide_index=True, width="stretch")
 
         # ==== LƯU DỮ LIỆU ====
-        if save_clicked:
+        if st.button("💾 Lưu bảng chấm công & ghi chú"):
             with st.spinner("Đang lưu dữ liệu lên Supabase..."):
 
                 # --- Lưu bảng công cho từng user ---
