@@ -1361,23 +1361,24 @@ def admin_app(user):
 
 
         # ==== HIỂN THỊ BẢNG CHẤM CÔNG (KHÔNG RERUN KHI GÕ) ====
+        # ==== HIỂN THỊ BẢNG CHẤM CÔNG (KHÔNG RERUN KHI EDIT CELL) ====
         st.markdown("### 📊 Bảng chấm công")
 
-        # ✅ Lưu dữ liệu gốc vào session_state để giữ bảng ổn định giữa các rerun
+        # 1️⃣ Khởi tạo dữ liệu nguồn
         if "attendance_df" not in st.session_state:
             st.session_state.attendance_df = df_display.copy()
 
-        # ✅ Tạo placeholder để chứa bảng chấm công
-        placeholder = st.empty()
+        # 2️⃣ Tạo key cố định cho bảng
+        EDITOR_KEY = "attendance_editor"
 
-        # ✅ Hiển thị bảng trong container riêng → không rerun toàn app khi chỉnh
-        with placeholder.container():
+        # 3️⃣ Bọc editor trong FORM để tránh rerun mỗi khi sửa cell
+        with st.form("attendance_form", clear_on_submit=False):
             edited_df = st.data_editor(
                 st.session_state.attendance_df,
                 hide_index=True,
                 use_container_width=True,
                 height=650,
-                key="attendance_editor",  # key cố định, không thay đổi theo tháng
+                key=EDITOR_KEY,
                 column_config={
                     "username": st.column_config.TextColumn("Tên đăng nhập (ẩn)", disabled=True),
                     "User": st.column_config.TextColumn("Nhân viên", disabled=True),
@@ -1389,21 +1390,15 @@ def admin_app(user):
                 column_order=["User"] + day_cols,
             )
 
+            save_clicked = st.form_submit_button("💾 Lưu bảng chấm công & ghi chú")
 
-        # Ẩn cột 'username' khỏi giao diện bằng CSS
-        st.markdown(
-            """
-            <style>
-            [data-testid="stColumn"] div[data-testid*="username"] {
-                display: none !important;
-            }
-            th[data-testid*="username"], td[data-testid*="username"] {
-                display: none !important;
-            }
-            </style>
-            """,
-            unsafe_allow_html=True
-        )
+        # 4️⃣ Cập nhật state và ghi DB chỉ khi nhấn Lưu
+        if save_clicked:
+            st.session_state.attendance_df = edited_df.copy()
+
+            with st.spinner("Đang lưu dữ liệu lên Supabase..."):
+                # Giữ nguyên toàn bộ phần lưu Supabase của bạn ở đây
+                pass  # Xóa dòng này khi bạn dán lại phần lưu dữ liệu cũ
 
 
 
