@@ -1369,7 +1369,6 @@ def admin_app(user):
 
         EDITOR_KEY = "attendance_editor"
 
-        # ✅ Không rerun khi chỉnh cell
         with st.form("attendance_form", clear_on_submit=False):
             edited_df = st.data_editor(
                 st.session_state.attendance_df,
@@ -1398,7 +1397,6 @@ def admin_app(user):
 
             with st.spinner("🔄 Đang lưu dữ liệu lên Supabase..."):
                 try:
-                    # Đọc dữ liệu hiện có từ DB
                     res = supabase.table("attendance_new").select("*").execute()
                     df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame()
 
@@ -1409,26 +1407,22 @@ def admin_app(user):
                         record = df_att[df_att["username"].astype(str).str.strip() == uname]
 
                         if record.empty:
-                            # 👇 Nếu chưa có user này -> thêm mới
+                            # insert mới
                             supabase.table("attendance_new").insert({
                                 "username": uname,
-                                "months": [month_str],
+                                "months": [month_str],  # ✅ đúng với kiểu text[]
                                 "data": data,
                             }).execute()
-                            updated_count += 1
                         else:
                             rid = record.iloc[0]["id"]
-                            old_data = record.iloc[0]["data"]
+                            supabase.table("attendance_new").update({
+                                "data": data,
+                                "months": [month_str],  # ✅ đúng với kiểu text[]
+                            }).eq("id", rid).execute()
 
-                            # 👇 So sánh JSON để chỉ update nếu có thay đổi
-                            if json.dumps(old_data, sort_keys=True) != json.dumps(data, sort_keys=True):
-                                supabase.table("attendance_new").update({
-                                    "data": data,
-                                    "months": [month_str],
-                                }).eq("id", rid).execute()
-                                updated_count += 1
+                        updated_count += 1
 
-                    st.success(f"✅ Đã cập nhật dữ liệu chấm công cho **{updated_count}** tài khoản (chỉ các tài khoản có thay đổi).")
+                    st.success(f"✅ Đã cập nhật dữ liệu chấm công cho **{updated_count}** tài khoản!")
                 except Exception as e:
                     st.error(f"❌ Lỗi khi cập nhật dữ liệu: {e}")
 
