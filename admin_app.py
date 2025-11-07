@@ -1468,12 +1468,13 @@ def admin_app(user):
         gb.configure_default_column(
             editable=True,
             resizable=True,
-            sortable=False,  # ✅ Tắt sort
-            autoSize=False,     # thêm dòng này
-            filter=False,    # ✅ Tắt filter
+            sortable=False,
+            filter=False,
             wrapHeaderText=True,
             autoHeaderHeight=True,
+            autoSize=False
         )
+
 
 
         # Pin cột User bên trái
@@ -1481,10 +1482,10 @@ def admin_app(user):
             "User",
             pinned="left",
             editable=False,
-            width=500,     # tăng lên
-            autoSize=False # thêm dòng này để nó KHÔNG tự co
-            filter=False,        # ✅ Không filter
-            sortable=False       # ✅ Không sort
+            width=250,
+            sortable=False,
+            filter=False,
+            autoSize=False
         )
 
 
@@ -1528,15 +1529,22 @@ def admin_app(user):
             return { 'backgroundColor': bg };
         }
         """)
-        header_html = col.replace(" (", "<br>(").replace(")", ")")
-
-        gb.configure_column(
-            col,
-            headerName=f"<div style='text-align:center; line-height:14px'>{header_html}</div>",
-        )
-
         for col in day_cols:
+            # tách ngày và thứ xuống dòng
+            header_html = col.replace(" (", "<br>(").replace(")", ")")
+
+            gb.configure_column(
+                col,
+                headerName=(
+                    f"<div style='text-align:center; white-space:normal; "
+                    f"line-height:14px'>{header_html}</div>"
+                ),
+                cellEditor="agSelectCellEditor",
+                cellEditorParams={"values": code_options},
+                autoSize=False,
+            )
             gb.configure_column(col, cellStyle=cell_style_jscode)
+
 
         gridOptions = gb.build()
 
@@ -1547,11 +1555,11 @@ def admin_app(user):
             df_display_clean,
             gridOptions=gridOptions,
             height=650,
-            fit_columns_on_grid_load=False,
             allow_unsafe_jscode=True,
-            update_mode=GridUpdateMode.NO_UPDATE,   # ✅ Không rerun khi edit cell
-            theme="alpine",
+            update_mode=GridUpdateMode.NO_UPDATE,
+            fit_columns_on_grid_load=False,
         )
+
 
 
         edited_df_clean = grid_response["data"]
