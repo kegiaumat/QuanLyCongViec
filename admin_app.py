@@ -1876,6 +1876,48 @@ def admin_app(user):
             st.session_state.attendance_buffer = None
 
 
+        # ==============================
+        # 📊 THỐNG KÊ CÁC LOẠI CÔNG THEO THÁNG
+        # ==============================
+
+        st.divider()
+        st.markdown("## 📊 Thống kê tổng hợp theo tháng")
+
+        if "df_display" in locals():
+
+            df_stat = df_display.copy()
+
+            # Lấy cột ngày
+            day_cols = [c for c in df_stat.columns if "/" in c]
+
+            # Hàm đếm theo loại
+            def count_type(row, code):
+                return sum(1 for c in day_cols if str(row[c]).strip().upper() == code)
+
+            # Các loại công
+            codes = ["K", "P", "L", "Ô", "H", "K1/2", "P1/2", "L1/2"]
+
+            for code in codes:
+                df_stat[f"Tổng {code}"] = df_stat.apply(lambda r: count_type(r, code), axis=1)
+
+            # Tính tổng công (K = 1; K1/2 = 0.5 ...)
+            def calc_work_days(row):
+                total = 0
+                for c in day_cols:
+                    val = str(row[c]).strip().upper()
+                    if val == "K": total += 1
+                    elif val == "K1/2": total += 0.5
+                return total
+
+            df_stat["Tổng Công"] = df_stat.apply(calc_work_days, axis=1)
+
+            # Chọn cột hiển thị
+            show_cols = ["User"] + [c for c in df_stat.columns if c.startswith("Tổng ")]
+
+            st.dataframe(df_stat[show_cols], use_container_width=True)
+
+        else:
+            st.info("Chưa có dữ liệu chấm công để thống kê.")
 
         
         # ==== XUẤT FILE EXCEL BẢNG CÔNG ====
