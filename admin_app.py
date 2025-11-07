@@ -1329,14 +1329,16 @@ def admin_app(user):
         df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["username", "data", "months"])
 
         # ==== GHÉP DỮ LIỆU CHO HIỂN THỊ ====
+        # ==========================
+        # BUILD DỮ LIỆU CHẤM CÔNG
+        # ==========================
         rows = []
+
         for _, u in df_users.iterrows():
-            uname = u.get("username", "")            # ← Dùng username thật để so sánh DB
-            display_name = u.get("display_name", "") # ← Dùng để hiển thị
-            record = df_att[df_att["username"].astype(str).str.strip() == str(uname).strip()]
+            uname = u["username"]
+            display_name = u["display_name"]
 
-
-
+            record = df_att[df_att["username"] == uname]
             user_data = {}
 
             if len(record) > 0:
@@ -1349,40 +1351,30 @@ def admin_app(user):
                         user_data = {}
 
             month_data = user_data.get(month_str, {})
-            row = {"User": display_name, "username": uname}
-
-
-            # ==== Chỉ tự động chấm đến ngày hiện tại ====
-            today = pd.Timestamp(dt.date.today())
+            row = {"username": uname, "User": display_name}
 
             for d in days:
                 weekday = d.weekday()
-                day_key = d.strftime("%d")
-                col = f"{day_key}/{d.strftime('%m')} ({['T2','T3','T4','T5','T6','T7','CN'][weekday]})"
+                key = d.strftime("%d")
+                col = f"{key}/{d.strftime('%m')} ({['T2','T3','T4','T5','T6','T7','CN'][weekday]})"
 
                 if d <= today:
-                    # Nếu đã có dữ liệu trong Supabase thì giữ nguyên, ngược lại auto K (trừ CN)
-                    val = month_data.get(day_key, "K" if weekday < 5 else "")
+                    val = month_data.get(key, "K" if weekday < 5 else "")
                 else:
-                    # Các ngày tương lai chưa đến => None
-                    val = month_data.get(day_key, None)
+                    val = month_data.get(key, None)
 
-                row[col] = val  # giữ ký hiệu gốc, KHÔNG thêm emoji nữa
-
+                row[col] = val
 
             rows.append(row)
 
-            # ✅ TẠO LẠI DỮ LIỆU KHI CHUYỂN THÁNG
-            if "att_month" not in st.session_state or st.session_state["att_month"] != month_str:
+        # ✅ tạo df một lần sau khi xong vòng for
+        df_display = pd.DataFrame(rows)
+        day_cols = [c for c in df_display.columns if "/" in c]
+        df_display = df_display[["username", "User"] + day_cols]
 
-                st.session_state["att_month"] = month_str
+        # ✅ chỉ gán session_state một lần
+        st.session_state["df_display_att"] = df_display.copy()
 
-                df_display = pd.DataFrame(rows)
-                day_cols = [c for c in df_display.columns if "/" in c]
-                df_display = df_display[["username", "User"] + day_cols]
-
-                # ✅ lưu bảng gốc vào session
-                st.session_state["df_display_att"] = df_display.copy()
 
             # ✅ sau đó luôn lấy ra dùng
             df_display = st.session_state["df_display_att"].copy()
