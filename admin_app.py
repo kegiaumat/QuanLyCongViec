@@ -120,20 +120,27 @@ def admin_app(user):
         supabase = get_supabase_client()
 
         # === Chuẩn hóa cột ===
+        # === Chuẩn hóa cột từ database ===
         df_users = df_users.rename(columns={
             "username": "Tên đăng nhập",
             "display_name": "Tên hiển thị",
             "dob": "Ngày sinh",
             "role": "Vai trò",
             "project_manager_of": "Chủ nhiệm dự án",
-            "project_leader_of": "Chủ trì dự án"
+            "project_leader_of": "Chủ trì dự án",
+            "stt": "STT"
         })
-        df_users = df_users.rename(columns={"stt": "STT"})
+
+        # ✅ Xóa hoàn toàn cột ID để không xuất hiện nữa
         df_users = df_users.drop(columns=["id"], errors="ignore")
+
+        # ✅ Sắp xếp theo STT
         df_users = df_users.sort_values("STT").reset_index(drop=True)
-        # === Thêm cột Xóa? ===
+
+        # ✅ Thêm cột Xóa? nếu chưa có
         if "Xóa?" not in df_users.columns:
             df_users["Xóa?"] = False
+
 
         # === Dữ liệu cho selectbox ===
         role_options = ["user", "admin", "Chủ nhiệm dự án", "Chủ trì dự án"]
