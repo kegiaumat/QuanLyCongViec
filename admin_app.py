@@ -130,6 +130,9 @@ def admin_app(user):
             "project_leader_of": "Chủ trì dự án",
             "stt": "STT"
         })
+        # ✅ Nếu DB chưa có cột STT thì tự tạo STT tăng dần
+        if "STT" not in df_users.columns:
+            df_users["STT"] = range(1, len(df_users) + 1)
 
         # ✅ Xóa hoàn toàn cột ID để không xuất hiện nữa
         df_users = df_users.drop(columns=["id"], errors="ignore")
