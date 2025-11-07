@@ -1621,9 +1621,21 @@ def admin_app(user):
 
         # ==== LƯU DỮ LIỆU ====
         if st.button("💾 Lưu bảng chấm công & ghi chú"):
-            attendance_buffer = edited_df.copy()   # CHỈ GHI Ở ĐÂY
-            st.session_state["attendance_buffer"] = attendance_buffer
-            
+
+            # Lấy dữ liệu thực tế sau khi sửa
+            edited_df = edited_df.copy()
+
+            st.info("⏳ Đang xử lý dữ liệu và lưu vào Supabase...")
+
+            today = dt.date.today()
+            updated_users = []
+            inserted_users = []
+            skipped_users = []
+            errors = []
+
+            # ======================================
+            # 1) TÍNH TỔNG HỢP CÔNG
+            # ======================================
             summary_rows = []
             for _, row in edited_df.iterrows():
                 vals = [v for k, v in row.items() if "/" in k]
@@ -1642,9 +1654,11 @@ def admin_app(user):
                     return c
 
                 total_K = cnt("K") - cnt(
-                    "P/K","H/K","TQ/K","NM/K","O/K","TS/K","VS/K","VR/K","ĐT/K","L/K",
-                    "K/P","K/H","K/TQ","K/NM","K/O","K/TS","K/VS","K/VR","K/ĐT","K/L","K:2"
-                )*0.5          
+                    "P/K","H/K","TQ/K","NM/K","O/K","TS/K","VS/K",
+                    "VR/K","ĐT/K","L/K","K/P","K/H","K/TQ","K/NM",
+                    "K/O","K/TS","K/VS","K/VR","K/ĐT","K/L","K:2"
+                ) * 0.5
+
                 total_H = cnt("H")
                 total_P = cnt("P")
                 total_BHXH = cnt("O","TS","VS")
@@ -1664,183 +1678,119 @@ def admin_app(user):
                 })
 
             df_summary = pd.DataFrame(summary_rows)
-            st.dataframe(df_summary, hide_index=True, width="stretch")            
-            with st.spinner("Đang lưu dữ liệu lên Supabase..."):
+            st.dataframe(df_summary, hide_index=True, width="stretch")
 
-                # --- Lưu bảng công cho từng user ---
-                # --- Lưu bảng công cho từng user ---
-                today = dt.date.today()  # Dùng kiểu date để tránh lỗi so sánh
+            # ======================================
+            # 2) LƯU DỮ LIỆU LÊN SUPABASE
+            # ======================================
+            for _, row in edited_df.iterrows():
 
-                updated_users = []
-                inserted_users = []
-                skipped_users = []
-                errors = []
-                
+                uname = row["username"]
+                display_name = row["User"]
 
-                for _, row in edited_df.iterrows():
-                    uname = row["username"]      # Lấy username thật để lưu
-                    display_name = row["User"]   # Hiển thị thôi
-
-
-                    # --- Hàm bỏ emoji ---
-                    def remove_emoji(txt):
-                        """Loại emoji, chỉ giữ ký hiệu (K, P, K:2, ...)"""
-                        if not txt:
-                            return ""
-                        if isinstance(txt, str):
-                            # Xoá toàn bộ emoji và ký tự màu
-                            txt = re.sub(r"[\U0001F300-\U0001FAFF]", "", txt)  # Xoá emoji Unicode
-                            for sym in ["🟩", "🟥", "🟦", "🟧", "🟨", "🟫", "🟪", "⬛"]:
-                                txt = txt.replace(sym, "")
-                            return txt.strip()
+                # Bỏ emoji để lấy ký hiệu nguyên bản
+                def remove_emoji(txt):
+                    if not txt:
                         return ""
+                    if isinstance(txt, str):
+                        txt = re.sub(r"[\U0001F300-\U0001FAFF]", "", txt)
+                        for sym in ["🟩","🟥","🟦","🟧","🟨","🟫","🟪","⬛"]:
+                            txt = txt.replace(sym, "")
+                        return txt.strip()
+                    return ""
 
-                    def cell_to_code(cell):
-                        """Chuyển ô có emoji (🟧 K:2) → ký hiệu thuần (K:2)."""
-                        if cell is None:
-                            return ""
-                        s = str(cell).strip()
-                        return remove_emoji(s)
+                def cell_to_code(cell):
+                    if cell is None:
+                        return ""
+                    return remove_emoji(str(cell).strip())
 
+                # Chuẩn hoá dict day -> code
+                codes = {}
+                for col in day_cols:
+                    day = col.split("/")[0]
+                    val = cell_to_code(row[col])
+                    codes[day] = val
 
+                # Kiểm tra user trong DB
+                record = df_att[df_att["username"].astype(str).str.strip() == str(uname).strip()]
 
-
-                    codes = {}
-                    for col in day_cols:
-                        try:
-                            day = int(col.split("/")[0])
-                            base_date = selected_month.date() if hasattr(selected_month, "date") else selected_month
-
-                            date_in_month = selected_month.replace(day=day)
-                            if date_in_month <= today:
-                                val = cell_to_code(row.get(col))
-                                codes[f"{day:02d}"] = val
-                        except Exception:
-                            pass
-
-                    print("✅", uname, codes)
-
-                    # --- Bỏ qua nếu hoàn toàn không có dữ liệu ---
-                    # --- Nếu bảng công rỗng (DB trống) => vẫn insert mới để khởi tạo ---
-                    record = df_att[df_att["username"].astype(str).str.strip() == str(uname).strip()]
-
-
-                    if len(record) == 0:
-                        # user chưa có dữ liệu trong DB -> luôn insert dữ liệu thật
-                        payload = {
+                # INSERT nếu chưa có
+                if len(record) == 0:
+                    try:
+                        supabase.table("attendance_new").insert({
                             "username": uname,
                             "months": [month_str],
-                            "data": {month_str: codes}   # chỉ giữ dict gốc, KHÔNG json.loads/dumps ở đây
-                        }
-                        supabase.table("attendance_new").insert(payload).execute()
-
-
-                        inserted_users.append(uname)
+                            "data": {month_str: codes}
+                        }).execute()
+                        inserted_users.append(display_name)
+                        continue
+                    except Exception as e:
+                        errors.append(f"{uname}: {e}")
                         continue
 
-
-                    # --- Đọc record hiện có trong DB ---
-                    record = df_att[df_att["username"].astype(str).str.strip() == str(uname).strip()]
-
-
-                    try:
-                        if len(record) > 0:
-                            rec = record.iloc[0]
-                            months = rec.get("months", []) or []
-                            data_all = rec.get("data", {}) or {}
-                            if isinstance(data_all, str):
-                                data_all = json.loads(data_all)
-
-                            old_month_data = data_all.get(month_str, {})
-                            has_changed = False
-
-                            # --- So sánh kỹ dữ liệu mới & cũ ---                            
-                            def normalize(v):
-                                if v in [None, "None", "nan", "NaN"]:
-                                    return ""
-                                return str(v).strip()
-
-                            # Ép lại dữ liệu JSON thành dict Python thật sự
-                            try:
-                                old_json = json.loads(json.dumps(old_month_data or {}, ensure_ascii=False))
-                            except Exception:
-                                old_json = old_month_data or {}
-
-                            try:
-                                new_json = json.loads(json.dumps(codes or {}, ensure_ascii=False))
-                            except Exception:
-                                new_json = codes or {}
-
-                            # Đưa về dạng chuẩn { '01': 'K', '02': 'K:2', ... }
-                            old_clean = {str(k).zfill(2): normalize(v) for k, v in old_json.items()}
-                            new_clean = {str(k).zfill(2): normalize(v) for k, v in new_json.items()}
-
-                            # ✅ So sánh từng ngày để bắt đúng thay đổi
-                            diff_days = [d for d in new_clean if new_clean.get(d) != old_clean.get(d)]
-                            has_changed = len(diff_days) > 0 or len(old_clean) != len(new_clean)
-
-                            if has_changed:
-                                data_all[month_str] = codes
-                                if month_str not in months:
-                                    months.append(month_str)
-
-                                payload = {
-                                    "months": months,
-                                    "data": data_all   # dùng dict gốc, không cần json.loads/json.dumps
-                                }
-                                supabase.table("attendance_new").update(payload).eq("username", str(uname).strip()).execute()
-
-
-                                updated_users.append(uname)
-                            else:
-                                skipped_users.append(uname)
-
-
-                        else:
-                            # --- User chưa có dữ liệu -> insert mới ---
-                            payload = {
-                                "username": uname,
-                                "months": [month_str],
-                                "data": {month_str: codes}
-
-                            }
-                            supabase.table("attendance_new").insert(payload).execute()
-
-                            inserted_users.append(uname)
-
-                    except Exception as e:
-                        errors.append(f"{uname}: {str(e)}")
-
-                # --- Báo kết quả ---
-                msg = f"✅ Lưu thành công!\n- Cập nhật: {len(updated_users)} user\n- Thêm mới: {len(inserted_users)} user\n- Bỏ qua (không thay đổi): {len(skipped_users)} user"
-                if errors:
-                    msg += f"\n⚠️ Lỗi {len(errors)} user: {', '.join(errors)}"
-
-                st.success(msg)
-
-
-
-                # --- Lưu ghi chú tháng riêng vào NoteData ---
-                note_record = df_att[df_att["username"] == "NoteData"]
-                if len(note_record) > 0:
-                    rec = note_record.iloc[0]
+                # UPDATE nếu đã có
+                try:
+                    rec = record.iloc[0]
+                    months = rec.get("months", []) or []
                     data_all = rec.get("data", {}) or {}
+
                     if isinstance(data_all, str):
                         data_all = json.loads(data_all)
-                    data_all[month_str] = monthly_note
-                    supabase.table("attendance_new").update({"data": data_all, "months": [month_str]}).eq("username", "NoteData").execute()
-                else:
-                    supabase.table("attendance_new").insert({
-                        "username": "NoteData",
-                        "data": {month_str: monthly_note},
-                        "months": [month_str]
-                    }).execute()
 
-            st.success("✅ Đã lưu bảng chấm công và ghi chú thành công!")
+                    old_month_data = data_all.get(month_str, {})
 
-            # Reset buffer để lần load tiếp theo lấy dữ liệu mới từ DB
-            st.session_state.attendance_buffer = None
+                    # xác định thay đổi
+                    if old_month_data != codes:
+                        data_all[month_str] = codes
+                        if month_str not in months:
+                            months.append(month_str)
 
+                        supabase.table("attendance_new").update({
+                            "months": months,
+                            "data": data_all
+                        }).eq("username", uname).execute()
+
+                        updated_users.append(display_name)
+                    else:
+                        skipped_users.append(display_name)
+
+                except Exception as e:
+                    errors.append(f"{uname}: {e}")
+
+            # ======================================
+            # 3) LƯU GHI CHÚ THÁNG
+            # ======================================
+            note_record = df_att[df_att["username"] == "NoteData"]
+            if len(note_record) > 0:
+                rec = note_record.iloc[0]
+                data_all = rec.get("data", {}) or {}
+                if isinstance(data_all, str):
+                    data_all = json.loads(data_all)
+                data_all[month_str] = monthly_note
+                supabase.table("attendance_new").update({
+                    "data": data_all,
+                    "months": [month_str]
+                }).eq("username", "NoteData").execute()
+            else:
+                supabase.table("attendance_new").insert({
+                    "username": "NoteData",
+                    "data": {month_str: monthly_note},
+                    "months": [month_str]
+                }).execute()
+
+            # ======================================
+            # 4) THÔNG BÁO
+            # ======================================
+            st.success(f"✅ Cập nhật: {len(updated_users)} người")
+            st.success(f"✅ Thêm mới: {len(inserted_users)} người")
+            st.info(f"ℹ️ Không thay đổi: {len(skipped_users)} người")
+
+            if errors:
+                st.error("⚠️ Lỗi khi lưu:")
+                for e in errors:
+                    st.error(e)
+
+            st.success("✅ Đã lưu bảng chấm công & ghi chú thành công!")
 
 
         
