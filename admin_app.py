@@ -1377,57 +1377,138 @@ def admin_app(user):
         df_display["User"] = df_display["User"].astype(str).str.strip()
 
 
-        # ==== HIỂN THỊ BẢNG CHẤM CÔNG ====
-        st.markdown("### 📊 Bảng chấm công")
-        # =========================================
-        #   BUFFER CHỐNG RERUN CHO BẢNG CHẤM CÔNG
-        # =========================================
 
-        # Tạo buffer lần đầu (chỉ tạo đúng 1 lần)
-        if "attendance_buffer" not in st.session_state or st.session_state.attendance_buffer is None:
-            st.session_state.attendance_buffer = df_display.copy()
+        # =============================
+        #     MÀU PASTEL TỪ KÝ HIỆU
+        # =============================
+        color_map = {
+            "K": "#C8E6C9",     # xanh lá nhạt
+            "K:2": "#FFE0B2",   # cam nhạt
+            "P": "#FFCDD2",     # đỏ nhạt
+            "H": "#BBDEFB",     # xanh dương nhạt
+            "TQ": "#FFF9C4",    # vàng nhạt
+            "BD": "#FFE0B2",    # cam nhạt
+            "L": "#D7CCC8",     # nâu nhạt
+            "O": "#C8E6C9",     # xanh lá nhạt
+            "VR": "#E0E0E0",    # xám nhạt
+            "NM": "#E1BEE7",    # tím nhạt
+            "TS": "#E1BEE7",    # tím nhạt
+            "VS": "#BBDEFB",    # xanh dương nhạt
+            "TV": "#FFF9C4"     # vàng nhạt
+        }
 
-        # Luôn dùng buffer để hiển thị bảng (ngăn bảng bị reset khi Streamlit rerun)
-        df_display = st.session_state.attendance_buffer.copy()
-        
-        edited_df = st.data_editor(
-            df_display,
-            hide_index=True,
-            use_container_width=True,
+        # Hàm lấy màu từ ký hiệu
+        def symbol_color(val):
+            if not val:
+                return "#FFFFFF"
+            if "/" in val:
+                # Lấy theo ký hiệu bên phải
+                val = val.split("/")[-1].strip()
+            return color_map.get(val, "#FFFFFF")
+
+        # =============================
+        #  CHUẨN HÓA DỮ LIỆU HIỂN THỊ
+        # =============================
+        st.markdown("### 📊 Bảng chấm công (AG-Grid)")
+
+        # Tạo bản copy để hiển thị
+        df_display_clean = df_display.copy()
+
+        for col in day_cols:
+            for i in range(len(df_display_clean)):
+                cell = df_display_clean.at[i, col]
+                if isinstance(cell, str) and " " in cell:
+                    df_display_clean.at[i, col] = cell.split()[-1]   # bỏ emoji, giữ ký hiệu
+
+        # Ẩn username khỏi hiển thị
+        df_display_clean = df_display_clean.drop(columns=["username"])
+
+        # =============================
+        #     TẠO GRID OPTIONS
+        # =============================
+        gb = GridOptionsBuilder.from_dataframe(df_display_clean)
+
+        # Cho phép chỉnh từng ô
+        gb.configure_default_column(
+            editable=True,
+            resizable=True,
+            sortable=True,
+            filter=True,
+        )
+
+        # Pin cột User bên trái
+        gb.configure_column("User", pinned="left", editable=False)
+
+        # Dropdown cho các cột ngày
+        for col in day_cols:
+            gb.configure_column(
+                col,
+                cellEditor="agSelectCellEditor",
+                cellEditorParams={"values": code_options},
+            )
+
+        # Sơn màu nền theo ký hiệu
+        cell_style_jscode = JsCode("""
+        function(params) {
+            const val = params.value;
+            if (!val) return { 'backgroundColor': '#FFFFFF' };
+
+            let key = val;
+            if (val.includes("/")) {
+                let parts = val.split("/");
+                key = parts[parts.length - 1].trim();
+            }
+
+            const colorMap = {
+                "K": "#C8E6C9",
+                "K:2": "#FFE0B2",
+                "P": "#FFCDD2",
+                "H": "#BBDEFB",
+                "TQ": "#FFF9C4",
+                "BD": "#FFE0B2",
+                "L": "#D7CCC8",
+                "O": "#C8E6C9",
+                "VR": "#E0E0E0",
+                "NM": "#E1BEE7",
+                "TS": "#E1BEE7",
+                "VS": "#BBDEFB",
+                "TV": "#FFF9C4"
+            };
+
+            const bg = colorMap[key] || "#FFFFFF";
+            return { 'backgroundColor': bg };
+        }
+        """)
+
+        for col in day_cols:
+            gb.configure_column(col, cellStyle=cell_style_jscode)
+
+        gridOptions = gb.build()
+
+        # =============================
+        #   HIỂN THỊ AG-GRID
+        # =============================
+        grid_response = AgGrid(
+            df_display_clean,
+            gridOptions=gridOptions,
             height=650,
-            key=f"attendance_{month_str}",
-            num_rows="fixed",      # khoá số dòng, không thêm/xóa
-            on_change=None,        # không gán callback -> hạn chế rerun
-            column_config={
-                "username": st.column_config.TextColumn("Tên đăng nhập (ẩn)", disabled=True),
-                "User": st.column_config.TextColumn("Nhân viên", disabled=True),
-                **{
-                    c: st.column_config.SelectboxColumn(
-                        c,
-                        options=[add_emoji(x) for x in code_options]
-                    ) for c in day_cols
-                },
-            },
-            column_order=["User"] + day_cols,
+            fit_columns_on_grid_load=False,
+            allow_unsafe_jscode=True,
+            update_mode=GridUpdateMode.VALUE_CHANGED,  # Không rerun Streamlit
+            theme="alpine",
         )
 
-        # Cập nhật buffer theo dữ liệu người dùng đang nhập, KHÔNG ghi DB
+        edited_df_clean = grid_response["data"]
+
+        # =============================
+        #  GHÉP LẠI USERNAME ĐỂ LƯU DB
+        # =============================
+        edited_df = edited_df_clean.copy()
+        edited_df["username"] = df_display["username"]    # ghép lại cột username ẩn
+        edited_df = edited_df[["username", "User"] + day_cols]
+
+        # Cập nhật buffer
         st.session_state.attendance_buffer = edited_df.copy()
-
-        # Ẩn cột 'username' khỏi giao diện bằng CSS
-        st.markdown(
-            """
-            <style>
-            [data-testid="stColumn"] div[data-testid*="username"] {
-                display: none !important;
-            }
-            th[data-testid*="username"], td[data-testid*="username"] {
-                display: none !important;
-            }
-            </style>
-            """,
-            unsafe_allow_html=True
-        )
 
 
 
