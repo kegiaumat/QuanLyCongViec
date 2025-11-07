@@ -1598,18 +1598,19 @@ def admin_app(user):
 
 
 
-        edited_df_clean = grid_response["data"]
+        # Ép dữ liệu trả về từ grid thành DataFrame và chuẩn hóa index
+        edited_df_clean = pd.DataFrame(grid_response["data"]).reset_index(drop=True)
 
-        # =============================
-        #  GHÉP LẠI USERNAME ĐỂ LƯU DB
-        # =============================
+        # Chuẩn hóa index của bảng gốc để so sánh an toàn
+        df_display_clean_idx = df_display_clean.reset_index(drop=True)
+
+        # Ghép lại cột username để chuẩn bị lưu DB
         edited_df = edited_df_clean.copy()
-        edited_df["username"] = df_display["username"]    # ghép lại cột username ẩn
+        edited_df["username"] = df_display["username"].reset_index(drop=True)
         edited_df = edited_df[["username", "User"] + day_cols]
 
-        # Cập nhật buffer
-        # ✅ Cập nhật buffer sau mỗi lần edit cell
-        if grid_response["data"] is not None and grid_response["data"] != df_display_clean:
+        # Chỉ cập nhật buffer khi THỰC SỰ có thay đổi (dùng .equals thay cho !=)
+        if not edited_df_clean.equals(df_display_clean_idx):
             st.session_state["attendance_buffer"] = edited_df.copy()
 
 
