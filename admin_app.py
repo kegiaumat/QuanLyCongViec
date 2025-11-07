@@ -14,7 +14,8 @@ import time
 @st.cache_data(ttl=15)
 def load_users_cached():
     supabase = get_connection()
-    data = supabase.table("users").select("id, username, display_name, dob, role, project_manager_of, project_leader_of").execute()
+    data = supabase.table("users").select("id, stt, username, display_name, dob, role, project_manager_of, project_leader_of").order("stt").execute()
+
     return pd.DataFrame(data.data)
 
 def load_users_fresh():
@@ -127,7 +128,9 @@ def admin_app(user):
             "project_manager_of": "Chủ nhiệm dự án",
             "project_leader_of": "Chủ trì dự án"
         })
-
+        df_users = df_users.rename(columns={"stt": "STT"})
+        df_users = df_users.drop(columns=["id"], errors="ignore")
+        df_users = df_users.sort_values("STT").reset_index(drop=True)
         # === Thêm cột Xóa? ===
         if "Xóa?" not in df_users.columns:
             df_users["Xóa?"] = False
@@ -155,6 +158,7 @@ def admin_app(user):
             hide_index=True,
             key="user_editor",
             column_config={
+                 "STT": st.column_config.NumberColumn("STT", min_value=1, step=1),
                 # ✅ Không cho sửa tên đăng nhập
                 "Tên đăng nhập": st.column_config.TextColumn(
                     "Tên đăng nhập",
@@ -189,6 +193,7 @@ def admin_app(user):
                     update_data = {}
 
                     for col, db_field in [
+                        ("STT", "stt"),
                         ("Tên hiển thị", "display_name"),
                         ("Ngày sinh", "dob"),
                         ("Vai trò", "role"),
