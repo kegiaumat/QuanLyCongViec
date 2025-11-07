@@ -1379,6 +1379,17 @@ def admin_app(user):
 
         # ==== HIỂN THỊ BẢNG CHẤM CÔNG ====
         st.markdown("### 📊 Bảng chấm công")
+        # =========================================
+        #   BUFFER CHỐNG RERUN CHO BẢNG CHẤM CÔNG
+        # =========================================
+
+        # Tạo buffer lần đầu (chỉ tạo đúng 1 lần)
+        if "attendance_buffer" not in st.session_state or st.session_state.attendance_buffer is None:
+            st.session_state.attendance_buffer = df_display.copy()
+
+        # Luôn dùng buffer để hiển thị bảng (ngăn bảng bị reset khi Streamlit rerun)
+        df_display = st.session_state.attendance_buffer.copy()
+        
         edited_df = st.data_editor(
             df_display,
             hide_index=True,
@@ -1411,6 +1422,8 @@ def admin_app(user):
             # 👇 Không đưa 'username' vào order để nó không chiếm chỗ trên UI
             column_order=["User"] + day_cols,
         )
+        # Cập nhật buffer theo dữ liệu người dùng đang nhập, KHÔNG ghi DB
+        st.session_state.attendance_buffer = edited_df.copy()
 
         # Ẩn cột 'username' khỏi giao diện bằng CSS
         st.markdown(
@@ -1671,7 +1684,8 @@ def admin_app(user):
 
             st.success("✅ Đã lưu bảng chấm công và ghi chú thành công!")
 
-
+            # Reset buffer để lần load tiếp theo lấy dữ liệu mới từ DB
+            st.session_state.attendance_buffer = None
 
 
 
