@@ -1676,8 +1676,8 @@ def admin_app(user):
             df_summary = pd.DataFrame(summary_rows)
             st.dataframe(df_summary, hide_index=True, width="stretch")            
             with st.spinner("Đang lưu dữ liệu lên Supabase..."):            
-            attendance_buffer = edited_df.copy()   # CHỈ GHI Ở ĐÂY
-            st.session_state["attendance_buffer"] = attendance_buffer
+                attendance_buffer = edited_df.copy()   # CHỈ GHI Ở ĐÂY
+                st.session_state["attendance_buffer"] = attendance_buffer
             
 
 
