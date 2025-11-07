@@ -133,7 +133,9 @@ def admin_app(user):
         # ✅ Nếu DB chưa có cột STT thì tự tạo STT tăng dần
         if "STT" not in df_users.columns:
             df_users["STT"] = range(1, len(df_users) + 1)
-
+        # ✅ Đưa cột STT lên đầu
+        cols = ["STT"] + [c for c in df_users.columns if c != "STT"]
+        df_users = df_users[cols]
         # ✅ Xóa hoàn toàn cột ID để không xuất hiện nữa
         df_users = df_users.drop(columns=["id"], errors="ignore")
 
