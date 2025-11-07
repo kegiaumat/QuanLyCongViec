@@ -1370,9 +1370,42 @@ def admin_app(user):
 
             rows.append(row)
 
-        df_display = pd.DataFrame(rows)
+        # ✅ Chỉ tạo DataFrame khi chưa có hoặc khi đổi tháng
+        if "att_month" not in st.session_state or st.session_state["att_month"] != month_str:
+            st.session_state["att_month"] = month_str
+
+            # ✅ Chỉ tạo df_display mới khi đổi tháng
+            if "att_month" not in st.session_state or st.session_state["att_month"] != month_str:
+                st.session_state["att_month"] = month_str
+
+                df_display = pd.DataFrame(rows)
+                day_cols = [c for c in df_display.columns if "/" in c]
+                df_display = df_display[["username", "User"] + day_cols]
+
+                # ✅ Lưu vào session lần đầu
+                st.session_state["df_display_att"] = df_display
+
+            # ✅ Sau đó luôn lấy lại bảng từ session
+            df_display = st.session_state["df_display_att"]
+            day_cols = [c for c in df_display.columns if "/" in c]
+
+
+            st.session_state["df_display_att"] = df_display
+
+        # ✅ Mỗi lần rerun chỉ lấy lại từ session_state
+        df_display = st.session_state["df_display_att"]
+
+        # Lấy lại day_cols để dùng tiếp
         day_cols = [c for c in df_display.columns if "/" in c]
-        df_display = df_display[["username", "User"] + day_cols]
+
+        # ✅ BUFFER chống mất dữ liệu khi rerun
+        if "attendance_buffer" not in st.session_state:
+            st.session_state["attendance_buffer"] = df_display.copy()
+
+        # dùng buffer để hiển thị
+        df_display = st.session_state["attendance_buffer"].copy()
+
+        
         # 🔧 Chuẩn hoá username để tránh sai lệch khi so sánh
         df_display["username"] = df_display["username"].astype(str).str.strip()
         df_display["User"] = df_display["User"].astype(str).str.strip()
@@ -1470,10 +1503,11 @@ def admin_app(user):
             resizable=True,
             sortable=False,
             filter=False,
-            wrapHeaderText=True,
-            autoHeaderHeight=True,
+            wrapHeaderText=False,      # ✅ Tắt wrap gây rerender
+            autoHeaderHeight=False,    # ✅ Tắt auto header height
             autoSize=False
         )
+
 
 
 
@@ -1556,10 +1590,11 @@ def admin_app(user):
             gridOptions=gridOptions,
             height=650,
             allow_unsafe_jscode=True,
-            update_mode=GridUpdateMode.NO_UPDATE,
+            update_mode=GridUpdateMode.MANUAL,   # ✅ Không rerun khi click cell
             reload_data=False,
             fit_columns_on_grid_load=False,
         )
+
 
 
 
@@ -1573,7 +1608,12 @@ def admin_app(user):
         edited_df = edited_df[["username", "User"] + day_cols]
 
         # Cập nhật buffer
-        edited_df_local = edited_df.copy()
+        # ✅ Cập nhật buffer sau mỗi lần edit cell
+        if grid_response["data"] is not None and grid_response["data"] != df_display_clean:
+            st.session_state["attendance_buffer"] = edited_df.copy()
+
+
+
 
 
 
@@ -1600,18 +1640,12 @@ def admin_app(user):
             height=120
         )
 
-        # ==== BẢNG TỔNG HỢP ====
-
-
 
 
 
 
         # ==== LƯU DỮ LIỆU ====
         if st.button("💾 Lưu bảng chấm công & ghi chú"):
-            attendance_buffer = edited_df.copy()   # CHỈ GHI Ở ĐÂY
-            st.session_state["attendance_buffer"] = attendance_buffer
-            
             summary_rows = []
             for _, row in edited_df.iterrows():
                 vals = [v for k, v in row.items() if "/" in k]
@@ -1653,7 +1687,11 @@ def admin_app(user):
 
             df_summary = pd.DataFrame(summary_rows)
             st.dataframe(df_summary, hide_index=True, width="stretch")            
-            with st.spinner("Đang lưu dữ liệu lên Supabase..."):
+            with st.spinner("Đang lưu dữ liệu lên Supabase..."):            
+                attendance_buffer = edited_df.copy()   # CHỈ GHI Ở ĐÂY
+                st.session_state["attendance_buffer"] = attendance_buffer
+            
+
 
                 # --- Lưu bảng công cho từng user ---
                 # --- Lưu bảng công cho từng user ---
