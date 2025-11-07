@@ -1482,7 +1482,7 @@ def admin_app(user):
             "User",
             pinned="left",
             editable=False,
-            width=300,
+            width=350,
             sortable=False,
             filter=False,
             autoSize=False
