@@ -1372,24 +1372,22 @@ def admin_app(user):
 
             rows.append(row)
 
-        # ✅ Chỉ tạo DataFrame khi chưa có hoặc khi đổi tháng
-        if "att_month" not in st.session_state or st.session_state["att_month"] != month_str:
-            st.session_state["att_month"] = month_str
-
-            # ✅ Chỉ tạo df_display mới khi đổi tháng
+            # ✅ TẠO LẠI DỮ LIỆU KHI CHUYỂN THÁNG
             if "att_month" not in st.session_state or st.session_state["att_month"] != month_str:
+
                 st.session_state["att_month"] = month_str
 
                 df_display = pd.DataFrame(rows)
                 day_cols = [c for c in df_display.columns if "/" in c]
                 df_display = df_display[["username", "User"] + day_cols]
 
-                # ✅ Lưu vào session lần đầu
-                st.session_state["df_display_att"] = df_display
+                # ✅ lưu bảng gốc vào session
+                st.session_state["df_display_att"] = df_display.copy()
 
-            # ✅ Sau đó luôn lấy lại bảng từ session
-            df_display = st.session_state["df_display_att"]
+            # ✅ sau đó luôn lấy ra dùng
+            df_display = st.session_state["df_display_att"].copy()
             day_cols = [c for c in df_display.columns if "/" in c]
+
 
 
             st.session_state["df_display_att"] = df_display
