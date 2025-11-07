@@ -1374,9 +1374,21 @@ def admin_app(user):
         if "att_month" not in st.session_state or st.session_state["att_month"] != month_str:
             st.session_state["att_month"] = month_str
 
-            df_display = pd.DataFrame(rows)
+            # ✅ Chỉ tạo df_display mới khi đổi tháng
+            if "att_month" not in st.session_state or st.session_state["att_month"] != month_str:
+                st.session_state["att_month"] = month_str
+
+                df_display = pd.DataFrame(rows)
+                day_cols = [c for c in df_display.columns if "/" in c]
+                df_display = df_display[["username", "User"] + day_cols]
+
+                # ✅ Lưu vào session lần đầu
+                st.session_state["df_display_att"] = df_display
+
+            # ✅ Sau đó luôn lấy lại bảng từ session
+            df_display = st.session_state["df_display_att"]
             day_cols = [c for c in df_display.columns if "/" in c]
-            df_display = df_display[["username", "User"] + day_cols]
+
 
             st.session_state["df_display_att"] = df_display
 
