@@ -1469,7 +1469,10 @@ def admin_app(user):
             editable=True,
             resizable=True,
             sortable=False,  # ✅ Tắt sort
+            autoSize=False,     # thêm dòng này
             filter=False,    # ✅ Tắt filter
+            wrapHeaderText=True,
+            autoHeaderHeight=True,
         )
 
 
@@ -1478,7 +1481,8 @@ def admin_app(user):
             "User",
             pinned="left",
             editable=False,
-            width=200,           # ✅ Cho đủ rộng
+            width=260,     # tăng lên
+            autoSize=False # thêm dòng này để nó KHÔNG tự co
             filter=False,        # ✅ Không filter
             sortable=False       # ✅ Không sort
         )
@@ -1524,6 +1528,12 @@ def admin_app(user):
             return { 'backgroundColor': bg };
         }
         """)
+        header_html = col.replace(" (", "<br>(").replace(")", ")")
+
+        gb.configure_column(
+            col,
+            headerName=f"<div style='text-align:center; line-height:14px'>{header_html}</div>",
+        )
 
         for col in day_cols:
             gb.configure_column(col, cellStyle=cell_style_jscode)
