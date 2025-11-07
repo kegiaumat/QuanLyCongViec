@@ -1396,12 +1396,10 @@ def admin_app(user):
             use_container_width=True,
             height=650,
             key=f"attendance_{month_str}",
-            num_rows="fixed",            # ✅ Không thêm/xóa dòng => KHÔNG RERUN
-            on_change=None,             # ✅ Tắt rerun khi chỉnh cell
-            disabled=False,             # Cho phép chỉnh sửa bình thường
-            
-            key_behavior="manual",   # ✅ KHÔNG rerun khi edit cell
-            allow_stored_state=True,  # ✅ Giữ nguyên trạng thái bảng khi chỉnh sửa
+            num_rows="fixed",          # ✅ Không cho thêm/xóa dòng
+            on_change=None,            # ✅ Không rerun khi edit cell
+            key_behavior="manual",     # ✅ Chế độ nhập thủ công – không rerun
+            allow_stored_state=True,   # ✅ Lưu lại trạng thái bảng
             column_config={
                 # 👇 ẨN HOÀN TOÀN cột username nhưng vẫn giữ trong dữ liệu trả về
                 "username": st.column_config.TextColumn(
