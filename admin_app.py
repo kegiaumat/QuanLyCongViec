@@ -1380,11 +1380,14 @@ def admin_app(user):
         # ==== HIỂN THỊ BẢNG CHẤM CÔNG ====
         st.markdown("### 📊 Bảng chấm công")
         edited_df = st.data_editor(
-            df_display,                         # GIỮ nguyên dataframe có cột 'username'
+            df_display,
             hide_index=True,
             use_container_width=True,
             height=650,
             key=f"attendance_{month_str}",
+            num_rows="fixed",            # ✅ Không thêm/xóa dòng => KHÔNG RERUN
+            on_change=None,             # ✅ Tắt rerun khi chỉnh cell
+            disabled=False,             # Cho phép chỉnh sửa bình thường
             column_config={
                 # 👇 ẨN HOÀN TOÀN cột username nhưng vẫn giữ trong dữ liệu trả về
                 "username": st.column_config.TextColumn(
