@@ -1365,7 +1365,8 @@ def admin_app(user):
                     # Các ngày tương lai chưa đến => None
                     val = month_data.get(day_key, None)
 
-                row[col] = add_emoji(val)
+                row[col] = val  # giữ ký hiệu gốc, KHÔNG thêm emoji nữa
+
 
             rows.append(row)
 
