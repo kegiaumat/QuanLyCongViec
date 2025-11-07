@@ -1396,30 +1396,21 @@ def admin_app(user):
             use_container_width=True,
             height=650,
             key=f"attendance_{month_str}",
-            num_rows="fixed",          # ✅ Không cho thêm/xóa dòng
-            on_change=None,            # ✅ Không rerun khi edit cell
-            key_behavior="manual",     # ✅ Chế độ nhập thủ công – không rerun
-            allow_stored_state=True,   # ✅ Lưu lại trạng thái bảng
+            num_rows="fixed",      # khoá số dòng, không thêm/xóa
+            on_change=None,        # không gán callback -> hạn chế rerun
             column_config={
-                # 👇 ẨN HOÀN TOÀN cột username nhưng vẫn giữ trong dữ liệu trả về
-                "username": st.column_config.TextColumn(
-                    "Tên đăng nhập (ẩn)",
-                    disabled=True,
-                    help="Cột ẩn để lưu DB"
-                ),
-
+                "username": st.column_config.TextColumn("Tên đăng nhập (ẩn)", disabled=True),
                 "User": st.column_config.TextColumn("Nhân viên", disabled=True),
                 **{
                     c: st.column_config.SelectboxColumn(
                         c,
                         options=[add_emoji(x) for x in code_options]
-                    )
-                    for c in day_cols
+                    ) for c in day_cols
                 },
             },
-            # 👇 Không đưa 'username' vào order để nó không chiếm chỗ trên UI
             column_order=["User"] + day_cols,
         )
+
         # Cập nhật buffer theo dữ liệu người dùng đang nhập, KHÔNG ghi DB
         st.session_state.attendance_buffer = edited_df.copy()
 
