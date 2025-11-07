@@ -1646,6 +1646,8 @@ def admin_app(user):
 
         # ==== LƯU DỮ LIỆU ====
         if st.button("💾 Lưu bảng chấm công & ghi chú"):
+            attendance_buffer = edited_df.copy()
+            st.session_state["attendance_buffer"] = attendance_buffer
             summary_rows = []
             for _, row in edited_df.iterrows():
                 vals = [v for k, v in row.items() if "/" in k]
