@@ -1372,17 +1372,15 @@ def admin_app(user):
         day_cols = [c for c in df_display.columns if "/" in c]
         df_display = df_display[["username", "User"] + day_cols]
 
-        # ✅ chỉ gán session_state một lần
+        # ✅ lưu vào session_state
         st.session_state["df_display_att"] = df_display.copy()
 
+        # ✅ lấy từ session ra dùng
+        df_display = st.session_state["df_display_att"].copy()
+        day_cols = [c for c in df_display.columns if "/" in c]
 
-            # ✅ sau đó luôn lấy ra dùng
-            df_display = st.session_state["df_display_att"].copy()
-            day_cols = [c for c in df_display.columns if "/" in c]
+        st.session_state["df_display_att"] = df_display
 
-
-
-            st.session_state["df_display_att"] = df_display
 
         # ✅ Mỗi lần rerun chỉ lấy lại từ session_state
         df_display = st.session_state["df_display_att"]
