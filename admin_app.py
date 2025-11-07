@@ -1390,7 +1390,7 @@ def admin_app(user):
             disabled=False,             # Cho phép chỉnh sửa bình thường
             
             key_behavior="manual",   # ✅ KHÔNG rerun khi edit cell
-            allow_stored_state=True  # ✅ Giữ nguyên trạng thái bảng khi chỉnh sửa
+            allow_stored_state=True,  # ✅ Giữ nguyên trạng thái bảng khi chỉnh sửa
             column_config={
                 # 👇 ẨN HOÀN TOÀN cột username nhưng vẫn giữ trong dữ liệu trả về
                 "username": st.column_config.TextColumn(
