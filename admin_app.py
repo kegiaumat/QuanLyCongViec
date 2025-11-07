@@ -1481,7 +1481,7 @@ def admin_app(user):
             "User",
             pinned="left",
             editable=False,
-            width=260,     # tăng lên
+            width=500,     # tăng lên
             autoSize=False # thêm dòng này để nó KHÔNG tự co
             filter=False,        # ✅ Không filter
             sortable=False       # ✅ Không sort
