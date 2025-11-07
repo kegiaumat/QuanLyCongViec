@@ -1373,6 +1373,14 @@ def admin_app(user):
         df_display = pd.DataFrame(rows)
         day_cols = [c for c in df_display.columns if "/" in c]
         df_display = df_display[["username", "User"] + day_cols]
+        # ✅ BUFFER chống mất dữ liệu khi rerun
+        if "attendance_buffer" not in st.session_state:
+            st.session_state["attendance_buffer"] = df_display.copy()
+
+        # dùng buffer để hiển thị
+        df_display = st.session_state["attendance_buffer"].copy()
+
+        
         # 🔧 Chuẩn hoá username để tránh sai lệch khi so sánh
         df_display["username"] = df_display["username"].astype(str).str.strip()
         df_display["User"] = df_display["User"].astype(str).str.strip()
@@ -1573,7 +1581,9 @@ def admin_app(user):
         edited_df = edited_df[["username", "User"] + day_cols]
 
         # Cập nhật buffer
-        edited_df_local = edited_df.copy()
+        # ✅ Cập nhật buffer sau mỗi lần edit cell
+        st.session_state["attendance_buffer"] = edited_df.copy()
+
 
 
 
@@ -1600,55 +1610,56 @@ def admin_app(user):
             height=120
         )
 
-        # ==== BẢNG TỔNG HỢP ====
-        st.markdown("### 📈 Tổng hợp số công theo loại")
 
-        summary_rows = []
-        for _, row in edited_df.iterrows():
-            vals = [v for k, v in row.items() if "/" in k]
 
-            def cnt(*patterns):
-                c = 0
-                for v in vals:
-                    if not isinstance(v, str):
-                        continue
-                    for p in patterns:
-                        if p in v:
-                            if "/" in v and (p + "/" in v or "/" + p in v):
-                                c += 0.5
-                            else:
-                                c += 1
-                return c
 
-            total_K = cnt("K") - cnt(
-                "P/K","H/K","TQ/K","NM/K","O/K","TS/K","VS/K","VR/K","ĐT/K","L/K",
-                "K/P","K/H","K/TQ","K/NM","K/O","K/TS","K/VS","K/VR","K/ĐT","K/L","K:2"
-            )*0.5          
-            total_H = cnt("H")
-            total_P = cnt("P")
-            total_BHXH = cnt("O","TS","VS")
-            total_KhongLuong = cnt("VR","NM","TQ","ĐT","L")
-            total_TV = cnt("TV")
-            total_all = total_K + total_H + total_P + total_BHXH + total_KhongLuong + total_TV
-
-            summary_rows.append({
-                "Nhân viên": row["User"],
-                "Công K (SP)": total_K,
-                "Hội họp (H)": total_H,
-                "Phép (P)": total_P,
-                "BHXH (O,TS,VS)": total_BHXH,
-                "Không lương (VR,TQ,L,ĐT,NM)": total_KhongLuong,
-                "Thử việc (TV)": total_TV,
-                "Tổng cộng": total_all
-            })
-
-        df_summary = pd.DataFrame(summary_rows)
-        st.dataframe(df_summary, hide_index=True, width="stretch")
 
         # ==== LƯU DỮ LIỆU ====
         if st.button("💾 Lưu bảng chấm công & ghi chú"):
             attendance_buffer = edited_df.copy()   # CHỈ GHI Ở ĐÂY
             st.session_state["attendance_buffer"] = attendance_buffer
+            
+            summary_rows = []
+            for _, row in edited_df.iterrows():
+                vals = [v for k, v in row.items() if "/" in k]
+
+                def cnt(*patterns):
+                    c = 0
+                    for v in vals:
+                        if not isinstance(v, str):
+                            continue
+                        for p in patterns:
+                            if p in v:
+                                if "/" in v and (p + "/" in v or "/" + p in v):
+                                    c += 0.5
+                                else:
+                                    c += 1
+                    return c
+
+                total_K = cnt("K") - cnt(
+                    "P/K","H/K","TQ/K","NM/K","O/K","TS/K","VS/K","VR/K","ĐT/K","L/K",
+                    "K/P","K/H","K/TQ","K/NM","K/O","K/TS","K/VS","K/VR","K/ĐT","K/L","K:2"
+                )*0.5          
+                total_H = cnt("H")
+                total_P = cnt("P")
+                total_BHXH = cnt("O","TS","VS")
+                total_KhongLuong = cnt("VR","NM","TQ","ĐT","L")
+                total_TV = cnt("TV")
+                total_all = total_K + total_H + total_P + total_BHXH + total_KhongLuong + total_TV
+
+                summary_rows.append({
+                    "Nhân viên": row["User"],
+                    "Công K (SP)": total_K,
+                    "Hội họp (H)": total_H,
+                    "Phép (P)": total_P,
+                    "BHXH (O,TS,VS)": total_BHXH,
+                    "Không lương (VR,TQ,L,ĐT,NM)": total_KhongLuong,
+                    "Thử việc (TV)": total_TV,
+                    "Tổng cộng": total_all
+                })
+
+            df_summary = pd.DataFrame(summary_rows)
+            st.dataframe(df_summary, hide_index=True, width="stretch")            
             with st.spinner("Đang lưu dữ liệu lên Supabase..."):
 
                 # --- Lưu bảng công cho từng user ---
