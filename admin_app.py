@@ -1478,10 +1478,11 @@ def admin_app(user):
             resizable=True,
             sortable=False,
             filter=False,
-            wrapHeaderText=True,
-            autoHeaderHeight=True,
+            wrapHeaderText=False,      # ✅ Tắt wrap gây rerender
+            autoHeaderHeight=False,    # ✅ Tắt auto header height
             autoSize=False
         )
+
 
 
 
@@ -1564,10 +1565,11 @@ def admin_app(user):
             gridOptions=gridOptions,
             height=650,
             allow_unsafe_jscode=True,
-            update_mode=GridUpdateMode.NO_UPDATE,
+            update_mode=GridUpdateMode.MANUAL,   # ✅ Không rerun khi click cell
             reload_data=False,
             fit_columns_on_grid_load=False,
         )
+
 
 
 
@@ -1582,7 +1584,10 @@ def admin_app(user):
 
         # Cập nhật buffer
         # ✅ Cập nhật buffer sau mỗi lần edit cell
-        st.session_state["attendance_buffer"] = edited_df.copy()
+        if grid_response["data"] is not None and grid_response["data"] != df_display_clean:
+            st.session_state["attendance_buffer"] = edited_df.copy()
+
+
 
 
 
