@@ -1282,6 +1282,8 @@ def admin_app(user):
 
     elif choice == "Chấm công – Nghỉ phép":
         
+        st.session_state.pop("attendance_buffer", None)
+        st.session_state.pop("attendance_grid_data", None)
 
 
         supabase = get_connection()
