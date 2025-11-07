@@ -1410,7 +1410,42 @@ def admin_app(user):
         # =============================
         #  CHUẨN HÓA DỮ LIỆU HIỂN THỊ
         # =============================
-        st.markdown("### 📊 Bảng chấm công (AG-Grid)")
+        st.markdown("### 📊 Bảng chấm công")
+        # ====================== JS CODE TÔ MÀU ======================
+        cell_style_jscode = JsCode("""
+        function(params) {
+            if (!params.value) return {'backgroundColor': '#FFFFFF'};
+
+            const map = {
+                'K':   '#C8E6C9',
+                'K:2': '#FFE0B2',
+                'P':   '#FFCDD2',
+                'H':   '#BBDEFB',
+                'TQ':  '#FFF9C4',
+                'BD':  '#FFE0B2',
+                'L':   '#D7CCC8',
+                'O':   '#C8E6C9',
+                'VR':  '#BDBDBD',
+                'NM':  '#E1BEE7',
+                'TS':  '#E1BEE7',
+                'VS':  '#BBDEFB',
+                'TV':  '#FFF9C4',
+
+                'K/P': '#FFECB3', 'P/K': '#FFECB3',
+                'K/H': '#BBDEFB', 'H/K': '#BBDEFB',
+                'K/TQ': '#FFF9C4', 'TQ/K': '#FFF9C4',
+                'K/NM': '#E1BEE7', 'NM/K': '#E1BEE7',
+                'K/TS': '#E1BEE7', 'TS/K': '#E1BEE7',
+                'K/VR': '#BDBDBD', 'VR/K': '#BDBDBD',
+                'K/O': '#C8E6C9', 'O/K': '#C8E6C9',
+                'K/ĐT': '#FFE0B2', 'ĐT/K': '#FFE0B2',
+                'K/L': '#D7CCC8', 'L/K': '#D7CCC8'
+            };
+
+            let clean = params.value.split(' ')[params.value.split(' ').length - 1].trim();
+            return {'backgroundColor': map[clean] || '#FFFFFF'};
+        }
+        """)
 
         # Tạo bản copy để hiển thị
         df_display_clean = df_display.copy()
@@ -1433,12 +1468,21 @@ def admin_app(user):
         gb.configure_default_column(
             editable=True,
             resizable=True,
-            sortable=True,
-            filter=True,
+            sortable=False,  # ✅ Tắt sort
+            filter=False,    # ✅ Tắt filter
         )
 
+
         # Pin cột User bên trái
-        gb.configure_column("User", pinned="left", editable=False)
+        gb.configure_column(
+            "User",
+            pinned="left",
+            editable=False,
+            width=200,           # ✅ Cho đủ rộng
+            filter=False,        # ✅ Không filter
+            sortable=False       # ✅ Không sort
+        )
+
 
         # Dropdown cho các cột ngày
         for col in day_cols:
@@ -1495,9 +1539,10 @@ def admin_app(user):
             height=650,
             fit_columns_on_grid_load=False,
             allow_unsafe_jscode=True,
-            update_mode=GridUpdateMode.VALUE_CHANGED,  # Không rerun Streamlit
+            update_mode=GridUpdateMode.NO_UPDATE,   # ✅ Không rerun khi edit cell
             theme="alpine",
         )
+
 
         edited_df_clean = grid_response["data"]
 
