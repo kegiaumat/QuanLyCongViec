@@ -1557,6 +1557,7 @@ def admin_app(user):
             height=650,
             allow_unsafe_jscode=True,
             update_mode=GridUpdateMode.NO_UPDATE,
+            reload_data=False,
             fit_columns_on_grid_load=False,
         )
 
@@ -1572,7 +1573,8 @@ def admin_app(user):
         edited_df = edited_df[["username", "User"] + day_cols]
 
         # Cập nhật buffer
-        st.session_state.attendance_buffer = edited_df.copy()
+        edited_df_local = edited_df.copy()
+
 
 
 
@@ -1645,6 +1647,8 @@ def admin_app(user):
 
         # ==== LƯU DỮ LIỆU ====
         if st.button("💾 Lưu bảng chấm công & ghi chú"):
+            attendance_buffer = edited_df.copy()   # CHỈ GHI Ở ĐÂY
+            st.session_state["attendance_buffer"] = attendance_buffer
             with st.spinner("Đang lưu dữ liệu lên Supabase..."):
 
                 # --- Lưu bảng công cho từng user ---
