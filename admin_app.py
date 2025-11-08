@@ -1549,7 +1549,7 @@ def admin_app(user):
         gb.configure_grid_options(
             suppressPropertyNamesCheck=True,
             suppressMovableColumns=True,
-            debounceEditStopTime=1000,   # ⏱️ Delay 1s sau khi dừng gõ mới gửi event → tránh rerun
+            debounceEditStopTime=100000,   # ⏱️ Delay 1s sau khi dừng gõ mới gửi event → tránh rerun
             stopEditingWhenCellsLoseFocus=False  # 🧩 Không commit khi click ra ngoài
         )
         # Sơn màu nền theo ký hiệu
