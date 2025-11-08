@@ -1406,11 +1406,12 @@ def admin_app(user):
         day_cols = [c for c in df_display.columns if "/" in c]
 
         # ✅ BUFFER chống mất dữ liệu khi rerun
-        if "attendance_buffer" not in st.session_state:
+        if "attendance_buffer" not in st.session_state or st.session_state["attendance_buffer"] is None:
             st.session_state["attendance_buffer"] = df_display.copy()
 
-        # dùng buffer để hiển thị
+        # ✅ Dùng buffer để hiển thị
         df_display = st.session_state["attendance_buffer"].copy()
+
 
         
         # 🔧 Chuẩn hoá username để tránh sai lệch khi so sánh
