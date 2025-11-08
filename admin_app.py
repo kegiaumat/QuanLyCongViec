@@ -1578,21 +1578,21 @@ def admin_app(user):
             return { 'backgroundColor': bg };
         }
         """)
-        for col in day_cols:
+        # for col in day_cols:
             # tách ngày và thứ xuống dòng
-            header_html = col.replace(" (", "<br>(").replace(")", ")")
+            # header_html = col.replace(" (", "<br>(").replace(")", ")")
 
-            gb.configure_column(
-                col,
-                headerName=(
-                    f"<div style='text-align:center; white-space:normal; "
-                    f"line-height:14px'>{header_html}</div>"
-                ),
-                cellEditor="agSelectCellEditor",
-                cellEditorParams={"values": code_options},
-                autoSize=False,
-            )
-            gb.configure_column(col, cellStyle=cell_style_jscode)
+            # gb.configure_column(
+                # col,
+                # headerName=(
+                    # f"<div style='text-align:center; white-space:normal; "
+                    # f"line-height:14px'>{header_html}</div>"
+                # ),
+                # cellEditor="agSelectCellEditor",
+                # cellEditorParams={"values": code_options},
+                # autoSize=False,
+            # )
+            # gb.configure_column(col, cellStyle=cell_style_jscode)
 
 
         gridOptions = gb.build()
