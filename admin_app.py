@@ -1532,11 +1532,18 @@ def admin_app(user):
 
 
         # Dropdown cho các cột ngày
+        # for col in day_cols:
+            # gb.configure_column(
+                # col,
+                # cellEditor="agSelectCellEditor",
+                # cellEditorParams={"values": code_options},
+            # )
         for col in day_cols:
             gb.configure_column(
                 col,
-                cellEditor="agSelectCellEditor",
-                cellEditorParams={"values": code_options},
+                editable=True,
+                cellEditor="agTextCellEditor",
+                headerName=col,
             )
 
         # Sơn màu nền theo ký hiệu
