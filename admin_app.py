@@ -1282,8 +1282,6 @@ def admin_app(user):
 
     elif choice == "Chấm công – Nghỉ phép":
         
-        st.session_state.pop("attendance_buffer", None)
-        st.session_state.pop("attendance_grid_data", None)
 
 
         supabase = get_connection()
@@ -1325,8 +1323,14 @@ def admin_app(user):
             return "/".join([f"{emoji_map.get(p, '')} {p}".strip() for p in parts])
 
         # ==== ĐỌC DỮ LIỆU TỪ SUPABASE ====
-        res = supabase.table("attendance_new").select("*").execute()
-        df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["username", "data", "months"])
+        if "attendance_all_data" not in st.session_state or st.session_state.get("attendance_month") != month_str:
+            res = supabase.table("attendance_new").select("*").execute()
+            df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["username", "data", "months"])
+            st.session_state["attendance_all_data"] = df_att
+            st.session_state["attendance_month"] = month_str
+        else:
+            df_att = st.session_state["attendance_all_data"]
+
 
         # ==== GHÉP DỮ LIỆU CHO HIỂN THỊ ====
         # ==========================
@@ -1573,6 +1577,16 @@ def admin_app(user):
         gridOptions = gb.build()
 
         # =============================
+        #   CẤU HÌNH CHỐNG RERUN
+        # =============================
+        gb.configure_grid_options(
+            suppressPropertyNamesCheck=True,
+            suppressMovableColumns=True,
+            stopEditingWhenCellsLoseFocus=False,
+            debounceEditStopTime=1000
+        )
+
+        # =============================
         #   HIỂN THỊ AG-GRID
         # =============================
         grid_response = AgGrid(
@@ -1580,7 +1594,7 @@ def admin_app(user):
             gridOptions=gridOptions,
             height=650,
             allow_unsafe_jscode=True,
-            update_mode=GridUpdateMode.MANUAL,   # ✅ Không rerun khi click cell
+            update_mode=GridUpdateMode.NO_UPDATE,  # ✅ Không rerun khi edit cell
             reload_data=False,
             fit_columns_on_grid_load=False,
         )
