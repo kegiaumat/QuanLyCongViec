@@ -1545,7 +1545,14 @@ def admin_app(user):
                 cellEditor="agTextCellEditor",
                 headerName=col,
             )
-
+        # ✅ Cấu hình chung cho toàn grid để tránh rerun khi edit lâu
+        gb.configure_grid_options(
+            suppressPropertyNamesCheck=True,
+            suppressMovableColumns=True,
+            debounceEditStopTime=1000,   # ⏱️ Delay 1s sau khi dừng gõ mới gửi event → tránh rerun
+            stopEditingWhenCellsLoseFocus=False  # 🧩 Không commit khi click ra ngoài
+        )
+        gridOptions = gb.build()
         # Sơn màu nền theo ký hiệu
         cell_style_jscode = JsCode("""
         function(params) {
