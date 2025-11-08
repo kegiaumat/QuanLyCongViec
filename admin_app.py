@@ -1281,10 +1281,23 @@ def admin_app(user):
                                     st.info("⚠️ Bạn chưa tick dòng nào để xoá.")
 
     elif choice == "Chấm công – Nghỉ phép":
-        
-        st.session_state.pop("attendance_buffer", None)
-        st.session_state.pop("attendance_grid_data", None)
+        # =======================
+        # 🔒 CHỐNG RERUN NGOÀI Ý MUỐN
+        # =======================
+        # Chỉ reset khi user đổi chức năng hoặc reload trang
+        if "active_tab" not in st.session_state:
+            st.session_state["active_tab"] = choice
 
+        # Nếu đổi menu (ví dụ từ "Giao Việc" sang "Chấm công")
+        if st.session_state["active_tab"] != choice:
+            st.session_state.clear()  # reset toàn bộ state khi đổi tab
+            st.session_state["active_tab"] = choice
+            st.rerun()
+
+        # Không xóa buffer tự động nữa
+        if "attendance_buffer" not in st.session_state:
+            st.session_state["attendance_buffer"] = None
+        
 
         supabase = get_connection()
         df_users = load_users_cached()
@@ -1860,10 +1873,9 @@ def admin_app(user):
                         "months": [month_str]
                     }).execute()
 
-            st.success("✅ Đã lưu bảng chấm công và ghi chú thành công!")
-
-            # Reset buffer để lần load tiếp theo lấy dữ liệu mới từ DB
-            st.session_state.attendance_buffer = None
+            st.success("✅ Đã lưu bảng chấm công thành công!")
+            time.sleep(0.8)
+            st.rerun()  # 🔁 Chỉ rerun khi ấn Lưu
 
 
         # ==============================
