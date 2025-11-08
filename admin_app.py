@@ -1290,7 +1290,11 @@ def admin_app(user):
 
         # Nếu đổi menu (ví dụ từ "Giao Việc" sang "Chấm công")
         if st.session_state["active_tab"] != choice:
-            st.session_state.clear()  # reset toàn bộ state khi đổi tab
+            # ✅ Chỉ xóa những key không cần giữ lại
+            keys_to_keep = ["active_tab"]
+            for k in list(st.session_state.keys()):
+                if k not in keys_to_keep:
+                    del st.session_state[k]
             st.session_state["active_tab"] = choice
             st.rerun()
 
@@ -1386,13 +1390,13 @@ def admin_app(user):
         df_display = df_display[["username", "User"] + day_cols]
 
         # ✅ lưu vào session_state
-        st.session_state["df_display_att"] = df_display.copy()
+        if "df_display_att" not in st.session_state:
+            st.session_state["df_display_att"] = df_display.copy()
 
-        # ✅ lấy từ session ra dùng
+        # ✅ Luôn dùng bản trong session (đã lưu sẵn)
         df_display = st.session_state["df_display_att"].copy()
         day_cols = [c for c in df_display.columns if "/" in c]
 
-        st.session_state["df_display_att"] = df_display
 
 
         # ✅ Mỗi lần rerun chỉ lấy lại từ session_state
