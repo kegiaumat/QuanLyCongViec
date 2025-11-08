@@ -1879,7 +1879,7 @@ def admin_app(user):
                     }).execute()
 
             st.success("✅ Đã lưu bảng chấm công thành công!")
-            time.sleep(1.5)
+            time.sleep(0.1)
             st.rerun()  # 🔁 Chỉ rerun khi ấn Lưu
 
 
