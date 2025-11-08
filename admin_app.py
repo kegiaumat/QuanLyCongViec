@@ -1598,9 +1598,10 @@ def admin_app(user):
             gridOptions=gridOptions,
             height=650,
             allow_unsafe_jscode=True,
-            update_mode=GridUpdateMode.MANUAL,   # ✅ Không rerun khi click cell
-            reload_data=False,
+            update_mode=GridUpdateMode.NO_UPDATE,   # ✅ KHÔNG rerun khi click / chọn ô
+            reload_data=False,                      # ✅ không nạp lại dữ liệu
             fit_columns_on_grid_load=False,
+            key="attendance_grid",                  # ✅ thêm key cố định để không tạo lại grid
         )
 
 
@@ -1624,7 +1625,9 @@ def admin_app(user):
 
         # ✅ Chỉ cập nhật buffer khi THỰC SỰ có thay đổi
         if not edited_df_clean.equals(df_display_clean_idx):
-            st.session_state["attendance_buffer"] = edited_df.copy()
+            # ✅ Chỉ lưu tạm vào buffer (chưa ghi session_state để tránh rerun)
+            st.session_state["_temp_att_buffer"] = edited_df.copy()
+
 
 
 
@@ -1660,8 +1663,10 @@ def admin_app(user):
 
         # ==== LƯU DỮ LIỆU ====
         if st.button("💾 Lưu bảng chấm công & ghi chú"):
-            attendance_buffer = edited_df.copy()
-            st.session_state["attendance_buffer"] = attendance_buffer
+            st.session_state["attendance_buffer"] = st.session_state.get("_temp_att_buffer", edited_df.copy())
+
+            # attendance_buffer = edited_df.copy()
+            # st.session_state["attendance_buffer"] = attendance_buffer
             summary_rows = []
             for _, row in edited_df.iterrows():
                 vals = [v for k, v in row.items() if "/" in k]
