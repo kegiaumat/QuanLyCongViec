@@ -1284,7 +1284,7 @@ def admin_app(user):
         st.subheader("🕒 Chấm công – Nghỉ phép")
 
         # =======================
-        # 1️⃣ KẾT NỐI & DỮ LIỆU CƠ BẢN
+        # 1️⃣ KẾT NỐI VÀ KHỞI TẠO
         # =======================
         supabase = get_connection()
         df_users = load_users_cached()
@@ -1305,11 +1305,18 @@ def admin_app(user):
         st.markdown(f"### Bảng chấm công tháng {selected_month.strftime('%m/%Y')}")
 
         # =======================
-        # 2️⃣ ĐỌC DỮ LIỆU TỪ SUPABASE
+        # 2️⃣ ĐỌC TOÀN BỘ DỮ LIỆU MỘT LẦN
         # =======================
-        res = supabase.table("attendance_new").select("*").execute()
-        df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["username", "data", "months"])
+        if "attendance_all_data" not in st.session_state:
+            res = supabase.table("attendance_new").select("*").execute()
+            df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["username", "data", "months"])
+            st.session_state["attendance_all_data"] = df_att
+        else:
+            df_att = st.session_state["attendance_all_data"]
 
+        # =======================
+        # 3️⃣ TẠO DATAFRAME CHẤM CÔNG
+        # =======================
         need_rebuild = (
             "attendance_df" not in st.session_state
             or st.session_state.get("attendance_month") != month_str
@@ -1348,14 +1355,13 @@ def admin_app(user):
                 rows.append(row)
 
             df_display = pd.DataFrame(rows)
-            df_display = df_display[["username", "User"] + [c for c in df_display.columns if "/" in c]]
-            st.session_state["attendance_month"] = month_str
             st.session_state["attendance_df"] = df_display.copy()
+            st.session_state["attendance_month"] = month_str
         else:
             df_display = st.session_state["attendance_df"].copy()
 
         # =======================
-        # 3️⃣ HIỂN THỊ BẢNG EDITOR
+        # 4️⃣ HIỂN THỊ VỚI st.data_editor
         # =======================
         code_options = [
             "K", "K:2", "P", "H", "TQ", "BD", "L", "O", "VR",
@@ -1377,16 +1383,17 @@ def admin_app(user):
             df_view,
             width="stretch",
             hide_index=True,
-            key="attendance_editor",
+            key=f"attendance_editor_{month_str}",
             column_config=col_config,
         )
 
+        # Lưu tạm kết quả vào session (để rerun không mất)
         edited_df = edited_view.copy()
         edited_df.insert(0, "username", df_display["username"].values)
         st.session_state["attendance_df"] = edited_df.copy()
 
         # =======================
-        # 4️⃣ GHI CHÚ THÁNG (NoteData)
+        # 5️⃣ GHI CHÚ THÁNG
         # =======================
         note_rec = df_att[df_att["username"] == "NoteData"]
         existing_note = ""
@@ -1403,13 +1410,16 @@ def admin_app(user):
             f"Ghi chú cho tháng {month_str}:",
             value=existing_note,
             height=120,
-            key="monthly_note_attendance"
+            key=f"monthly_note_{month_str}"
         )
 
         # =======================
-        # 5️⃣ NÚT LƯU DỮ LIỆU
+        # 6️⃣ NÚT LƯU DỮ LIỆU
         # =======================
-        if st.button("💾 Lưu bảng chấm công & ghi chú", key="save_attendance_btn"):
+        if st.button("💾 Lưu bảng chấm công & ghi chú", key=f"save_attendance_btn_{month_str}"):
+            df_att = st.session_state["attendance_all_data"]
+
+            # --- Lưu chấm công cho từng nhân sự ---
             for _, u in df_users.iterrows():
                 uname = u["username"]
                 row = edited_df[edited_df["username"] == uname]
@@ -1460,7 +1470,7 @@ def admin_app(user):
                         "months": months_list
                     }).execute()
 
-            # Lưu ghi chú tháng
+            # --- Lưu ghi chú tháng ---
             note_rec = df_att[df_att["username"] == "NoteData"]
             if not note_rec.empty:
                 note_data = note_rec.iloc[0].get("data", {}) or {}
@@ -1496,7 +1506,9 @@ def admin_app(user):
                     "months": months_list
                 }).execute()
 
-            st.success("✅ Đã lưu bảng chấm công & ghi chú thành công.")
+            # Cập nhật session local để không reload DB ngay sau lưu
+            st.session_state["attendance_all_data"] = supabase.table("attendance_new").select("*").execute().data
+            st.success("✅ Đã lưu bảng chấm công & ghi chú thành công!")
 
     elif choice == "Thống kê công việc":
         st.subheader("📊 Thống kê công việc")
