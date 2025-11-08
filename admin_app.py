@@ -1552,7 +1552,6 @@ def admin_app(user):
             debounceEditStopTime=1000,   # ⏱️ Delay 1s sau khi dừng gõ mới gửi event → tránh rerun
             stopEditingWhenCellsLoseFocus=False  # 🧩 Không commit khi click ra ngoài
         )
-        gridOptions = gb.build()
         # Sơn màu nền theo ký hiệu
         cell_style_jscode = JsCode("""
         function(params) {
