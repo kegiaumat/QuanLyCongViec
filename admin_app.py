@@ -1283,6 +1283,10 @@ def admin_app(user):
                                     st.info("⚠️ Bạn chưa tick dòng nào để xoá.")
 
     elif choice == "Chấm công – Nghỉ phép":
+        import datetime as dt
+        import json, io, re
+        import pandas as pd
+        from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
 
         st.subheader("🕒 Quản lý chấm công & nghỉ phép")
 
@@ -1290,23 +1294,23 @@ def admin_app(user):
         df_users = load_users_cached()
 
         # ==== CHỌN THÁNG ====
-        today = pd.Timestamp(dt.date.today())
-        selected_month = st.date_input("📅 Chọn tháng", dt.date(today.year, today.month, 1))
+        today_ts = pd.Timestamp(dt.date.today())
+        today_date = dt.date.today()
+        selected_month = st.date_input("📅 Chọn tháng", dt.date(today_date.year, today_date.month, 1))
         month_str = selected_month.strftime("%Y-%m")
 
-        # ✅ Reset dữ liệu chỉ khi đổi tháng
         if "selected_month_prev" not in st.session_state or st.session_state["selected_month_prev"] != month_str:
             st.session_state.pop("attendance_buffer", None)
             st.session_state["selected_month_prev"] = month_str
 
         st.subheader(f"🗓️ Bảng chấm công – Tháng {selected_month.strftime('%m/%Y')}")
 
-        # ==== TẠO DANH SÁCH NGÀY ====
+        # ==== DANH SÁCH NGÀY ====
         first_day = selected_month.replace(day=1)
         next_month = (first_day + dt.timedelta(days=32)).replace(day=1)
         days = pd.date_range(first_day, next_month - dt.timedelta(days=1))
 
-        # ==== CÁC KÝ HIỆU ====
+        # ==== KÝ HIỆU ====
         code_options = [
             "K", "K:2", "P", "H", "TQ", "BD", "L", "O", "VR",
             "NM", "TS", "VS", "TV",
@@ -1319,11 +1323,12 @@ def admin_app(user):
         res = supabase.table("attendance_new").select("*").execute()
         df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["username", "data", "months"])
 
-        # ==== KHỞI TẠO BẢNG NẾU CHƯA CÓ BUFFER ====
+        # ==== KHỞI TẠO BUFFER ====
         if "attendance_buffer" not in st.session_state:
             rows = []
             for _, u in df_users.iterrows():
-                uname, display_name = u["username"], u["display_name"]
+                uname = u["username"]
+                display_name = u["display_name"]
                 record = df_att[df_att["username"] == uname]
                 user_data = {}
                 if len(record) > 0:
@@ -1337,11 +1342,11 @@ def admin_app(user):
                 month_data = user_data.get(month_str, {})
                 row = {"username": uname, "User": display_name}
                 for d in days:
-                    wd = d.weekday()
+                    weekday = d.weekday()
                     key = d.strftime("%d")
-                    col = f"{key}/{d.strftime('%m')} ({['T2','T3','T4','T5','T6','T7','CN'][wd]})"
-                    if d <= today:
-                        val = month_data.get(key, "K" if wd < 5 else "")
+                    col = f"{key}/{d.strftime('%m')} ({['T2','T3','T4','T5','T6','T7','CN'][weekday]})"
+                    if d.date() <= today_date:
+                        val = month_data.get(key, "K" if weekday < 5 else "")
                     else:
                         val = month_data.get(key, "")
                     row[col] = val
@@ -1352,7 +1357,7 @@ def admin_app(user):
         day_cols = [c for c in df_display.columns if "/" in c]
         df_display_clean = df_display.drop(columns=["username"]).copy()
 
-        # ==== CẤU HÌNH AGGRID ====
+        # ==== AGGRID ====
         gb = GridOptionsBuilder.from_dataframe(df_display_clean)
         gb.configure_default_column(editable=True, resizable=True, sortable=False, filter=False)
         gb.configure_column("User", pinned="left", editable=False, width=300)
@@ -1360,7 +1365,7 @@ def admin_app(user):
             gb.configure_column(col, cellEditor="agSelectCellEditor", cellEditorParams={"values": code_options})
         gridOptions = gb.build()
 
-        # ==== HIỂN THỊ TRONG FORM ĐỂ KHÔNG RERUN ====
+        # ==== FORM CHỐNG RERUN ====
         with st.form("attendance_form", clear_on_submit=False):
             grid_response = AgGrid(
                 df_display_clean,
@@ -1400,10 +1405,9 @@ def admin_app(user):
 
             save_clicked = st.form_submit_button("💾 Lưu bảng chấm công & ghi chú")
 
-        # ==== LƯU DỮ LIỆU ====
+        # ==== XỬ LÝ LƯU ====
         if save_clicked:
             today_date = dt.date.today()
-
             edited_df = st.session_state["attendance_buffer"].copy()
             updated_users, inserted_users, skipped_users, errors = [], [], [], []
 
@@ -1423,13 +1427,12 @@ def admin_app(user):
                     for col in day_cols:
                         try:
                             day = int(col.split("/")[0])
-                            date_in_month = selected_month.replace(day=day)   # datetime.date
-                            if date_in_month <= today_date:                   # so sánh 2 kiểu date
-                                val = cell_to_code(row.get(col))              # hoặc remove_emoji(...) của bạn
+                            date_in_month = selected_month.replace(day=day)
+                            if date_in_month <= today_date:
+                                val = remove_emoji(row.get(col))
                                 codes[f"{day:02d}"] = val
-                        except Exception:
+                        except:
                             pass
-
 
                     record = df_att[df_att["username"].astype(str).str.strip() == str(uname).strip()]
                     try:
@@ -1447,40 +1450,29 @@ def admin_app(user):
                         months = rec.get("months", []) or []
                         data_all = rec.get("data", {}) or {}
                         if isinstance(data_all, str):
-                            data_all = json.loads(data_all)
+                            try:
+                                data_all = json.loads(data_all)
+                            except:
+                                data_all = {}
 
                         old_month_data = data_all.get(month_str, {})
-                        def normalize(v):
-                            if v in [None, "None", "nan", "NaN"]:
-                                return ""
-                            return str(v).strip()
+                        if isinstance(old_month_data, str):
+                            try:
+                                old_month_data = json.loads(old_month_data)
+                            except:
+                                old_month_data = {}
 
-                        try:
-                            old_json = json.loads(json.dumps(old_month_data or {}, ensure_ascii=False))
-                        except:
-                            old_json = old_month_data or {}
-                        try:
-                            new_json = json.loads(json.dumps(codes or {}, ensure_ascii=False))
-                        except:
-                            new_json = codes or {}
-
-                        old_clean = {str(k).zfill(2): normalize(v) for k, v in old_json.items()}
-                        new_clean = {str(k).zfill(2): normalize(v) for k, v in new_json.items()}
-
-                        diff_days = [d for d in new_clean if new_clean.get(d) != old_clean.get(d)]
-                        has_changed = len(diff_days) > 0 or len(old_clean) != len(new_clean)
-
-                        if has_changed:
-                            # ✅ GIỮ NGUYÊN DATA CŨ CÁC THÁNG KHÁC
+                        if old_month_data != codes:
                             data_all[month_str] = codes
                             if month_str not in months:
                                 months.append(month_str)
-                            payload = {"months": months, "data": data_all}
-                            supabase.table("attendance_new").update(payload).eq("username", uname).execute()
+                            supabase.table("attendance_new").update({
+                                "data": data_all,
+                                "months": months
+                            }).eq("username", uname).execute()
                             updated_users.append(uname)
                         else:
                             skipped_users.append(uname)
-
                     except Exception as e:
                         errors.append(f"{uname}: {e}")
 
