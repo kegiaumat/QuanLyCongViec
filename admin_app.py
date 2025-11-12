@@ -1353,61 +1353,110 @@ def admin_app(user):
         df_display_clean = df_display.drop(columns=["username"]).copy()
 
         # =============================
-        #     TẠO GRID OPTIONS
         # =============================
+        #     TẠO GRID OPTIONS (FIX UI)
+        # =============================
+
+        # 1) Header ngày xuống dòng bằng \n (không dùng HTML)
+        day_cols_multiline = {}
+        for col in day_cols:                              # col ví dụ: "01/11 (T7)"
+            if " (" in col:
+                d, w = col.split(" (", 1)                 # d="01/11", w="T7)"
+                day_cols_multiline[col] = f"{d}\n({w.rstrip(')')})"   # "01/11\n(T7)"
+            else:
+                day_cols_multiline[col] = col
+
+        # 2) Ẩn username khi hiển thị
+        df_display_clean = df_display.drop(columns=["username"]).copy()
+
+        # 3) CSS màu nền cho từng ký hiệu (ổn định với !important)
+        st.markdown("""
+        <style>
+        .ag-theme-streamlit .bg-k    { background-color:#C8E6C9 !important; }
+        .ag-theme-streamlit .bg-k2   { background-color:#FFE0B2 !important; }
+        .ag-theme-streamlit .bg-p    { background-color:#FFCDD2 !important; }
+        .ag-theme-streamlit .bg-h    { background-color:#BBDEFB !important; }
+        .ag-theme-streamlit .bg-tq   { background-color:#FFF9C4 !important; }
+        .ag-theme-streamlit .bg-bd   { background-color:#FFE0B2 !important; }
+        .ag-theme-streamlit .bg-l    { background-color:#D7CCC8 !important; }
+        .ag-theme-streamlit .bg-o    { background-color:#C8E6C9 !important; }
+        .ag-theme-streamlit .bg-vr   { background-color:#E0E0E0 !important; }
+        .ag-theme-streamlit .bg-nm   { background-color:#E1BEE7 !important; }
+        .ag-theme-streamlit .bg-ts   { background-color:#E1BEE7 !important; }
+        .ag-theme-streamlit .bg-vs   { background-color:#BBDEFB !important; }
+        .ag-theme-streamlit .bg-tv   { background-color:#FFF9C4 !important; }
+        .ag-theme-streamlit .bg-mix  { background-color:#FFECB3 !important; } /* K/P, P/K */
+        .ag-theme-streamlit .bg-none { background-color:#FFFFFF !important; }
+        </style>
+        """, unsafe_allow_html=True)
+
+        # 4) Build grid
         gb = GridOptionsBuilder.from_dataframe(df_display_clean)
         gb.configure_default_column(
             editable=True,
             resizable=True,
             sortable=False,
             filter=False,
-            wrapHeaderText=True,      # ✅ Cho phép header xuống dòng
-            autoHeaderHeight=True,    # ✅ Tự cao theo nội dung
+            wrapHeaderText=True,        # ✅ cho phép xuống dòng
+            autoHeaderHeight=True,      # ✅ header cao theo nội dung
             autoSize=False
         )
 
-        # ✅ Cột User: ghim trái, rộng, không cắt chữ
-        gb.configure_column(
-            "User",
+        # Cột User: ghim trái & rộng hơn để không cụt chữ
+        gb.configure_column("User",
             pinned="left",
             editable=False,
-            width=420,
+            width=460,                  # ✅ cho đủ tên
             wrapText=True,
             autoHeight=True
         )
 
-        # ✅ Màu pastel cho từng ký hiệu
-        cell_style_jscode = JsCode("""
-        function(params) {
-            const map = {
-                'K':'#C8E6C9','K:2':'#FFE0B2','P':'#FFCDD2','H':'#BBDEFB',
-                'TQ':'#FFF9C4','BD':'#FFE0B2','L':'#D7CCC8','O':'#C8E6C9',
-                'VR':'#E0E0E0','NM':'#E1BEE7','TS':'#E1BEE7','VS':'#BBDEFB',
-                'TV':'#FFF9C4','K/P':'#FFECB3','P/K':'#FFECB3','K/H':'#BBDEFB',
-                'H/K':'#BBDEFB','K/TQ':'#FFF9C4','TQ/K':'#FFF9C4','K/NM':'#E1BEE7',
-                'NM/K':'#E1BEE7','K/TS':'#E1BEE7','TS/K':'#E1BEE7','K/VR':'#E0E0E0',
-                'VR/K':'#E0E0E0','K/O':'#C8E6C9','O/K':'#C8E6C9','K/ĐT':'#FFE0B2',
-                'ĐT/K':'#FFE0B2','K/L':'#D7CCC8','L/K':'#D7CCC8','': '#FFFFFF'
-            };
-            const v = (params.value || '').trim();
-            return {'backgroundColor': map[v] || '#FFFFFF', 'textAlign':'center'};
-        }
-        """)
+        # Hàm tiện: cellClassRules theo giá trị
+        def class_rules():
+            return {
+                "bg-k":  "value == 'K'",
+                "bg-k2": "value == 'K:2'",
+                "bg-p":  "value == 'P'",
+                "bg-h":  "value == 'H'",
+                "bg-tq": "value == 'TQ'",
+                "bg-bd": "value == 'BD'",
+                "bg-l":  "value == 'L'",
+                "bg-o":  "value == 'O'",
+                "bg-vr": "value == 'VR'",
+                "bg-nm": "value == 'NM'",
+                "bg-ts": "value == 'TS'",
+                "bg-vs": "value == 'VS'",
+                "bg-tv": "value == 'TV'",
+                # tổ hợp
+                "bg-mix": "value == 'K/P' || value == 'P/K' || value == 'K/H' || value == 'H/K' || \
+                           value == 'K/TQ' || value == 'TQ/K' || value == 'K/NM' || value == 'NM/K' || \
+                           value == 'K/TS' || value == 'TS/K' || value == 'K/VR' || value == 'VR/K' || \
+                           value == 'K/O' || value == 'O/K' || value == 'K/ĐT' || value == 'ĐT/K' || \
+                           value == 'K/L' || value == 'L/K'",
+                "bg-none": "!value"     # rỗng
+            }
 
-        # ✅ Tiêu đề ngày có xuống dòng bằng \n
+        # Cấu hình từng cột ngày: header xuống dòng, dropdown, màu
         for col in day_cols:
-            header_text = col.replace(" (", "\n(").replace(")", ")")  # 01/11\n(T7)
             gb.configure_column(
                 col,
-                headerName=header_text,
+                headerName=day_cols_multiline[col],                 # ✅ "01/11\n(T7)"
                 cellEditor="agSelectCellEditor",
-                cellEditorParams={"values": code_options},
-                cellStyle=cell_style_jscode,
-                autoSize=False,
-                width=64
+                cellEditorParams={"values": [
+                    "", "K", "K:2", "P", "H", "TQ", "BD", "L", "O", "VR",
+                    "NM", "TS", "VS", "TV",
+                    "K/P", "P/K", "K/H", "H/K", "K/TQ", "TQ/K", "K/NM", "NM/K",
+                    "K/TS", "TS/K", "K/VR", "VR/K", "K/O", "O/K",
+                    "K/ĐT", "ĐT/K", "K/L", "L/K"
+                ]},
+                cellClassRules=class_rules(),                      # ✅ tô màu theo class
+                width=68,
+                autoSize=False
             )
 
         gridOptions = gb.build()
+        # ép header cao thêm chút (nếu theme không auto đủ)
+        gridOptions["headerHeight"] = 54
         gridOptions["ensureDomOrder"] = True
         gridOptions["suppressHorizontalScroll"] = False
 
@@ -1420,23 +1469,24 @@ def admin_app(user):
                 gridOptions=gridOptions,
                 height=650,
                 allow_unsafe_jscode=True,
-                update_mode=GridUpdateMode.MANUAL,
+                update_mode=GridUpdateMode.MANUAL,   # không rerun khi click
                 data_return_mode=DataReturnMode.AS_INPUT,
                 reload_data=False,
                 fit_columns_on_grid_load=False,
                 key=f"grid_{month_str}"
             )
 
-            st.markdown(
-                "<script>window.scrollTo({top: 0, left: 0, behavior: 'smooth'});</script>",
-                unsafe_allow_html=True
-            )
+            # Đưa scroll về đầu
+            st.markdown("<script>window.scrollTo({top:0,left:0,behavior:'auto'});</script>", unsafe_allow_html=True)
 
             edited_df_clean = pd.DataFrame(grid_response["data"]).reset_index(drop=True)
             edited_df = edited_df_clean.copy()
             edited_df["username"] = df_display["username"].reset_index(drop=True)
             edited_df = edited_df[["username", "User"] + day_cols]
             st.session_state["attendance_buffer"] = edited_df.copy()
+
+            # (phần ghi chú tháng + nút Lưu giữ nguyên bên dưới)
+
 
             # ==== GHI CHÚ THÁNG ====
             st.markdown("### 📝 Ghi chú tháng")
