@@ -1290,7 +1290,8 @@ def admin_app(user):
         df_users = load_users_cached()
 
         # ==== CHỌN THÁNG ====
-        today = pd.Timestamp(dt.date.today())
+        today_date = dt.date.today()
+
         selected_month = st.date_input("📅 Chọn tháng", dt.date(today.year, today.month, 1))
         month_str = selected_month.strftime("%Y-%m")
 
@@ -1421,12 +1422,13 @@ def admin_app(user):
                     for col in day_cols:
                         try:
                             day = int(col.split("/")[0])
-                            date_in_month = selected_month.replace(day=day)
-                            if date_in_month <= today:
-                                val = remove_emoji(row.get(col))
+                            date_in_month = selected_month.replace(day=day)   # datetime.date
+                            if date_in_month <= today_date:                   # so sánh 2 kiểu date
+                                val = cell_to_code(row.get(col))              # hoặc remove_emoji(...) của bạn
                                 codes[f"{day:02d}"] = val
-                        except:
+                        except Exception:
                             pass
+
 
                     record = df_att[df_att["username"].astype(str).str.strip() == str(uname).strip()]
                     try:
