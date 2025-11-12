@@ -1292,7 +1292,20 @@ def admin_app(user):
         # ===== Lấy dữ liệu chấm công từ DB =====
         # Giả định bảng trong DB có tên là 'attendance' với các cột:
         # username, date, code (K, P, L,...)
-        data = supabase.table("attendance").select("*").like("date", f"{month_str}%").execute()
+        start_date = selected_month.replace(day=1)
+        if selected_month.month == 12:
+            end_date = selected_month.replace(year=selected_month.year + 1, month=1, day=1)
+        else:
+            end_date = selected_month.replace(month=selected_month.month + 1, day=1)
+
+        data = (
+            supabase.table("attendance")
+            .select("*")
+            .gte("date", start_date.isoformat())
+            .lt("date", end_date.isoformat())
+            .execute()
+        )
+
         df = pd.DataFrame(data.data)
 
         if df.empty:
