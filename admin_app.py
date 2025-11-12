@@ -1402,6 +1402,8 @@ def admin_app(user):
 
         # ==== LƯU DỮ LIỆU ====
         if save_clicked:
+            today_date = dt.date.today()
+
             edited_df = st.session_state["attendance_buffer"].copy()
             updated_users, inserted_users, skipped_users, errors = [], [], [], []
 
