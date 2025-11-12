@@ -1283,336 +1283,157 @@ def admin_app(user):
     elif choice == "Chấm công – Nghỉ phép":
         st.subheader("🕒 Quản lý chấm công & nghỉ phép")
 
-        # ===== Chọn tháng =====
+        supabase = get_supabase_client()
+
+        # ====== Chọn tháng ======
         selected_month = st.date_input("📅 Chọn tháng", datetime.date.today().replace(day=1))
         month_str = selected_month.strftime("%Y-%m")
 
-        supabase = get_supabase_client()
+        # ====== Lấy dữ liệu người dùng ======
+        df_users = load_users_cached()
 
-        # ===== Lấy dữ liệu chấm công từ DB =====
-        # Giả định bảng trong DB có tên là 'attendance' với các cột:
-        # username, date, code (K, P, L,...)
+        # ====== Lấy dữ liệu chấm công từ DB ======
+        res = supabase.table("attendance_new").select("*").execute()
+        df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["username", "data"])
+
+        # ====== Lập danh sách ngày trong tháng ======
         start_date = selected_month.replace(day=1)
         if selected_month.month == 12:
             end_date = selected_month.replace(year=selected_month.year + 1, month=1, day=1)
         else:
             end_date = selected_month.replace(month=selected_month.month + 1, day=1)
+        days = pd.date_range(start_date, end_date - datetime.timedelta(days=1))
 
-        data = (
-            supabase.table("attendance")
-            .select("*")
-            .gte("date", start_date.isoformat())
-            .lt("date", end_date.isoformat())
-            .execute()
+        # ====== Các ký hiệu công ======
+        code_options = ["", "K", "K:2", "P", "H", "TQ", "BD", "L", "O", "VR", "NM", "TS", "VS", "TV"]
+
+        # ====== Chuẩn bị bảng chấm công ======
+        records = []
+        for _, u in df_users.iterrows():
+            username = u["username"]
+            display_name = u["display_name"]
+
+            rec = df_att[df_att["username"] == username]
+            data_dict = {}
+            if not rec.empty:
+                try:
+                    data_dict = json.loads(rec.iloc[0]["data"])
+                except Exception:
+                    data_dict = {}
+
+            month_data = data_dict.get(month_str, {})
+            row = {"User": display_name, "username": username}
+            for d in days:
+                day_key = d.strftime("%d")
+                row[day_key] = month_data.get(day_key, "K" if d.weekday() < 5 else "")
+            records.append(row)
+
+        df_display = pd.DataFrame(records)
+        day_cols = [d.strftime("%d") for d in days]
+        df_display = df_display[["User"] + day_cols]
+
+        st.markdown("### 📋 Bảng chấm công")
+        edited_df = st.data_editor(
+            df_display,
+            hide_index=True,
+            width="stretch",
+            column_config={
+                c: st.column_config.SelectboxColumn(c, options=code_options) for c in day_cols
+            }
         )
 
-        df = pd.DataFrame(data.data)
-
-        if df.empty:
-            st.info("⚠️ Chưa có dữ liệu chấm công cho tháng này.")
-            st.stop()
-
-        # ===== Map user hiển thị =====
-        df_users = st.session_state["df_users"]
-        user_map = dict(zip(df_users["username"], df_users["display_name"]))
-        df["Họ và tên"] = df["username"].map(user_map).fillna(df["username"])
-
-        # ===== Pivot thành dạng bảng chấm công =====
-        df["date"] = pd.to_datetime(df["date"])
-        df["Ngày"] = df["date"].dt.day
-        pivot_df = df.pivot_table(index="Họ và tên", columns="Ngày", values="code", aggfunc="first").fillna("")
-        pivot_df = pivot_df.reset_index()
-
-        st.markdown("### 📊 Bảng chấm công")
-        st.dataframe(pivot_df, use_container_width=True)
-
-        # ===== Thống kê tổng hợp theo tháng =====
-        st.divider()
-        st.markdown("### 📈 Thống kê tổng hợp theo tháng")
-
-        # Hàm tính tổng theo ký hiệu
-        def count_code(row, code):
-            return sum(1 for v in row.values if str(v).strip().upper() == code)
-
-        stat_rows = []
-        for _, row in pivot_df.iterrows():
-            user = row["Họ và tên"]
-            vals = row.drop("Họ và tên")
-            stat = {
-                "User": user,
-                "Tổng K": count_code(vals, "K"),
-                "Tổng P": count_code(vals, "P"),
-                "Tổng L": count_code(vals, "L"),
-                "Tổng Ô": count_code(vals, "Ô"),
-                "Tổng H": count_code(vals, "H"),
-                "Tổng K1/2": count_code(vals, "K1/2"),
-                "Tổng P1/2": count_code(vals, "P1/2"),
-                "Tổng Công": count_code(vals, "K") + 0.5 * count_code(vals, "K1/2")
-            }
-            stat_rows.append(stat)
-
-        df_stat = pd.DataFrame(stat_rows)
-        st.dataframe(df_stat, use_container_width=True)
-
-        # ===== Ghi chú tháng =====
+        # ====== Ghi chú tháng ======
         st.divider()
         st.markdown("### 📝 Ghi chú tháng")
-        monthly_note = st.text_area(f"Ghi chú cho tháng {month_str}:")
+        note_row = df_att[df_att["username"] == "NoteData"]
+        note_data = ""
+        if not note_row.empty:
+            try:
+                data_json = json.loads(note_row.iloc[0]["data"])
+                note_data = data_json.get(month_str, "")
+            except Exception:
+                pass
 
+        monthly_note = st.text_area("Ghi chú cho tháng này:", value=note_data)
+
+        # ====== Lưu dữ liệu ======
         if st.button("💾 Lưu bảng chấm công & ghi chú"):
-            # Lưu ghi chú vào DB (bảng attendance_notes)
-            supabase.table("attendance_notes").upsert({
-                "month": month_str,
-                "note": monthly_note
-            }).execute()
-            st.success("✅ Đã lưu ghi chú tháng và bảng chấm công!")
+            with st.spinner("Đang lưu dữ liệu..."):
+                for _, row in edited_df.iterrows():
+                    uname = row["username"]
+                    vals = {d: row[d] for d in day_cols}
+                    record = df_att[df_att["username"] == uname]
+                    if record.empty:
+                        data_dict = {month_str: vals}
+                        supabase.table("attendance_new").insert({
+                            "username": uname,
+                            "data": json.dumps(data_dict)
+                        }).execute()
+                    else:
+                        try:
+                            data_dict = json.loads(record.iloc[0]["data"])
+                        except Exception:
+                            data_dict = {}
+                        data_dict[month_str] = vals
+                        supabase.table("attendance_new").update({
+                            "data": json.dumps(data_dict)
+                        }).eq("username", uname).execute()
 
-        # ===== Ghi chú các loại công =====
+                # Ghi chú tháng riêng
+                note_dict = {}
+                if not note_row.empty:
+                    try:
+                        note_dict = json.loads(note_row.iloc[0]["data"])
+                    except:
+                        pass
+                note_dict[month_str] = monthly_note
+                if note_row.empty:
+                    supabase.table("attendance_new").insert({
+                        "username": "NoteData",
+                        "data": json.dumps(note_dict)
+                    }).execute()
+                else:
+                    supabase.table("attendance_new").update({
+                        "data": json.dumps(note_dict)
+                    }).eq("username", "NoteData").execute()
+
+            st.success("✅ Đã lưu bảng chấm công và ghi chú!")
+
+        # ====== Thống kê tổng hợp ======
+        st.divider()
+        st.markdown("### 📈 Thống kê tổng hợp theo tháng")
+        stats = []
+        for _, row in edited_df.iterrows():
+            vals = [row[c] for c in day_cols]
+            stats.append({
+                "User": row["User"],
+                "Tổng K": vals.count("K"),
+                "Tổng P": vals.count("P"),
+                "Tổng L": vals.count("L"),
+                "Tổng H": vals.count("H"),
+                "Tổng Công": vals.count("K") + 0.5 * vals.count("K:2")
+            })
+        st.dataframe(pd.DataFrame(stats), hide_index=True, width="stretch")
+
+        # ====== Ghi chú các loại công ======
         st.divider()
         st.markdown("### 📘 Ghi chú các loại công")
-
         legend_data = [
             ("🟩", "K", "01 ngày làm việc"),
             ("🟧", "K:2", "1/2 ngày làm việc"),
             ("🟥", "P", "Nghỉ phép"),
             ("🟦", "H", "Hội họp"),
             ("🟨", "TQ", "Tham quan, học tập"),
-            ("🟧", "BD", "Đào tạo, bồi dưỡng"),
             ("🟫", "L", "Nghỉ lễ, tết"),
-            ("🟩", "O", "Nghỉ ốm, con ốm"),
-            ("⬛", "VR", "Nghỉ hiếu, hỷ"),
             ("🟪", "NM", "Nghỉ mát"),
-            ("🟦", "VS", "Nghỉ vợ sinh"),
-            ("🟨", "TV", "Thử việc"),
-            ("🟠", "K/P, P/K", "Kết hợp làm việc & phép"),
-            ("🔵", "K/H, H/K", "Kết hợp làm việc & hội họp"),
-            ("🟣", "K/TQ, TQ/K", "Kết hợp làm việc & tham quan"),
-            ("🟤", "K/NM, NM/K", "Kết hợp làm việc & nghỉ mát"),
-            ("🟡", "K/TS, TS/K", "Kết hợp làm việc & thai sản"),
-            ("🟢", "K/VR, VR/K", "Kết hợp làm việc & hiếu hỷ"),
-            ("⚫", "K/O, O/K", "Kết hợp làm việc & ốm"),
-            ("⚪", "K/L, L/K", "Kết hợp làm việc & lễ, tết")
-        ]
-
-        df_legend = pd.DataFrame(legend_data, columns=["Emoji", "Ký hiệu", "Diễn giải"])
-        half = len(df_legend)//2 + len(df_legend)%2
-        c1, c2 = st.columns(2)
-        with c1:
-            st.dataframe(df_legend.iloc[:half], hide_index=True, use_container_width=True)
-        with c2:
-            st.dataframe(df_legend.iloc[half:], hide_index=True, use_container_width=True)
-
-        # ==============================
-        # 📊 THỐNG KÊ CÁC LOẠI CÔNG THEO THÁNG
-        # ==============================
-
-        st.divider()
-        st.markdown("## 📊 Thống kê tổng hợp theo tháng")
-
-        if "df_display" in locals():
-
-            df_stat = df_display.copy()
-
-            # Lấy cột ngày
-            day_cols = [c for c in df_stat.columns if "/" in c]
-
-            # Hàm đếm theo loại
-            def count_type(row, code):
-                return sum(1 for c in day_cols if str(row[c]).strip().upper() == code)
-
-            # Các loại công
-            codes = ["K", "P", "L", "Ô", "H", "K1/2", "P1/2", "L1/2"]
-
-            for code in codes:
-                df_stat[f"Tổng {code}"] = df_stat.apply(lambda r: count_type(r, code), axis=1)
-
-            # Tính tổng công (K = 1; K1/2 = 0.5 ...)
-            def calc_work_days(row):
-                total = 0
-                for c in day_cols:
-                    val = str(row[c]).strip().upper()
-                    if val == "K": total += 1
-                    elif val == "K1/2": total += 0.5
-                return total
-
-            df_stat["Tổng Công"] = df_stat.apply(calc_work_days, axis=1)
-
-            # Chọn cột hiển thị
-            show_cols = ["User"] + [c for c in df_stat.columns if c.startswith("Tổng ")]
-
-            st.dataframe(df_stat[show_cols], use_container_width=True)
-
-        else:
-            st.info("Chưa có dữ liệu chấm công để thống kê.")
-
-        
-        # ==== XUẤT FILE EXCEL BẢNG CÔNG ====
-
-        # Chuẩn bị dữ liệu
-        export_df = edited_df.copy()
-
-        # Loại bỏ emoji -> chỉ giữ ký hiệu (K, P, ...)
-        def remove_emoji(val):
-            if isinstance(val, str) and " " in val:
-                return val.split()[-1]
-            return val
-        for col in export_df.columns:
-            if col != "User":
-                export_df[col] = export_df[col].apply(remove_emoji)
-
-        # ====== Tổng hợp “Quy ra công” ======
-        summary_rows = []
-        for _, row in export_df.iterrows():
-            vals = [v for k, v in row.items() if "/" in k]
-
-            def cnt(*patterns):
-                c = 0
-                for v in vals:
-                    if not isinstance(v, str):
-                        continue
-                    for p in patterns:
-                        if p in v:
-                            if "/" in v and (p + "/" in v or "/" + p in v):
-                                c += 0.5
-                            else:
-                                c += 1
-                return c
-
-            total_K = cnt("K") - cnt("K/P", "K/H", "K/TQ", "K/NM", "K/O", "K/TS", "K/VR", "K/ĐT", "K/L","K:2") * 0.5
-            
-            total_H = cnt("H")
-            total_P = cnt("P")
-            total_BHXH = cnt("O", "TS", "VS")
-            total_KhongLuong = cnt("VR", "NM", "TQ", "ĐT", "L")
-            total_TV = cnt("TV")
-            total_all = total_K + total_H + total_P + total_BHXH + total_KhongLuong + total_TV
-
-            summary_rows.append([
-                total_K, total_H, total_P, total_BHXH, total_KhongLuong, total_TV, total_all
-            ])
-
-        summary_df = pd.DataFrame(summary_rows, columns=[
-            "Số công hưởng lương SP", "Số công hội họp", "Số công nghỉ phép",
-            "Số công hưởng BHXH", "Số công không lương", "Thử việc", "Tổng cộng"
-        ])
-
-        # Gộp dữ liệu bảng công + quy ra công
-        final_df = pd.concat([export_df.reset_index(drop=True), summary_df], axis=1)
-
-        # ====== Xuất Excel ======
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            final_df.to_excel(writer, index=False, sheet_name="Bảng chấm công", startrow=7)
-
-            wb = writer.book
-            ws = writer.sheets["Bảng chấm công"]
-
-            # ==== Cài đặt style ====
-            header_bold = wb.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'bg_color': '#D9E1F2'})
-            cell_fmt = wb.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1})
-            title_fmt = wb.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'font_size': 14})
-            subtitle_fmt = wb.add_format({'align': 'center', 'valign': 'vcenter', 'italic': True})
-            left_fmt = wb.add_format({'align': 'left'})
-            bold_left = wb.add_format({'align': 'left', 'bold': True})
-            sign_fmt = wb.add_format({'align': 'center', 'bold': True})
-            normal = wb.add_format({'align': 'center', 'valign': 'vcenter'})
-
-            # ==== Tiêu đề công ty & tháng ====
-            ws.merge_range('A1:N1', 'CÔNG TY CP TVXDCT GIAO THÔNG 2', title_fmt)
-            ws.merge_range('A2:N2', 'Đơn vị: Xí nghiệp KSTK Đường 1', left_fmt)
-            ws.merge_range('A3:N3', f"BẢNG CHẤM CÔNG NĂM {selected_month.year} - THÁNG {selected_month.strftime('%m')}", title_fmt)
-            ws.merge_range('A4:N4', "", title_fmt)
-            ws.write('N1', "Mẫu số 02", subtitle_fmt)
-
-            # ==== Header bảng công ====
-            for col_num, col_name in enumerate(final_df.columns):
-                ws.write(7, col_num, col_name, header_bold)
-                ws.set_column(col_num, col_num, 5, cell_fmt)
-            ws.set_column(0, 0, 25)  # cột Họ và tên
-
-            # ==== Viền và căn giữa dữ liệu ====
-            nrows, ncols = final_df.shape
-            for r in range(8, 8 + nrows):
-                for c in range(ncols):
-                    ws.write(r, c, final_df.iloc[r - 8, c], cell_fmt)
-
-            # ==== Dòng “Cộng” ====
-            total_row = 8 + nrows
-            ws.write(total_row, 0, "Cộng", header_bold)
-            for c in range(1, ncols):
-                ws.write(total_row, c, "", cell_fmt)
-
-            # ==== Phần ký tên ====
-            start_row = total_row + 3
-            ws.write(start_row, 1, "Người lập biểu", sign_fmt)
-            ws.write(start_row, 4, "XN KSTK Đường 1", sign_fmt)
-            ws.write(start_row, 7, "Phòng Kinh tế kế hoạch", sign_fmt)
-            ws.write(start_row, 10, "Giám đốc Công ty", sign_fmt)
-
-            ws.write(start_row + 4, 1, "Đỗ Văn Thành", normal)
-            ws.write(start_row + 4, 4, "Đỗ Văn Thành", normal)
-            ws.write(start_row + 4, 7, "Phạm Quang Huy", normal)
-            ws.write(start_row + 4, 10, "Trần Quang Tú", normal)
-
-            # ==== Ghi chú (từ monthly_note) ====
-            ws.write(start_row + 7, 0, "Ghi chú:", bold_left)
-            if monthly_note.strip():
-                lines = [line.strip() for line in monthly_note.split("\n") if line.strip()]
-                for i, line in enumerate(lines):
-                    ws.write(start_row + 8 + i, 0, f"{i+1}. {line}", left_fmt)
-            else:
-                ws.write(start_row + 8, 0, "(Không có ghi chú)", left_fmt)
-
-            # ==== Định dạng độ rộng cột giống mẫu ====
-            ws.set_column("A:A", 25)   # Họ và tên
-            ws.set_column("B:AF", 3.5) # Các ngày trong tháng
-            ws.set_column("AG:AM", 12) # Các cột “Quy ra công”
-            ws.set_zoom(90)
-
-        excel_data = output.getvalue()
-
-        st.download_button(
-            label=f"📥 Xuất bảng chấm công mẫu hành chính ({month_str})",
-            data=excel_data,
-            file_name=f"bang_cham_cong_{month_str}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-
-
-        # ==== GHI CHÚ CÁC LOẠI CÔNG ====
-        st.markdown("### 📘 Ghi chú các loại công")
-
-        legend_data = [
-            ("🟩", "K", "01 ngày làm việc"),
-            ("🟧", "K:2", "1/2 ngày làm việc"),
-            ("🟥", "P", "Nghỉ phép"),
-            ("🟦", "H", "Hội họp"),
-            ("🟨", "TQ", "Tham quan, học tập"),
-            ("🟧", "BD", "Đào tạo, bồi dưỡng"),
-            ("🟫", "L", "Nghỉ lễ, tết"),
-            ("🟩", "O", "Nghỉ ốm, con ốm"),
             ("⬛", "VR", "Nghỉ hiếu, hỷ"),
-            ("🟪", "NM", "Nghỉ mát"),
+            ("🟩", "O", "Nghỉ ốm, con ốm"),
             ("🟪", "TS", "Nghỉ thai sản"),
             ("🟦", "VS", "Nghỉ vợ sinh"),
             ("🟨", "TV", "Thử việc"),
-            ("🟠", "K/P, P/K", "Kết hợp làm việc & phép"),
-            ("🔵", "K/H, H/K", "Kết hợp làm việc & hội họp"),
-            ("🟣", "K/TQ, TQ/K", "Kết hợp làm việc & tham quan"),
-            ("🟤", "K/NM, NM/K", "Kết hợp làm việc & nghỉ mát"),
-            ("🟡", "K/TS, TS/K", "Kết hợp làm việc & thai sản"),
-            ("🟢", "K/VR, VR/K", "Kết hợp làm việc & hiếu hỷ"),
-            ("🔴", "K/O, O/K", "Kết hợp làm việc & ốm"),
-            ("⚫", "K/ĐT, ĐT/K", "Kết hợp làm việc & đào tạo"),
-            ("⚪", "K/L, L/K", "Kết hợp làm việc & lễ, tết")
         ]
-        df_legend = pd.DataFrame(legend_data, columns=["Emoji", "Ký hiệu", "Diễn giải"])
-        half = len(df_legend)//2 + len(df_legend)%2
-        col1, col2 = st.columns(2)
-        with col1:
-            st.dataframe(df_legend.iloc[:half], hide_index=True, use_container_width=True)
-        with col2:
-            st.dataframe(df_legend.iloc[half:], hide_index=True, use_container_width=True)
+        st.dataframe(pd.DataFrame(legend_data, columns=["Emoji", "Ký hiệu", "Diễn giải"]),
+                     hide_index=True, use_container_width=True)
 
     elif choice == "Thống kê công việc":
         st.subheader("📊 Thống kê công việc")
