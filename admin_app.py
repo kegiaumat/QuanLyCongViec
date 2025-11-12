@@ -1281,6 +1281,10 @@ def admin_app(user):
                                     st.info("⚠️ Bạn chưa tick dòng nào để xoá.")
 
     elif choice == "Chấm công – Nghỉ phép":
+        import datetime as dt
+        import json, io, re
+        import pandas as pd
+        from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode, JsCode
 
         st.subheader("🕒 Quản lý chấm công & nghỉ phép")
 
@@ -1293,6 +1297,7 @@ def admin_app(user):
         selected_month = st.date_input("📅 Chọn tháng", dt.date(today_date.year, today_date.month, 1))
         month_str = selected_month.strftime("%Y-%m")
 
+        # Reset buffer khi đổi tháng
         if "selected_month_prev" not in st.session_state or st.session_state["selected_month_prev"] != month_str:
             st.session_state.pop("attendance_buffer", None)
             st.session_state["selected_month_prev"] = month_str
@@ -1306,14 +1311,14 @@ def admin_app(user):
 
         # ==== KÝ HIỆU ====
         code_options = [
-            "K", "K:2", "P", "H", "TQ", "BD", "L", "O", "VR",
+            "", "K", "K:2", "P", "H", "TQ", "BD", "L", "O", "VR",
             "NM", "TS", "VS", "TV",
             "K/P", "P/K", "K/H", "H/K", "K/TQ", "TQ/K", "K/NM", "NM/K",
             "K/TS", "TS/K", "K/VR", "VR/K", "K/O", "O/K",
-            "K/ĐT", "ĐT/K", "K/L", "L/K", ""
+            "K/ĐT", "ĐT/K", "K/L", "L/K"
         ]
 
-        # ==== ĐỌC DỮ LIỆU TỪ SUPABASE ====
+        # ==== ĐỌC DỮ LIỆU ====
         res = supabase.table("attendance_new").select("*").execute()
         df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["username", "data", "months"])
 
@@ -1338,7 +1343,8 @@ def admin_app(user):
                 for d in days:
                     weekday = d.weekday()
                     key = d.strftime("%d")
-                    col = f"{key}/{d.strftime('%m')} ({['T2','T3','T4','T5','T6','T7','CN'][weekday]})"
+                    # 🔹 Thứ xuống dòng
+                    col = f"{key}/{d.strftime('%m')}<br>({['T2','T3','T4','T5','T6','T7','CN'][weekday]})"
                     if d.date() <= today_date:
                         val = month_data.get(key, "K" if weekday < 5 else "")
                     else:
@@ -1351,15 +1357,55 @@ def admin_app(user):
         day_cols = [c for c in df_display.columns if "/" in c]
         df_display_clean = df_display.drop(columns=["username"]).copy()
 
-        # ==== AGGRID ====
+        # ==== CẤU HÌNH AGGRID ====
         gb = GridOptionsBuilder.from_dataframe(df_display_clean)
         gb.configure_default_column(editable=True, resizable=True, sortable=False, filter=False)
-        gb.configure_column("User", pinned="left", editable=False, width=300)
-        for col in day_cols:
-            gb.configure_column(col, cellEditor="agSelectCellEditor", cellEditorParams={"values": code_options})
-        gridOptions = gb.build()
 
-        # ==== FORM CHỐNG RERUN ====
+        # 🔹 Cột “User” – ghim trái, rộng hơn
+        gb.configure_column(
+            "User",
+            pinned="left",
+            editable=False,
+            width=400,
+            wrapText=True,
+            autoHeight=True
+        )
+
+        # 🔹 Ánh xạ màu ký hiệu
+        color_js = JsCode("""
+        function(params) {
+            const map = {
+                'K': '#C8E6C9', 'K:2': '#FFE0B2', 'P': '#FFCDD2', 'H': '#BBDEFB',
+                'TQ': '#FFF9C4', 'BD': '#FFE0B2', 'L': '#D7CCC8', 'O': '#C8E6C9',
+                'VR': '#E0E0E0', 'NM': '#E1BEE7', 'TS': '#E1BEE7', 'VS': '#BBDEFB',
+                'TV': '#FFF9C4', 'K/P': '#FFECB3', 'P/K': '#FFECB3',
+                'K/H': '#BBDEFB', 'H/K': '#BBDEFB', 'K/TQ': '#FFF9C4', 'TQ/K': '#FFF9C4',
+                'K/NM': '#E1BEE7', 'NM/K': '#E1BEE7', 'K/TS': '#E1BEE7', 'TS/K': '#E1BEE7',
+                'K/VR': '#E0E0E0', 'VR/K': '#E0E0E0', 'K/O': '#C8E6C9', 'O/K': '#C8E6C9',
+                'K/ĐT': '#FFE0B2', 'ĐT/K': '#FFE0B2', 'K/L': '#D7CCC8', 'L/K': '#D7CCC8'
+            };
+            const val = params.value ? params.value.trim() : "";
+            return {'backgroundColor': map[val] || '#FFFFFF', 'textAlign': 'center'};
+        }
+        """)
+
+        # 🔹 Các cột ngày: thứ xuống dòng + màu
+        for col in day_cols:
+            gb.configure_column(
+                col,
+                headerName=f"<div style='text-align:center;white-space:normal;line-height:14px'>{col}</div>",
+                cellEditor="agSelectCellEditor",
+                cellEditorParams={"values": code_options},
+                cellStyle=color_js,
+                autoSize=False,
+                width=60
+            )
+
+        gridOptions = gb.build()
+        gridOptions["suppressHorizontalScroll"] = False
+        gridOptions["ensureDomOrder"] = True
+
+        # ==== FORM (để không rerun) ====
         with st.form("attendance_form", clear_on_submit=False):
             grid_response = AgGrid(
                 df_display_clean,
@@ -1371,6 +1417,12 @@ def admin_app(user):
                 reload_data=False,
                 fit_columns_on_grid_load=False,
                 key=f"grid_{month_str}"
+            )
+
+            # 🔹 Đặt thanh cuộn ở vị trí đầu
+            st.markdown(
+                "<script>window.scrollTo({top: 0, left: 0, behavior: 'smooth'});</script>",
+                unsafe_allow_html=True
             )
 
             edited_df_clean = pd.DataFrame(grid_response["data"]).reset_index(drop=True)
@@ -1399,7 +1451,7 @@ def admin_app(user):
 
             save_clicked = st.form_submit_button("💾 Lưu bảng chấm công & ghi chú")
 
-        # ==== XỬ LÝ LƯU ====
+        # ==== GHI DỮ LIỆU ====
         if save_clicked:
             today_date = dt.date.today()
             edited_df = st.session_state["attendance_buffer"].copy()
@@ -1431,11 +1483,7 @@ def admin_app(user):
                     record = df_att[df_att["username"].astype(str).str.strip() == str(uname).strip()]
                     try:
                         if len(record) == 0:
-                            payload = {
-                                "username": uname,
-                                "months": [month_str],
-                                "data": {month_str: codes}
-                            }
+                            payload = {"username": uname, "months": [month_str], "data": {month_str: codes}}
                             supabase.table("attendance_new").insert(payload).execute()
                             inserted_users.append(uname)
                             continue
@@ -1470,7 +1518,7 @@ def admin_app(user):
                     except Exception as e:
                         errors.append(f"{uname}: {e}")
 
-                # ==== GHI GHI CHÚ ====
+                # ==== GHI CHÚ ====
                 note_rec = df_att[df_att["username"] == "NoteData"]
                 if not note_rec.empty:
                     rec = note_rec.iloc[0]
@@ -1478,7 +1526,9 @@ def admin_app(user):
                     if isinstance(data_all, str):
                         data_all = json.loads(data_all)
                     data_all[month_str] = monthly_note
-                    supabase.table("attendance_new").update({"data": data_all, "months": [month_str]}).eq("username","NoteData").execute()
+                    supabase.table("attendance_new").update(
+                        {"data": data_all, "months": [month_str]}
+                    ).eq("username","NoteData").execute()
                 else:
                     supabase.table("attendance_new").insert({
                         "username": "NoteData",
@@ -1490,24 +1540,6 @@ def admin_app(user):
             if errors:
                 msg += f"\n⚠️ Lỗi {len(errors)} user: {', '.join(errors)}"
             st.success(msg)
-
-        # ==== THỐNG KÊ ====
-        st.divider()
-        st.markdown("## 📊 Thống kê tổng hợp theo tháng")
-
-        df_stat = st.session_state["attendance_buffer"].copy()
-        day_cols = [c for c in df_stat.columns if "/" in c]
-
-        def count_type(row, code):
-            return sum(1 for c in day_cols if str(row[c]).strip().upper() == code)
-
-        df_stat["Tổng K"] = df_stat.apply(lambda r: count_type(r, "K"), axis=1)
-        df_stat["Tổng P"] = df_stat.apply(lambda r: count_type(r, "P"), axis=1)
-        df_stat["Tổng L"] = df_stat.apply(lambda r: count_type(r, "L"), axis=1)
-        df_stat["Tổng H"] = df_stat.apply(lambda r: count_type(r, "H"), axis=1)
-        df_stat["Tổng Công"] = df_stat["Tổng K"] + df_stat["Tổng H"] + df_stat["Tổng P"]
-        st.dataframe(df_stat[["User", "Tổng K", "Tổng P", "Tổng L", "Tổng H", "Tổng Công"]],
-                     hide_index=True, use_container_width=True)
 
     elif choice == "Thống kê công việc":
         st.subheader("📊 Thống kê công việc")
