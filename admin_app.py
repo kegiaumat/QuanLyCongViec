@@ -1290,8 +1290,7 @@ def admin_app(user):
         df_users = load_users_cached()
 
         # ==== CHỌN THÁNG ====
-        today_date = dt.date.today()
-
+        today = pd.Timestamp(dt.date.today())
         selected_month = st.date_input("📅 Chọn tháng", dt.date(today.year, today.month, 1))
         month_str = selected_month.strftime("%Y-%m")
 
