@@ -5,7 +5,9 @@ import datetime
 import datetime as dt
 import json
 from auth import get_connection, calc_hours, get_projects, add_user, hash_password, add_project
-from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode, DataReturnMode
+
+
 import io  # đảm bảo có import này ở đầu file
 import re
 import time
