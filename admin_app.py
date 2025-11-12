@@ -1414,7 +1414,7 @@ def admin_app(user):
             "User",
             pinned="left",
             editable=False,
-            width=120,                # rộng ra
+            width=150,                # rộng ra
             wrapText=True,
             autoHeight=True
         )
