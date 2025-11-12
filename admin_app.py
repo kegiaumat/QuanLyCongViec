@@ -1477,7 +1477,7 @@ def admin_app(user):
                 ]},
                 cellClassRules=class_rules(),              # tô màu qua class
                 cellStyle=color_style_js,                  # và tô màu trực tiếp (đảm bảo)
-                width=72,                                  # tăng chút để "01/11" không cụt
+                width=60,                                  # tăng chút để "01/11" không cụt
                 autoSize=False
             )
 
