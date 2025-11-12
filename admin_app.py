@@ -1284,7 +1284,7 @@ def admin_app(user):
         import datetime as dt
         import json, io, re
         import pandas as pd
-        from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
+        from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
 
         st.subheader("🕒 Quản lý chấm công & nghỉ phép")
 
@@ -1295,9 +1295,9 @@ def admin_app(user):
         today = pd.Timestamp(dt.date.today())
         selected_month = st.date_input("📅 Chọn tháng", dt.date(today.year, today.month, 1))
         month_str = selected_month.strftime("%Y-%m")
-        st.subheader(f"🕒 Bảng chấm công tháng {selected_month.strftime('%m/%Y')}")
+        st.subheader(f"🕒 Bảng chấm công – Tháng {selected_month.strftime('%m/%Y')}")
 
-        # Reset session_state CHỈ khi đổi tháng
+        # ✅ Reset dữ liệu chỉ khi đổi tháng
         if "selected_month_prev" not in st.session_state or st.session_state["selected_month_prev"] != month_str:
             st.session_state.pop("attendance_buffer", None)
             st.session_state.pop("attendance_grid_data", None)
@@ -1317,15 +1317,17 @@ def admin_app(user):
             "K/ĐT", "ĐT/K", "K/L", "L/K", ""
         ]
 
-        # ==== ĐỌC DỮ LIỆU DB ====
+        # ==== ĐỌC DỮ LIỆU TỪ SUPABASE ====
         res = supabase.table("attendance_new").select("*").execute()
         df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["username", "data", "months"])
 
-        # ==== XÂY DỮ LIỆU BAN ĐẦU ====
+        # ==== KHỞI TẠO DỮ LIỆU ====
         if "attendance_buffer" not in st.session_state:
             rows = []
             for _, u in df_users.iterrows():
-                uname, display_name = u["username"], u["display_name"]
+                uname = u["username"]
+                display_name = u["display_name"]
+
                 record = df_att[df_att["username"] == uname]
                 user_data = {}
 
@@ -1340,19 +1342,23 @@ def admin_app(user):
 
                 month_data = user_data.get(month_str, {})
                 row = {"username": uname, "User": display_name}
+
                 for d in days:
                     wd = d.weekday()
                     key = d.strftime("%d")
                     col = f"{key}/{d.strftime('%m')} ({['T2','T3','T4','T5','T6','T7','CN'][wd]})"
-                    row[col] = month_data.get(key, "K" if d <= today and wd < 5 else "")
+                    if d <= today:
+                        val = month_data.get(key, "K" if wd < 5 else "")
+                    else:
+                        val = month_data.get(key, "")
+                    row[col] = val
+
                 rows.append(row)
 
-            df_display = pd.DataFrame(rows)
-            st.session_state["attendance_buffer"] = df_display.copy()
-        else:
-            df_display = st.session_state["attendance_buffer"].copy()
+            st.session_state["attendance_buffer"] = pd.DataFrame(rows)
+        df_display = st.session_state["attendance_buffer"].copy()
 
-        # ==== CHUẨN BỊ DỮ LIỆU GRID ====
+        # ==== CẤU HÌNH GRID ====
         day_cols = [c for c in df_display.columns if "/" in c]
         df_display_clean = df_display.drop(columns=["username"]).copy()
 
@@ -1363,7 +1369,7 @@ def admin_app(user):
             gb.configure_column(col, cellEditor="agSelectCellEditor", cellEditorParams={"values": code_options})
         gridOptions = gb.build()
 
-        # ==== HIỂN THỊ TRONG FORM (ngăn rerun) ====
+        # ==== HIỂN THỊ TRONG FORM (để tránh rerun) ====
         with st.form("attendance_form", clear_on_submit=False):
             grid_response = AgGrid(
                 df_display_clean,
@@ -1371,7 +1377,7 @@ def admin_app(user):
                 height=650,
                 allow_unsafe_jscode=True,
                 update_mode=GridUpdateMode.MANUAL,
-                data_return_mode="AS_INPUT",
+                data_return_mode=DataReturnMode.AS_INPUT,
                 reload_data=False,
                 fit_columns_on_grid_load=False,
                 key=f"grid_{month_str}"
@@ -1404,25 +1410,22 @@ def admin_app(user):
 
             save_clicked = st.form_submit_button("💾 Lưu bảng chấm công & ghi chú")
 
-        # ==== NẾU NHẤN LƯU ====
+        # ==== XỬ LÝ LƯU ====
         if save_clicked:
             edited_df = st.session_state["attendance_buffer"].copy()
+            updated_users, inserted_users, skipped_users, errors = [], [], [], []
 
-            # -------------------------
-            # TOÀN BỘ LOGIC GHI SUPABASE GIỮ NGUYÊN
-            # -------------------------
-            with st.spinner("Đang lưu dữ liệu lên Supabase..."):
-                df_att = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["username", "data", "months"])
-                updated_users, inserted_users, skipped_users, errors = [], [], [], []
-
+            with st.spinner("🔄 Đang lưu dữ liệu lên Supabase..."):
                 for _, row in edited_df.iterrows():
                     uname = row["username"]
+
                     def remove_emoji(txt):
                         if not txt:
                             return ""
-                        txt = re.sub(r"[\U0001F300-\U0001FAFF]", "", str(txt))
-                        for sym in ["🟩","🟥","🟦","🟧","🟨","🟫","🟪","⬛"]:
-                            txt = txt.replace(sym,"")
+                        if isinstance(txt, str):
+                            txt = re.sub(r"[\U0001F300-\U0001FAFF]", "", txt)
+                            for sym in ["🟩","🟥","🟦","🟧","🟨","🟫","🟪","⬛"]:
+                                txt = txt.replace(sym, "")
                         return txt.strip()
 
                     codes = {}
@@ -1452,7 +1455,29 @@ def admin_app(user):
                             data_all = json.loads(data_all)
 
                         old_month_data = data_all.get(month_str, {})
-                        if json.dumps(old_month_data, sort_keys=True) != json.dumps(codes, sort_keys=True):
+                        # So sánh kỹ y như bản gốc
+                        def normalize(v):
+                            if v in [None, "None", "nan", "NaN"]:
+                                return ""
+                            return str(v).strip()
+
+                        try:
+                            old_json = json.loads(json.dumps(old_month_data or {}, ensure_ascii=False))
+                        except:
+                            old_json = old_month_data or {}
+
+                        try:
+                            new_json = json.loads(json.dumps(codes or {}, ensure_ascii=False))
+                        except:
+                            new_json = codes or {}
+
+                        old_clean = {str(k).zfill(2): normalize(v) for k, v in old_json.items()}
+                        new_clean = {str(k).zfill(2): normalize(v) for k, v in new_json.items()}
+
+                        diff_days = [d for d in new_clean if new_clean.get(d) != old_clean.get(d)]
+                        has_changed = len(diff_days) > 0 or len(old_clean) != len(new_clean)
+
+                        if has_changed:
                             data_all[month_str] = codes
                             if month_str not in months:
                                 months.append(month_str)
@@ -1464,7 +1489,7 @@ def admin_app(user):
                     except Exception as e:
                         errors.append(f"{uname}: {e}")
 
-                # Ghi chú tháng riêng
+                # ==== LƯU GHI CHÚ ====
                 note_rec = df_att[df_att["username"] == "NoteData"]
                 if not note_rec.empty:
                     rec = note_rec.iloc[0]
@@ -1474,18 +1499,17 @@ def admin_app(user):
                     data_all[month_str] = monthly_note
                     supabase.table("attendance_new").update({"data": data_all, "months": [month_str]}).eq("username","NoteData").execute()
                 else:
-                    supabase.table("attendance_new").insert({"username": "NoteData", "data": {month_str: monthly_note}, "months": [month_str]}).execute()
+                    supabase.table("attendance_new").insert({"username":"NoteData","data":{month_str:monthly_note},"months":[month_str]}).execute()
 
             msg = f"✅ Lưu thành công!\n- Cập nhật: {len(updated_users)} user\n- Thêm mới: {len(inserted_users)} user\n- Bỏ qua: {len(skipped_users)} user"
             if errors:
                 msg += f"\n⚠️ Lỗi {len(errors)} user: {', '.join(errors)}"
             st.success(msg)
 
-        # =========================
-        # 📊 THỐNG KÊ CÔNG
-        # =========================
+        # ==== THỐNG KÊ ====
         st.divider()
         st.markdown("## 📊 Thống kê tổng hợp theo tháng")
+
         df_stat = st.session_state["attendance_buffer"].copy()
         day_cols = [c for c in df_stat.columns if "/" in c]
 
@@ -1497,44 +1521,27 @@ def admin_app(user):
         df_stat["Tổng L"] = df_stat.apply(lambda r: count_type(r, "L"), axis=1)
         df_stat["Tổng H"] = df_stat.apply(lambda r: count_type(r, "H"), axis=1)
         df_stat["Tổng Công"] = df_stat["Tổng K"] + df_stat["Tổng H"] + df_stat["Tổng P"]
-
         st.dataframe(df_stat[["User", "Tổng K", "Tổng P", "Tổng L", "Tổng H", "Tổng Công"]], hide_index=True, use_container_width=True)
 
-        # =========================
-        # 📥 XUẤT EXCEL
-        # =========================
-        export_df = st.session_state["attendance_buffer"].copy()
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            export_df.to_excel(writer, index=False, sheet_name="Bảng chấm công")
-        st.download_button(
-            label=f"📥 Xuất bảng chấm công ({month_str})",
-            data=output.getvalue(),
-            file_name=f"bang_cham_cong_{month_str}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-
-        # =========================
-        # 📘 GHI CHÚ CÁC LOẠI CÔNG
-        # =========================
+        # ==== GHI CHÚ CÔNG ====
+        st.divider()
         st.markdown("### 📘 Ghi chú các loại công")
         legend_data = [
-            ("🟩", "K", "01 ngày làm việc"),
-            ("🟧", "K:2", "1/2 ngày làm việc"),
-            ("🟥", "P", "Nghỉ phép"),
-            ("🟦", "H", "Hội họp"),
-            ("🟨", "TQ", "Tham quan, học tập"),
-            ("🟧", "BD", "Đào tạo, bồi dưỡng"),
-            ("🟫", "L", "Nghỉ lễ, tết"),
-            ("🟩", "O", "Nghỉ ốm, con ốm"),
-            ("⬛", "VR", "Nghỉ hiếu, hỷ"),
-            ("🟪", "NM", "Nghỉ mát"),
-            ("🟪", "TS", "Nghỉ thai sản"),
-            ("🟦", "VS", "Nghỉ vợ sinh"),
-            ("🟨", "TV", "Thử việc"),
+            ("🟩","K","01 ngày làm việc"),
+            ("🟧","K:2","1/2 ngày làm việc"),
+            ("🟥","P","Nghỉ phép"),
+            ("🟦","H","Hội họp"),
+            ("🟨","TQ","Tham quan, học tập"),
+            ("🟧","BD","Đào tạo, bồi dưỡng"),
+            ("🟫","L","Nghỉ lễ, tết"),
+            ("🟩","O","Nghỉ ốm, con ốm"),
+            ("⬛","VR","Nghỉ hiếu, hỷ"),
+            ("🟪","NM","Nghỉ mát"),
+            ("🟪","TS","Nghỉ thai sản"),
+            ("🟦","VS","Nghỉ vợ sinh"),
+            ("🟨","TV","Thử việc")
         ]
-        df_legend = pd.DataFrame(legend_data, columns=["Emoji", "Ký hiệu", "Diễn giải"])
-        st.dataframe(df_legend, hide_index=True, use_container_width=True)
+        st.dataframe(pd.DataFrame(legend_data, columns=["Emoji","Ký hiệu","Diễn giải"]), hide_index=True, use_container_width=True)
 
     elif choice == "Thống kê công việc":
         st.subheader("📊 Thống kê công việc")
