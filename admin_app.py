@@ -403,21 +403,38 @@ def admin_app(user):
                     })
 
             df_display = pd.DataFrame(rows)
+
+            # --- Sort theo ngày ---
+            df_display = df_display.sort_values("Ngày").reset_index(drop=True)
+
+            # --- Tô màu dòng đã duyệt ---
+            def highlight_row(row):
+                if row["Duyệt?"]:
+                    return ["background-color: #fff7cc"] * len(row)  # vàng nhạt
+                else:
+                    return ["background-color: white"] * len(row)
+
+            styled_df = df_display.style.apply(highlight_row, axis=1)
+            
             meta_cols = [c for c in df_display.columns if c.startswith("_")]
 
             st.markdown("### ✏️ Danh sách công việc (sửa trực tiếp)")
             edited = st.data_editor(
-                df_display.drop(columns=meta_cols),
+                df_display.drop(columns=["ID", "Duyệt?"], errors="ignore"),   # ❌ bỏ cột Duyệt?
+                hide_index=True,
                 width="stretch",
-                key="job_editor",
+                key=f"editor_cong_{user_name}",
                 column_config={
-                    "Cha": st.column_config.TextColumn("Đầu mục công việc"),
-                    "Con": st.column_config.TextColumn("Công việc chi tiết"),
-                    "Đơn vị": st.column_config.TextColumn("Đơn vị"),
-                    "Nhóm dự án": st.column_config.SelectboxColumn("Nhóm dự án", options=["public", "group"]),
-                    "Xóa?": st.column_config.CheckboxColumn("Xóa?", help="Tick để xoá công việc"),
-                }
+                    "Ngày": st.column_config.DateColumn("Ngày"),
+                    "Khối lượng (giờ)": st.column_config.NumberColumn("Khối lượng (giờ)", step=0.25),
+                    "Chọn?": st.column_config.CheckboxColumn("Chọn?"),
+                },
+                disabled=["Ngày"],   # tuỳ chọn nếu bạn muốn khoá trường này
+                row_style=(
+                    lambda row: {"backgroundColor": "#fff7cc"} if row["Duyệt?"] else {}
+                ),
             )
+
 
             # ===== CẬP NHẬT =====
             # ===== Hai nút song song =====
