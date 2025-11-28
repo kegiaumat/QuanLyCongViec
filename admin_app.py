@@ -1075,15 +1075,15 @@ def admin_app(user):
                             for _, r in df_user.iterrows():
                                 stime, etime, date_part, note_rest = split_times(r.get("note", ""))
 
-                                if stime and etime:
-                                    full_note_display = f"⏰ {stime} - {etime} {date_part} {note_rest}".strip()
-                                else:
-                                    full_note_display = note_rest
+                                full_note_display = (
+                                    f"⏰ {stime} - {etime} {date_part} {note_rest}".strip()
+                                    if stime and etime else note_rest
+                                )
 
                                 rows.append({
                                     "ID": r["id"],
-                                    "Công việc": r["task"],
                                     "Ngày": r["Ngày_dt"].date() if pd.notna(r["Ngày_dt"]) else None,
+                                    "Công việc": r["task"],
                                     "Giờ bắt đầu": stime,
                                     "Giờ kết thúc": etime,
                                     "Khối lượng (giờ)": float(r.get("khoi_luong") or 0),
@@ -1094,24 +1094,49 @@ def admin_app(user):
 
                             df_display = pd.DataFrame(rows)
 
-                            # Không dùng TimeColumn nữa cho đỡ lỗi kiểu dữ liệu
+                            # ---- Data editor ----
                             edited = st.data_editor(
                                 df_display.drop(columns=["ID"], errors="ignore"),
                                 hide_index=True,
                                 width="stretch",
-                                key=f"pub_editor_cong_{user_name}",
+                                key=f"editor_cong_{user_name}",
                                 column_config={
                                     "Ngày": st.column_config.DateColumn("Ngày"),
                                     "Khối lượng (giờ)": st.column_config.NumberColumn("Khối lượng (giờ)", step=0.25),
                                     "Duyệt?": st.column_config.CheckboxColumn("Duyệt?", disabled=True),
-                                    "Chọn?": st.column_config.CheckboxColumn("Chọn?")
+                                    "Chọn?": st.column_config.CheckboxColumn("Chọn?"),
                                 }
                             )
 
                             selected = edited[edited["Chọn?"] == True]
 
-                            # ===== Lưu =====
-                            if st.button("💾 Lưu công nhật", key=f"save_cong_{user_name}"):
+                            # ---- Hàng nút thao tác ----
+                            colA, colB, colC = st.columns([1, 1, 1])
+
+                            # ===== XÓA =====
+                            if colA.button("🗑 Xóa dòng đã chọn", key=f"delete_cong_{user_name}"):
+                                for idx in selected.index:
+                                    tid = int(df_display.iloc[idx]["ID"])
+                                    supabase.table("tasks").delete().eq("id", tid).execute()
+                                st.success("Đã xoá các dòng đã chọn.")
+                                st.rerun()
+
+                            # ===== Duyệt / Bỏ duyệt toggle =====
+                            # Kiểm tra xem có dòng nào đang được chọn đã approve hay chưa
+                            any_approved = any(df_display.iloc[idx]["Duyệt?"] for idx in selected.index)
+
+                            toggle_label = "❌ Bỏ duyệt dòng đã chọn" if any_approved else "✔ Duyệt dòng đã chọn"
+
+                            if colB.button(toggle_label, key=f"toggle_cong_{user_name}"):
+                                new_value = not any_approved
+                                for idx in selected.index:
+                                    tid = int(df_display.iloc[idx]["ID"])
+                                    supabase.table("tasks").update({"approved": new_value}).eq("id", tid).execute()
+                                st.success("Đã thay đổi trạng thái duyệt.")
+                                st.rerun()
+
+                            # ===== LƯU =====
+                            if colC.button("💾 Lưu công nhật", key=f"save_cong_{user_name}"):
                                 for idx, row in edited.iterrows():
                                     tid = int(df_display.iloc[idx]["ID"])
                                     supabase.table("tasks").update({
@@ -1119,8 +1144,9 @@ def admin_app(user):
                                         "khoi_luong": row["Khối lượng (giờ)"],
                                         "note": row["Ghi chú"],
                                     }).eq("id", tid).execute()
-                                st.success("Đã lưu.")
+                                st.success("Đã lưu công nhật.")
                                 st.rerun()
+
 
                             if st.button("✔ Duyệt dòng đã chọn", key=f"approve_cong_{user_name}"):
                                 for idx in selected.index:
