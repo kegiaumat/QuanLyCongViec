@@ -1133,58 +1133,110 @@ def admin_app(user):
                             df_display = pd.DataFrame(rows)
 
                             # ---- Data editor ----
-                            edited = st.data_editor(
-                                df_display.drop(columns=["ID"], errors="ignore"),
-                                hide_index=True,
-                                width="stretch",
-                                key=f"editor_cong_{user_name}",
-                                column_config={
-                                    "Ngày": st.column_config.DateColumn("Ngày"),
-                                    "Khối lượng (giờ)": st.column_config.NumberColumn("Khối lượng (giờ)", step=0.25),
-                                    "Duyệt?": st.column_config.CheckboxColumn("Duyệt?", disabled=True),
-                                    "Chọn?": st.column_config.CheckboxColumn("Chọn?"),
-                                }
-                            )
 
-                            selected = edited[edited["Chọn?"] == True]
+                            for user_name in df_cong_all["assignee"].unique():
 
-                            # ===========================
-                            #   HÀNG NÚT THAO TÁC MỚI
-                            # ===========================
+                                df_user = df_cong_all[df_cong_all["assignee"] == user_name].copy()
 
-                            colA, colB, colC = st.columns([1, 1, 1])
+                                with st.expander(f"👤 {user_name}", expanded=False):
 
-                            # ===== XÓA =====
-                            if colA.button("🗑 Xóa dòng đã chọn", key=f"delete_cong_{user_name}"):
-                                for idx in selected.index:
-                                    tid = int(df_display.iloc[idx]["ID"])
-                                    supabase.table("tasks").delete().eq("id", tid).execute()
-                                st.success("Đã xoá các dòng đã chọn.")
-                                st.rerun()
+                                    rows = []
+                                    for _, r in df_user.iterrows():
+                                        stime, etime, date_part, note_rest = split_times(r.get("note", ""))
 
-                            # ===== TOGGLE DUYỆT / BỎ DUYỆT =====
-                            any_approved = any(df_display.iloc[idx]["Duyệt?"] for idx in selected.index)
-                            toggle_label = "❌ Bỏ duyệt dòng đã chọn" if any_approved else "✔ Duyệt dòng đã chọn"
+                                        full_note_display = (
+                                            f"⏰ {stime} - {etime} {date_part} {note_rest}".strip()
+                                            if stime and etime else note_rest
+                                        )
 
-                            if colB.button(toggle_label, key=f"toggle_cong_{user_name}"):
-                                new_value = not any_approved
-                                for idx in selected.index:
-                                    tid = int(df_display.iloc[idx]["ID"])
-                                    supabase.table("tasks").update({"approved": new_value}).eq("id", tid).execute()
-                                st.success("Đã thay đổi trạng thái duyệt.")
-                                st.rerun()
+                                        rows.append({
+                                            "ID": r["id"],
+                                            "Ngày": r["Ngày_dt"].date() if pd.notna(r["Ngày_dt"]) else None,
+                                            "Công việc": r["task"],
+                                            "Giờ bắt đầu": stime,
+                                            "Giờ kết thúc": etime,
+                                            "Khối lượng (giờ)": float(r.get("khoi_luong") or 0),
+                                            "Ghi chú": full_note_display,
+                                            "approved": bool(r.get("approved", False)),
+                                            "Chọn?": False
+                                        })
 
-                            # ===== LƯU =====
-                            if colC.button("💾 Lưu công nhật", key=f"save_cong_{user_name}"):
-                                for idx, row in edited.iterrows():
-                                    tid = int(df_display.iloc[idx]["ID"])
-                                    supabase.table("tasks").update({
-                                        "start_date": row["Ngày"],
-                                        "khoi_luong": row["Khối lượng (giờ)"],
-                                        "note": row["Ghi chú"],
-                                    }).eq("id", tid).execute()
-                                st.success("Đã lưu công nhật.")
-                                st.rerun()
+                                    df_display = pd.DataFrame(rows).sort_values("Ngày")
+
+                                    # ==========================
+                                    #      AG-GRID CONFIG
+                                    # ==========================
+                                    gb = GridOptionsBuilder.from_dataframe(df_display)
+
+                                    gb.configure_default_column(editable=True)
+
+                                    # Ẩn cột approved
+                                    gb.configure_column("approved", hide=True)
+
+                                    # Checkbox chọn
+                                    gb.configure_column("Chọn?", editable=True)
+
+                                    # Tô màu dòng nếu đã duyệt
+                                    row_style = JsCode("""
+                                        function(params) {
+                                            if (params.data.approved === true) {
+                                                return {'backgroundColor': '#fff7cc'};
+                                            }
+                                            return {'backgroundColor': 'white'};
+                                        }
+                                    """)
+
+                                    gb.configure_row_style(row_style)
+
+                                    gridOptions = gb.build()
+
+                                    grid = AgGrid(
+                                        df_display,
+                                        gridOptions=gridOptions,
+                                        update_mode=GridUpdateMode.NO_UPDATE,
+                                        data_return_mode="AS_INPUT",
+                                        allow_unsafe_jscode=True,
+                                        fit_columns_on_grid_load=True,
+                                        height=400
+                                    )
+
+                                    edited = pd.DataFrame(grid["data"])
+                                    selected = edited[edited["Chọn?"] == True]
+
+                                    # ==========================
+                                    #  HÀNG NÚT BÊN DƯỚI
+                                    # ==========================
+                                    colA, colB, colC = st.columns([1,1,1])
+
+                                    # ===== XÓA =====
+                                    if colA.button(f"🗑 Xóa dòng đã chọn – {user_name}", key=f"del_{user_name}"):
+                                        for _, row in selected.iterrows():
+                                            supabase.table("tasks").delete().eq("id", row["ID"]).execute()
+                                        st.success("Đã xoá.")
+                                        st.rerun()
+
+                                    # ===== TOGGLE DUYỆT =====
+                                    any_approved = any(selected["approved"])
+                                    toggle_label = "❌ Bỏ duyệt" if any_approved else "✔ Duyệt"
+
+                                    if colB.button(f"{toggle_label} – {user_name}", key=f"toggle_{user_name}"):
+                                        new_val = not any_approved
+                                        for _, row in selected.iterrows():
+                                            supabase.table("tasks").update({"approved": new_val}).eq("id", row["ID"]).execute()
+                                        st.success("Đã cập nhật trạng thái.")
+                                        st.rerun()
+
+                                    # ===== LƯU =====
+                                    if colC.button(f"💾 Lưu – {user_name}", key=f"save_{user_name}"):
+                                        for _, row in edited.iterrows():
+                                            supabase.table("tasks").update({
+                                                "start_date": row["Ngày"],
+                                                "khoi_luong": row["Khối lượng (giờ)"],
+                                                "note": row["Ghi chú"]
+                                            }).eq("id", row["ID"]).execute()
+                                        st.success("Đã lưu.")
+                                        st.rerun()
+
 
 
 
