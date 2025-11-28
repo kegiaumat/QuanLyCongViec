@@ -979,15 +979,20 @@ def admin_app(user):
 
             for u in df_tasks["assignee"].unique():
                 with st.expander(f"👤 {u}"):
-                    df_user = df_tasks[df_tasks["assignee"] == u]
+                    # ====== BẢNG CÔNG NHẬT NÂNG CẤP – TẤT CẢ USER ======
+                    df_cong_all = df_tasks[df_tasks["unit"].str.lower() == "công"].copy()
 
-                    df_cong = df_user[df_user["unit"].str.lower() == "công"]
-                    df_other = df_user[df_user["unit"].str.lower() != "công"]
+                    if not df_cong_all.empty:
+                        st.markdown("### ⏱️ Công nhật (nâng cấp – tất cả user)")
 
-                    # ====== Công nhật ======
-                    if not df_cong.empty:
+                        # đảm bảo có cột start_date, approved trong DataFrame
+                        if "start_date" not in df_cong_all.columns:
+                            df_cong_all["start_date"] = None
+                        if "approved" not in df_cong_all.columns:
+                            df_cong_all["approved"] = False
+
+                        # Hàm tách giờ (giống phần cũ)
                         def split_times(note_text: str):
-                            """Tách giờ, ngày và phần ghi chú từ note"""
                             if not isinstance(note_text, str):
                                 return "", "", "", ""
                             block_re = r'⏰\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*[-–]\s*(\d{1,2}:\d{2}(?::\d{2})?)'
@@ -1003,15 +1008,11 @@ def admin_app(user):
                             note_rest = re.sub(full_re, "", note_text).strip()
                             return start, end, date_part, note_rest
 
-
-
-
-
+                        # Chuẩn hoá dữ liệu hiển thị
                         rows = []
-                        for _, r in df_cong.iterrows():
+                        for _, r in df_cong_all.iterrows():
                             stime, etime, date_part, note_rest = split_times(r.get("note", ""))
 
-                            # 🧩 Hiển thị ghi chú đầy đủ giờ và ngày (như user_app)
                             if stime and etime:
                                 full_note_display = f"⏰ {stime} - {etime} {date_part} {note_rest}".strip()
                             else:
@@ -1019,141 +1020,110 @@ def admin_app(user):
 
                             rows.append({
                                 "ID": r["id"],
+                                "User": r["assignee"],  # đã map sang display_name ở trên
                                 "Công việc": r["task"],
+                                # start_date có thể None → không lỗi
+                                "Ngày": pd.to_datetime(r.get("start_date"), errors="coerce").date()
+                                        if pd.notna(r.get("start_date")) else None,
                                 "Giờ bắt đầu": stime,
                                 "Giờ kết thúc": etime,
-                                "Ghi chú": full_note_display,  # hiển thị đầy đủ
-                                "__note_raw": note_rest,        # lưu lại phần ghi chú gốc
-                                "__date_part": date_part,       # giữ ngày để khi lưu ghép lại
-                                "Tiến độ (%)": int(pd.to_numeric(r.get("progress", 0), errors="coerce") or 0),
+                                "Khối lượng (giờ)": r.get("khoi_luong"),
+                                "Ghi chú": full_note_display,
+                                "Duyệt?": bool(r.get("approved", False)),
+                                "Chọn?": False,
                             })
 
-                        df_cong_show = pd.DataFrame(rows)
+                        dfc = pd.DataFrame(rows)
 
-                        config = {
-                            "Tiến độ (%)": st.column_config.NumberColumn(
-                                "Tiến độ (%)", min_value=0, max_value=100, step=1, format="%d%%"
-                            ),
-                        }
-
-                        
-                        # ================================================
-                        #     CÔNG VIỆC CÔNG NHẬT - BẢNG NÂNG CẤP (NEW)
-                        # ================================================
-
-                        st.markdown("### ⏱️ Công nhật (nâng cấp)")
-
-                        # df_cong_show đã được tạo phía trên từ code cũ → dùng lại cho an toàn
-                        dfc = df_cong_show.copy()
-
-                        # Bổ sung 2 cột mới nếu chưa có
-                        if "start_date" not in dfc.columns:
-                            dfc["start_date"] = None
-                        if "approved" not in dfc.columns:
-                            dfc["approved"] = False
-
-                        # Tạo cột hiển thị ngày
-                        dfc["Ngày"] = pd.to_datetime(dfc["start_date"], errors="coerce").dt.date
-
-                        # Booleans an toàn
-                        dfc["Duyệt?"] = dfc["approved"].fillna(False)
-                        dfc["Chọn?"] = False
-
-                        # =============================
-                        #  LỌC THEO NĂM + QUÝ (AN TOÀN)
-                        # =============================
-
+                        # ============ LỌC THEO NĂM + QUÝ (CHO TẤT CẢ USER) ============
                         today = dt.date.today()
                         year_now = today.year
 
-                        colY, colQ = st.columns([1,1])
-                        year_filter = colY.selectbox("Năm", [year_now-1, year_now, year_now+1], index=1)
+                        colY, colQ = st.columns([1, 1])
+                        year_filter = colY.selectbox(
+                            "Năm (Công nhật)",
+                            [year_now - 1, year_now, year_now + 1],
+                            index=1,
+                            key="cong_year"
+                        )
 
                         quarters = {
-                            "Q1": (dt.date(year_filter,1,1),  dt.date(year_filter,3,31)),
-                            "Q2": (dt.date(year_filter,4,1),  dt.date(year_filter,6,30)),
-                            "Q3": (dt.date(year_filter,7,1),  dt.date(year_filter,9,30)),
-                            "Q4": (dt.date(year_filter,10,1), dt.date(year_filter,12,31)),
+                            "Q1": (dt.date(year_filter, 1, 1),  dt.date(year_filter, 3, 31)),
+                            "Q2": (dt.date(year_filter, 4, 1),  dt.date(year_filter, 6, 30)),
+                            "Q3": (dt.date(year_filter, 7, 1),  dt.date(year_filter, 9, 30)),
+                            "Q4": (dt.date(year_filter,10, 1),  dt.date(year_filter,12,31)),
                         }
 
-                        q_now = (today.month-1)//3
-                        q_name = colQ.selectbox("Quý", list(quarters.keys()), index=q_now)
+                        q_now = (today.month - 1) // 3
+                        q_name = colQ.selectbox(
+                            "Quý (Công nhật)",
+                            list(quarters.keys()),
+                            index=q_now,
+                            key="cong_quarter"
+                        )
 
                         d_from, d_to = quarters[q_name]
 
-                        # Lọc theo ngày — KHÔNG LỖI nếu start_date None
+                        dfc["Ngày_dt"] = pd.to_datetime(dfc["Ngày"], errors="coerce")
                         dfc = dfc[
-                            (pd.to_datetime(dfc["Ngày"], errors="coerce") >= pd.Timestamp(d_from)) &
-                            (pd.to_datetime(dfc["Ngày"], errors="coerce") <= pd.Timestamp(d_to))
-                        ]
+                            (dfc["Ngày_dt"] >= pd.Timestamp(d_from)) &
+                            (dfc["Ngày_dt"] <= pd.Timestamp(d_to))
+                        ].drop(columns=["Ngày_dt"]).reset_index(drop=True)
 
-                        # =============================
-                        #  CHUẨN BỊ ĐỂ HIỂN THỊ BẢNG
-                        # =============================
+                        # ============ HIỂN THỊ BẢNG ============
 
-                        cols = ["Công việc", "Ngày", "Giờ bắt đầu", "Giờ kết thúc",
-                                "Khối lượng (giờ)", "Ghi chú", "Duyệt?", "Chọn?"]
-
-                        # KHÔNG lỗi KeyError – vì chỉ lấy các cột chắc chắn có
-                        dfc_display = dfc[cols]
+                        dfc_display = dfc.drop(columns=["ID"])   # bỏ ID khi hiển thị
 
                         edited = st.data_editor(
                             dfc_display,
                             hide_index=True,
                             width="stretch",
-                            key=f"pub_editor_{u}",
+                            key="pub_editor_all",
                             column_config={
                                 "Ngày": st.column_config.DateColumn("Ngày"),
                                 "Giờ bắt đầu": st.column_config.TimeColumn("Giờ bắt đầu"),
                                 "Giờ kết thúc": st.column_config.TimeColumn("Giờ kết thúc"),
+                                "Khối lượng (giờ)": st.column_config.NumberColumn("Khối lượng (giờ)", step=0.25),
                                 "Duyệt?": st.column_config.CheckboxColumn("Duyệt?", disabled=True),
                                 "Chọn?": st.column_config.CheckboxColumn("Chọn?")
                             }
                         )
 
-                        # Lấy các dòng được chọn
                         selected = edited[edited["Chọn?"] == True]
 
-                        # =============================
-                        #              SAVE
-                        # =============================
-                        if st.button(f"💾 Lưu ({u})"):
+                        # ===== LƯU =====
+                        if st.button("💾 Lưu công nhật (tất cả user)"):
                             for idx, row in edited.iterrows():
-                                tid = int(df_cong.iloc[idx]["id"])
+                                tid = int(dfc.iloc[idx]["ID"])
                                 supabase.table("tasks").update({
-                                    "start_date": row["Ngày"],       # ngày mới
-                                    "note": row["Ghi chú"],
+                                    "start_date": row["Ngày"],
                                     "khoi_luong": row["Khối lượng (giờ)"],
+                                    "note": row["Ghi chú"],
                                 }).eq("id", tid).execute()
-
-                            st.success("Đã lưu!")
+                            st.success("Đã lưu công nhật.")
                             st.rerun()
 
-                        # =============================
-                        #         DUYỆT / BỎ DUYỆT
-                        # =============================
-                        if st.button(f"✔ Duyệt ({u})"):
-                            for _, r in selected.iterrows():
-                                tid = int(df_cong.iloc[r.name]["id"])
+                        # ===== DUYỆT / BỎ DUYỆT =====
+                        if st.button("✔ Duyệt các dòng đã chọn"):
+                            for idx in selected.index:
+                                tid = int(dfc.iloc[idx]["ID"])
                                 supabase.table("tasks").update({"approved": True}).eq("id", tid).execute()
-                            st.success("Đã duyệt!")
+                            st.success("Đã duyệt.")
                             st.rerun()
 
-                        if st.button(f"❌ Bỏ duyệt ({u})"):
-                            for _, r in selected.iterrows():
-                                tid = int(df_cong.iloc[r.name]["id"])
+                        if st.button("❌ Bỏ duyệt các dòng đã chọn"):
+                            for idx in selected.index:
+                                tid = int(dfc.iloc[idx]["ID"])
                                 supabase.table("tasks").update({"approved": False}).eq("id", tid).execute()
-                            st.success("Đã bỏ duyệt!")
+                            st.success("Đã bỏ duyệt.")
                             st.rerun()
 
-                        # =============================
-                        #             XOÁ
-                        # =============================
-                        if st.button(f"🗑 Xoá ({u})"):
-                            for _, r in selected.iterrows():
-                                tid = int(df_cong.iloc[r.name]["id"])
+                        # ===== XOÁ =====
+                        if st.button("🗑 Xoá các dòng đã chọn"):
+                            for idx in selected.index:
+                                tid = int(dfc.iloc[idx]["ID"])
                                 supabase.table("tasks").delete().eq("id", tid).execute()
-                            st.success("Đã xoá!")
+                            st.success("Đã xoá.")
                             st.rerun()
 
 
