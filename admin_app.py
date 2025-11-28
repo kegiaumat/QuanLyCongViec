@@ -1027,15 +1027,14 @@ def admin_app(user):
             # LOOP QUA TỪNG USER
             for u in df_tasks_raw["assignee"].unique():
 
+                # lọc theo user
                 df_user = df_tasks_raw[df_tasks_raw["assignee"] == u].copy()
+
+                # lọc công nhật theo user
                 df_cong_all = df_user[df_user["unit"].str.lower() == "công"].copy()
 
                 if df_cong_all.empty:
-                    # KHÔNG continue
-                    # vẫn phải hiển thị user rỗng
-                    with st.expander(f"👤 {u}"):
-                        st.info("Không có công nhật trong dự án này.")
-                    continue
+                    continue   # user không có công → bỏ qua
 
                 # xử lý tiếp (lọc năm – quý – hiển thị grid…)
 
