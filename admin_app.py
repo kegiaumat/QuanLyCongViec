@@ -364,87 +364,107 @@ def admin_app(user):
 
         st.divider()
 
-        # ======================================
-        # 2) HIỂN THỊ & CHỈNH SỬA CHA–CON–ĐƠN VỊ–NHÓM DỰ ÁN
-        # ======================================
-        jobs = df_jobs.copy()
 
+        # ======================================
+        # 2) HIỂN THỊ & CHỈNH SỬA CHA – CON – ĐƠN VỊ – NHÓM DỰ ÁN (AG-GRID)
+        # ======================================
+
+        jobs = df_jobs.copy()
 
         if jobs.empty:
             st.info("⚠️ Chưa có công việc nào trong mục lục")
         else:
-            # rows = []
-            # ===== Chuẩn bị hiển thị cha–con =====
+
+            # ===== CHUẨN BỊ BẢNG CHA – CON =====
             rows = []
             for _, p in jobs[jobs["parent_id"].isnull()].iterrows():
-                # luôn thêm dòng cha
+
                 rows.append({
                     "Cha": p["name"],
                     "Con": "",
-                    "Đơn vị": p["unit"] if pd.notna(p["unit"]) else "",
-                    "Nhóm dự án": p["project_type"] if pd.notna(p["project_type"]) else "group",
+                    "Đơn vị": p["unit"] or "",
+                    "Nhóm dự án": p["project_type"] or "group",
                     "Xóa?": False,
                     "_id": p["id"],
                     "_is_parent": True,
                     "_orig_name": p["name"]
                 })
-                # sau đó thêm các con
+
                 children = jobs[jobs["parent_id"] == p["id"]]
-                for _, cjob in children.iterrows():
+                for _, c in children.iterrows():
                     rows.append({
                         "Cha": "",
-                        "Con": cjob["name"],
-                        "Đơn vị": cjob["unit"] if pd.notna(cjob["unit"]) else "",
-                        "Nhóm dự án": cjob["project_type"] if pd.notna(cjob["project_type"]) else "group",
+                        "Con": c["name"],
+                        "Đơn vị": c["unit"] or "",
+                        "Nhóm dự án": c["project_type"] or "group",
                         "Xóa?": False,
-                        "_id": cjob["id"],
+                        "_id": c["id"],
                         "_is_parent": False,
-                        "_orig_name": cjob["name"]
+                        "_orig_name": c["name"]
                     })
 
             df_display = pd.DataFrame(rows)
-
-            # --- Sort theo ngày ---
-            df_display = df_display.sort_values("Ngày").reset_index(drop=True)
-
-            # --- Tô màu dòng đã duyệt ---
-            def highlight_row(row):
-                if row["Duyệt?"]:
-                    return ["background-color: #fff7cc"] * len(row)  # vàng nhạt
-                else:
-                    return ["background-color: white"] * len(row)
-
-            styled_df = df_display.style.apply(highlight_row, axis=1)
-            
             meta_cols = [c for c in df_display.columns if c.startswith("_")]
 
-            st.markdown("### ✏️ Danh sách công việc (sửa trực tiếp)")
-            edited = st.data_editor(
-                df_display.drop(columns=["ID", "Duyệt?"], errors="ignore"),   # ❌ bỏ cột Duyệt?
-                hide_index=True,
-                width="stretch",
-                key=f"editor_cong_{user_name}",
-                column_config={
-                    "Ngày": st.column_config.DateColumn("Ngày"),
-                    "Khối lượng (giờ)": st.column_config.NumberColumn("Khối lượng (giờ)", step=0.25),
-                    "Chọn?": st.column_config.CheckboxColumn("Chọn?"),
-                },
-                disabled=["Ngày"],   # tuỳ chọn nếu bạn muốn khoá trường này
-                row_style=(
-                    lambda row: {"backgroundColor": "#fff7cc"} if row["Duyệt?"] else {}
-                ),
+            # -----------------------------
+            # CONFIG AGGRID
+            # -----------------------------
+            gb = GridOptionsBuilder.from_dataframe(df_display)
+
+            # Cho phép sửa trực tiếp
+            gb.configure_columns(
+                ["Cha", "Con", "Đơn vị", "Nhóm dự án"],
+                editable=True,
             )
 
+            # Checkbox xoá
+            gb.configure_column("Xóa?", editable=True)
 
-            # ===== CẬP NHẬT =====
-            # ===== Hai nút song song =====
+            # Ẩn cột metadata
+            for col in meta_cols:
+                gb.configure_column(col, hide=True)
+
+            # Tô màu dòng cha
+            gb.configure_row_style(
+                js_code="""
+                    function(params) {
+                        if (params.data._is_parent){
+                            return {'backgroundColor': '#e8f4ff'};
+                        }
+                        return {};
+                    }
+                """
+            )
+
+            grid_options = gb.build()
+
+            st.markdown("### ✏️ Danh sách công việc – AG Grid (Editable)")
+
+            grid = AgGrid(
+                df_display,
+                gridOptions=grid_options,
+                update_mode=GridUpdateMode.NO_UPDATE,   # ❗ KHÔNG RERUN KHI EDIT
+                allow_unsafe_jscode=True,
+                fit_columns_on_grid_load=True,
+                height=500
+            )
+
+            edited = grid["data"]        # bản cập nhật không gây rerun
+            selected = [r for r in edited if r["Xóa?"]]
+
+            # ======================================
+            # 3) HAI NÚT: CẬP NHẬT & XOÁ
+            # ======================================
             col1, col2 = st.columns([1,1])
 
+            # ====================
+            # NÚT CẬP NHẬT
+            # ====================
             with col1:
-                if st.button("💾 Cập nhật"):
-                    full = edited.copy()
-                    for col in meta_cols:
-                        full[col] = df_display[col].values
+                if st.button("💾 Cập nhật mục lục"):
+
+                    full = pd.DataFrame(edited)
+
                     for _, row in full.iterrows():
                         job_id = int(row["_id"])
                         old_name = row["_orig_name"]
@@ -459,51 +479,52 @@ def admin_app(user):
                         try:
                             supabase.table("job_catalog").update({
                                 "name": new_name,
-                                "unit": new_unit if new_unit else None,
+                                "unit": new_unit or None,
                                 "project_type": new_project_type
                             }).eq("id", job_id).execute()
 
-                            # nếu đổi tên thì đồng bộ sang tasks
                             if new_name != old_name:
+                                # cập nhật tasks liên quan
                                 supabase.table("tasks").update({"task": new_name}).eq("task", old_name).execute()
+
                         except Exception as e:
                             st.error(f"⚠️ Lỗi khi cập nhật {old_name}: {e}")
 
-                    
-                    st.success("✅ Đã cập nhật mục lục công việc")
+                    st.success("✔ Đã cập nhật mục lục công việc")
                     refresh_all_cache()
 
+            # ====================
+            # NÚT XOÁ
+            # ====================
             with col2:
-                if st.button("❌ Xóa"):
-                    full = edited.copy()
-                    for col in meta_cols:
-                        full[col] = df_display[col].values
-
-                    to_delete = full[full["Xóa?"] == True]
-                    if to_delete.empty:
+                if st.button("❌ Xóa công việc đã chọn"):
+                    if not selected:
                         st.warning("⚠️ Bạn chưa tick công việc nào để xoá")
                     else:
-                        st.session_state["confirm_delete_jobs"] = to_delete
+                        st.session_state["confirm_delete_jobs"] = selected
 
-
-
+            # ============================
+            # POPUP XÁC NHẬN XOÁ
+            # ============================
             if "confirm_delete_jobs" in st.session_state:
-                to_delete = st.session_state["confirm_delete_jobs"]
-                st.error(f"⚠️ Bạn có chắc muốn xoá {len(to_delete)} công việc: "
-                         f"{', '.join(to_delete['Cha'] + to_delete['Con'])}?")
+                to_delete = pd.DataFrame(st.session_state["confirm_delete_jobs"])
+
+                st.error(
+                    f"⚠️ Bạn có chắc muốn xoá {len(to_delete)} công việc: "
+                    f"{', '.join(to_delete['Cha'] + to_delete['Con'])}?"
+                )
 
                 c1, c2 = st.columns(2)
+
                 with c1:
-                    if st.button("✅ Yes, xoá ngay"):
+                    if st.button("✔ Yes, xoá ngay"):
                         for _, row in to_delete.iterrows():
                             job_id = int(row["_id"])
                             job_name = row["_orig_name"]
 
-                            # Xoá trong tasks
                             supabase.table("tasks").delete().eq("task", job_name).execute()
-                            # Xoá trong job_catalog
                             supabase.table("job_catalog").delete().eq("id", job_id).execute()
-                        
+
                         st.success("🗑️ Đã xoá các công việc được chọn")
                         del st.session_state["confirm_delete_jobs"]
                         refresh_all_cache()
@@ -512,7 +533,7 @@ def admin_app(user):
                     if st.button("❌ No, huỷ"):
                         st.info("Đã huỷ thao tác xoá")
                         del st.session_state["confirm_delete_jobs"]
-        
+
 
 
     elif choice == "Quản lý dự án":
