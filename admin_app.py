@@ -1014,6 +1014,19 @@ def admin_app(user):
 
             df_tasks = df_tasks.merge(jobs_units, left_on="task", right_on="name", how="left")
             df_tasks["assignee"] = df_tasks["assignee"].map(user_map).fillna(df_tasks["assignee"])
+
+            # for u in df_tasks["assignee"].unique():
+                # with st.expander(f"👤 {u}"):
+                    # ===== DANH SÁCH CÔNG VIỆC CHO USER u =====
+                    # df_user_tasks = df_tasks[df_tasks["assignee"] == u]
+                    # st.dataframe(df_user_tasks)
+
+            # ============================
+
+            # ============================
+            #  PHẦN CÔNG NHẬT – LỌC THEO THỜI GIAN
+            # ============================
+
             df_cong_all = df_tasks[df_tasks["unit"].str.lower() == "công"].copy()
 
             if df_cong_all.empty:
