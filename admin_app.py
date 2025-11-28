@@ -1104,11 +1104,13 @@ def admin_app(user):
                         return start, end, date_part, note_rest
 
                     # ---- Hiển thị công nhật theo từng user trong quý ----
+                    # ---- Hiển thị công nhật theo từng user trong quý ----
                     for user_name in df_cong_all["assignee"].unique():
                         df_user = df_cong_all[df_cong_all["assignee"] == user_name].copy()
 
                         with st.expander(f"👤 {user_name}", expanded=False):
 
+                            # Chuẩn bị dữ liệu cho AG-Grid
                             rows = []
                             for _, r in df_user.iterrows():
                                 stime, etime, date_part, note_rest = split_times(r.get("note", ""))
@@ -1126,120 +1128,87 @@ def admin_app(user):
                                     "Giờ kết thúc": etime,
                                     "Khối lượng (giờ)": float(r.get("khoi_luong") or 0),
                                     "Ghi chú": full_note_display,
-                                    "Duyệt?": bool(r.get("approved", False)),
+                                    # cột trạng thái duyệt ẩn trong grid, dùng để tô màu
+                                    "approved": bool(r.get("approved", False)),
+                                    # cột chọn để thao tác
                                     "Chọn?": False,
                                 })
 
-                            df_display = pd.DataFrame(rows)
+                            df_display = pd.DataFrame(rows).sort_values("Ngày")
 
-                            # ---- Data editor ----
+                            # ==========================
+                            #      AG-GRID CONFIG
+                            # ==========================
+                            gb = GridOptionsBuilder.from_dataframe(df_display)
 
-                            for user_name in df_cong_all["assignee"].unique():
+                            # Cho phép sửa các cột
+                            gb.configure_default_column(editable=True)
 
-                                df_user = df_cong_all[df_cong_all["assignee"] == user_name].copy()
+                            # Ẩn cột approved (chỉ dùng để màu dòng)
+                            gb.configure_column("approved", hide=True)
+                            # Cột chọn
+                            gb.configure_column("Chọn?", editable=True)
 
-                                with st.expander(f"👤 {user_name}", expanded=False):
+                            gridOptions = gb.build()
 
-                                    rows = []
-                                    for _, r in df_user.iterrows():
-                                        stime, etime, date_part, note_rest = split_times(r.get("note", ""))
+                            # Tô màu dòng nếu đã duyệt
+                            row_style = JsCode("""
+                                function(params) {
+                                    if (params.data.approved === true) {
+                                        return {'backgroundColor': '#fff7cc'};
+                                    }
+                                    return null;
+                                }
+                            """)
+                            gridOptions["getRowStyle"] = row_style
 
-                                        full_note_display = (
-                                            f"⏰ {stime} - {etime} {date_part} {note_rest}".strip()
-                                            if stime and etime else note_rest
-                                        )
+                            grid = AgGrid(
+                                df_display,
+                                gridOptions=gridOptions,
+                                update_mode=GridUpdateMode.NO_UPDATE,
+                                data_return_mode=DataReturnMode.AS_INPUT,
+                                allow_unsafe_jscode=True,
+                                fit_columns_on_grid_load=True,
+                                height=400,
+                                key=f"grid_cong_{project}_{user_name}"
+                            )
 
-                                        rows.append({
-                                            "ID": r["id"],
-                                            "Ngày": r["Ngày_dt"].date() if pd.notna(r["Ngày_dt"]) else None,
-                                            "Công việc": r["task"],
-                                            "Giờ bắt đầu": stime,
-                                            "Giờ kết thúc": etime,
-                                            "Khối lượng (giờ)": float(r.get("khoi_luong") or 0),
-                                            "Ghi chú": full_note_display,
-                                            "approved": bool(r.get("approved", False)),
-                                            "Chọn?": False
-                                        })
+                            edited = pd.DataFrame(grid["data"])
+                            selected = edited[edited["Chọn?"] == True]
 
-                                    df_display = pd.DataFrame(rows).sort_values("Ngày")
+                            # ==========================
+                            #  HÀNG NÚT BÊN DƯỚI
+                            # ==========================
+                            colA, colB, colC = st.columns([1, 1, 1])
 
-                                    # ==========================
-                                    #      AG-GRID CONFIG
-                                    # ==========================
-                                    gb = GridOptionsBuilder.from_dataframe(df_display)
+                            # ===== XÓA =====
+                            if colA.button("🗑 Xóa dòng đã chọn", key=f"del_cong_{project}_{user_name}"):
+                                for _, row in selected.iterrows():
+                                    supabase.table("tasks").delete().eq("id", row["ID"]).execute()
+                                st.success("Đã xoá.")
+                                st.rerun()
 
-                                    gb.configure_default_column(editable=True)
+                            # ===== TOGGLE DUYỆT =====
+                            any_approved = bool(len(selected) and selected["approved"].any())
+                            toggle_label = "❌ Bỏ duyệt dòng đã chọn" if any_approved else "✔ Duyệt dòng đã chọn"
 
-                                    # Ẩn cột approved
-                                    gb.configure_column("approved", hide=True)
+                            if colB.button(toggle_label, key=f"toggle_cong_{project}_{user_name}"):
+                                new_val = not any_approved
+                                for _, row in selected.iterrows():
+                                    supabase.table("tasks").update({"approved": new_val}).eq("id", row["ID"]).execute()
+                                st.success("Đã cập nhật trạng thái duyệt.")
+                                st.rerun()
 
-                                    # Checkbox chọn
-                                    gb.configure_column("Chọn?", editable=True)
-
-                                    # Tô màu dòng nếu đã duyệt
-                                    row_style = JsCode("""
-                                        function(params) {
-                                            if (params.data.approved === true) {
-                                                return {'backgroundColor': '#fff7cc'};
-                                            }
-                                            return null;
-                                        }
-                                    """)
-
-                                    gb = GridOptionsBuilder.from_dataframe(df_display)
-                                    gridOptions = gb.build()
-
-                                    gridOptions["getRowStyle"] = row_style  # ✅ GIẢI PHÁP ĐÚNG
-
-
-                                    grid = AgGrid(
-                                        df_display,
-                                        gridOptions=gridOptions,
-                                        update_mode=GridUpdateMode.NO_UPDATE,
-                                        data_return_mode="AS_INPUT",
-                                        allow_unsafe_jscode=True,
-                                        fit_columns_on_grid_load=True,
-                                        height=400
-                                    )
-
-                                    edited = pd.DataFrame(grid["data"])
-                                    selected = edited[edited["Chọn?"] == True]
-
-                                    # ==========================
-                                    #  HÀNG NÚT BÊN DƯỚI
-                                    # ==========================
-                                    colA, colB, colC = st.columns([1,1,1])
-
-                                    # ===== XÓA =====
-                                    if colA.button(f"🗑 Xóa dòng đã chọn – {user_name}", key=f"del_{user_name}"):
-                                        for _, row in selected.iterrows():
-                                            supabase.table("tasks").delete().eq("id", row["ID"]).execute()
-                                        st.success("Đã xoá.")
-                                        st.rerun()
-
-                                    # ===== TOGGLE DUYỆT =====
-                                    any_approved = any(selected["approved"])
-                                    toggle_label = "❌ Bỏ duyệt" if any_approved else "✔ Duyệt"
-
-                                    if colB.button(f"{toggle_label} – {user_name}", key=f"toggle_{user_name}"):
-                                        new_val = not any_approved
-                                        for _, row in selected.iterrows():
-                                            supabase.table("tasks").update({"approved": new_val}).eq("id", row["ID"]).execute()
-                                        st.success("Đã cập nhật trạng thái.")
-                                        st.rerun()
-
-                                    # ===== LƯU =====
-                                    if colC.button(f"💾 Lưu – {user_name}", key=f"save_{user_name}"):
-                                        for _, row in edited.iterrows():
-                                            supabase.table("tasks").update({
-                                                "start_date": row["Ngày"],
-                                                "khoi_luong": row["Khối lượng (giờ)"],
-                                                "note": row["Ghi chú"]
-                                            }).eq("id", row["ID"]).execute()
-                                        st.success("Đã lưu.")
-                                        st.rerun()
-
-
+                            # ===== LƯU =====
+                            if colC.button("💾 Lưu công nhật", key=f"save_cong_{project}_{user_name}"):
+                                for _, row in edited.iterrows():
+                                    supabase.table("tasks").update({
+                                        "start_date": row["Ngày"],
+                                        "khoi_luong": row["Khối lượng (giờ)"],
+                                        "note": row["Ghi chú"]
+                                    }).eq("id", row["ID"]).execute()
+                                st.success("Đã lưu công nhật.")
+                                st.rerun()
 
 
 
