@@ -1030,10 +1030,12 @@ def admin_app(user):
             #  PHẦN CÔNG NHẬT – LỌC THEO THỜI GIAN
             # ============================
 
-            df_cong_all = df_tasks[
-                df_tasks["note"].fillna("").str.contains("⏰")
-            ].copy()
+            # df_cong_all = df_tasks[
+                # df_tasks["note"].fillna("").str.contains("⏰")
+            # ].copy()
 
+            df_user = df_tasks[df_tasks["assignee"] == u]
+            df_cong_all = df_user[df_user["unit"].str.lower() == "công"]
 
             if df_cong_all.empty:
                 st.info("⚠ Không có công nhật nào trong dự án này.")
