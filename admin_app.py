@@ -1182,13 +1182,15 @@ def admin_app(user):
                                             if (params.data.approved === true) {
                                                 return {'backgroundColor': '#fff7cc'};
                                             }
-                                            return {'backgroundColor': 'white'};
+                                            return null;
                                         }
                                     """)
 
-                                    gb.configure_row_style(row_style)
-
+                                    gb = GridOptionsBuilder.from_dataframe(df_display)
                                     gridOptions = gb.build()
+
+                                    gridOptions["getRowStyle"] = row_style  # ✅ GIẢI PHÁP ĐÚNG
+
 
                                     grid = AgGrid(
                                         df_display,
