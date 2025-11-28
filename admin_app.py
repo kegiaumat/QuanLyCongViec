@@ -1138,7 +1138,16 @@ def admin_app(user):
                         "Chọn?": False
                     })
 
-                df_display = pd.DataFrame(rows).sort_values("Ngày").reset_index(drop=True)
+                df_display = pd.DataFrame(rows)
+
+                # Convert Ngày về string vì AgGrid KHÔNG hỗ trợ datetime
+                df_display["Ngày"] = df_display["Ngày"].astype(str)
+
+                # Convert tất cả cột khác về string nếu có object
+                for col in df_display.columns:
+                    df_display[col] = df_display[col].apply(lambda x: x if isinstance(x, (int, float, bool)) else str(x))
+
+                df_display = df_display.sort_values("Ngày").reset_index(drop=True)
 
                 # ================================
                 #  CẤU HÌNH AGRID
