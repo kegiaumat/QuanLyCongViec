@@ -1016,21 +1016,23 @@ def admin_app(user):
             df_tasks["assignee"] = df_tasks["assignee"].map(user_map).fillna(df_tasks["assignee"])
             # df_cong_all = df_tasks[df_tasks["unit"].str.lower() == "công"].copy()
             # Load tasks
+            # Merge job units đúng 1 lần
             df_tasks_raw = df_tasks.copy()
-
-            # Merge job units
             df_tasks_raw = df_tasks_raw.merge(jobs_units, left_on="task", right_on="name", how="left")
 
-            # Map assignee
+            # Chuẩn hóa cột unit (tránh unit_x / unit_y)
+            if "unit_x" in df_tasks_raw.columns:
+                df_tasks_raw["unit"] = df_tasks_raw["unit_x"]
+            elif "unit" not in df_tasks_raw.columns:
+                df_tasks_raw["unit"] = None
+
+            # Map name hiển thị
             df_tasks_raw["assignee"] = df_tasks_raw["assignee"].map(user_map).fillna(df_tasks_raw["assignee"])
+
 
             # LOOP QUA TỪNG USER
             for u in df_tasks_raw["assignee"].unique():
-
-                # lọc theo user
                 df_user = df_tasks_raw[df_tasks_raw["assignee"] == u].copy()
-
-                # lọc công nhật theo user
                 df_cong_all = df_user[df_user["unit"].str.lower() == "công"].copy()
 
                 if df_cong_all.empty:
