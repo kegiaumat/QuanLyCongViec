@@ -1038,24 +1038,31 @@ def admin_app(user):
 
                         
                         # ================================================
-                        #     CÔNG VIỆC CÔNG NHẬT - BẢNG NÂNG CẤP
+                        #     CÔNG VIỆC CÔNG NHẬT - BẢNG NÂNG CẤP (NEW)
                         # ================================================
 
                         st.markdown("### ⏱️ Công nhật (nâng cấp)")
 
-                        dfc = df_cong.copy()
+                        # df_cong_show đã được tạo phía trên từ code cũ → dùng lại cho an toàn
+                        dfc = df_cong_show.copy()
 
-                        # Nếu DB chưa có cột → tạo tạm trong DataFrame
+                        # Bổ sung 2 cột mới nếu chưa có
                         if "start_date" not in dfc.columns:
                             dfc["start_date"] = None
                         if "approved" not in dfc.columns:
                             dfc["approved"] = False
 
+                        # Tạo cột hiển thị ngày
                         dfc["Ngày"] = pd.to_datetime(dfc["start_date"], errors="coerce").dt.date
+
+                        # Booleans an toàn
                         dfc["Duyệt?"] = dfc["approved"].fillna(False)
                         dfc["Chọn?"] = False
 
-                        # Bộ lọc năm + quý
+                        # =============================
+                        #  LỌC THEO NĂM + QUÝ (AN TOÀN)
+                        # =============================
+
                         today = dt.date.today()
                         year_now = today.year
 
@@ -1063,24 +1070,31 @@ def admin_app(user):
                         year_filter = colY.selectbox("Năm", [year_now-1, year_now, year_now+1], index=1)
 
                         quarters = {
-                            "Q1": (dt.date(year_filter,1,1), dt.date(year_filter,3,31)),
-                            "Q2": (dt.date(year_filter,4,1), dt.date(year_filter,6,30)),
-                            "Q3": (dt.date(year_filter,7,1), dt.date(year_filter,9,30)),
+                            "Q1": (dt.date(year_filter,1,1),  dt.date(year_filter,3,31)),
+                            "Q2": (dt.date(year_filter,4,1),  dt.date(year_filter,6,30)),
+                            "Q3": (dt.date(year_filter,7,1),  dt.date(year_filter,9,30)),
                             "Q4": (dt.date(year_filter,10,1), dt.date(year_filter,12,31)),
                         }
 
                         q_now = (today.month-1)//3
                         q_name = colQ.selectbox("Quý", list(quarters.keys()), index=q_now)
+
                         d_from, d_to = quarters[q_name]
 
+                        # Lọc theo ngày — KHÔNG LỖI nếu start_date None
                         dfc = dfc[
                             (pd.to_datetime(dfc["Ngày"], errors="coerce") >= pd.Timestamp(d_from)) &
                             (pd.to_datetime(dfc["Ngày"], errors="coerce") <= pd.Timestamp(d_to))
                         ]
 
-                        # Chuẩn bị bảng
-                        cols = ["Công việc","Ngày","Giờ bắt đầu","Giờ kết thúc","Khối lượng (giờ)","Ghi chú","Duyệt?","Chọn?"]
+                        # =============================
+                        #  CHUẨN BỊ ĐỂ HIỂN THỊ BẢNG
+                        # =============================
 
+                        cols = ["Công việc", "Ngày", "Giờ bắt đầu", "Giờ kết thúc",
+                                "Khối lượng (giờ)", "Ghi chú", "Duyệt?", "Chọn?"]
+
+                        # KHÔNG lỗi KeyError – vì chỉ lấy các cột chắc chắn có
                         dfc_display = dfc[cols]
 
                         edited = st.data_editor(
@@ -1097,14 +1111,17 @@ def admin_app(user):
                             }
                         )
 
+                        # Lấy các dòng được chọn
                         selected = edited[edited["Chọn?"] == True]
 
-                        # ===== SAVE =====
+                        # =============================
+                        #              SAVE
+                        # =============================
                         if st.button(f"💾 Lưu ({u})"):
                             for idx, row in edited.iterrows():
                                 tid = int(df_cong.iloc[idx]["id"])
                                 supabase.table("tasks").update({
-                                    "start_date": row["Ngày"],
+                                    "start_date": row["Ngày"],       # ngày mới
                                     "note": row["Ghi chú"],
                                     "khoi_luong": row["Khối lượng (giờ)"],
                                 }).eq("id", tid).execute()
@@ -1112,7 +1129,9 @@ def admin_app(user):
                             st.success("Đã lưu!")
                             st.rerun()
 
-                        # ===== DUYỆT =====
+                        # =============================
+                        #         DUYỆT / BỎ DUYỆT
+                        # =============================
                         if st.button(f"✔ Duyệt ({u})"):
                             for _, r in selected.iterrows():
                                 tid = int(df_cong.iloc[r.name]["id"])
@@ -1127,13 +1146,16 @@ def admin_app(user):
                             st.success("Đã bỏ duyệt!")
                             st.rerun()
 
-                        # ===== XOÁ =====
+                        # =============================
+                        #             XOÁ
+                        # =============================
                         if st.button(f"🗑 Xoá ({u})"):
                             for _, r in selected.iterrows():
                                 tid = int(df_cong.iloc[r.name]["id"])
                                 supabase.table("tasks").delete().eq("id", tid).execute()
                             st.success("Đã xoá!")
                             st.rerun()
+
 
 
     elif choice == "Chấm công – Nghỉ phép":
