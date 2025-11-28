@@ -1054,8 +1054,9 @@ def admin_app(user):
                     "Năm (Công nhật)",
                     [year_now - 1, year_now, year_now + 1],
                     index=1,
-                    key="cong_year_all_v2"
+                    key=f"cong_year_all_{user_name}"
                 )
+
 
                 quarters = {
                     "Q1": (dt.date(year_filter, 1, 1),  dt.date(year_filter, 3, 31)),
@@ -1069,8 +1070,9 @@ def admin_app(user):
                     "Quý (Công nhật)",
                     list(quarters.keys()),
                     index=q_now,
-                    key="cong_quarter_all_v2"
+                    key=f"cong_quarter_all_{user_name}"
                 )
+
 
                 d_from, d_to = quarters[q_name]
 
