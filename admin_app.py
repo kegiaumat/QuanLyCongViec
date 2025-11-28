@@ -1110,7 +1110,10 @@ def admin_app(user):
 
                             selected = edited[edited["Chọn?"] == True]
 
-                            # ---- Hàng nút thao tác ----
+                            # ===========================
+                            #   HÀNG NÚT THAO TÁC MỚI
+                            # ===========================
+
                             colA, colB, colC = st.columns([1, 1, 1])
 
                             # ===== XÓA =====
@@ -1121,10 +1124,8 @@ def admin_app(user):
                                 st.success("Đã xoá các dòng đã chọn.")
                                 st.rerun()
 
-                            # ===== Duyệt / Bỏ duyệt toggle =====
-                            # Kiểm tra xem có dòng nào đang được chọn đã approve hay chưa
+                            # ===== TOGGLE DUYỆT / BỎ DUYỆT =====
                             any_approved = any(df_display.iloc[idx]["Duyệt?"] for idx in selected.index)
-
                             toggle_label = "❌ Bỏ duyệt dòng đã chọn" if any_approved else "✔ Duyệt dòng đã chọn"
 
                             if colB.button(toggle_label, key=f"toggle_cong_{user_name}"):
@@ -1147,27 +1148,6 @@ def admin_app(user):
                                 st.success("Đã lưu công nhật.")
                                 st.rerun()
 
-
-                            if st.button("✔ Duyệt dòng đã chọn", key=f"approve_cong_{user_name}"):
-                                for idx in selected.index:
-                                    tid = int(df_display.iloc[idx]["ID"])
-                                    supabase.table("tasks").update({"approved": True}).eq("id", tid).execute()
-                                st.success("Đã duyệt.")
-                                st.rerun()
-
-                            if st.button("❌ Bỏ duyệt dòng đã chọn", key=f"unapprove_cong_{user_name}"):
-                                for idx in selected.index:
-                                    tid = int(df_display.iloc[idx]["ID"])
-                                    supabase.table("tasks").update({"approved": False}).eq("id", tid).execute()
-                                st.success("Đã bỏ duyệt.")
-                                st.rerun()
-
-                            if st.button("🗑 Xoá dòng đã chọn", key=f"delete_cong_{user_name}"):
-                                for idx in selected.index:
-                                    tid = int(df_display.iloc[idx]["ID"])
-                                    supabase.table("tasks").delete().eq("id", tid).execute()
-                                st.success("Đã xoá.")
-                                st.rerun()
 
 
 
