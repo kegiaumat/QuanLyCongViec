@@ -1025,54 +1025,47 @@ def admin_app(user):
             # ============================
 
             # Lấy toàn bộ task của dự án hiện tại (đã lọc theo project phía trên)
+            # =================== LỌC CÔNG NHẬT ===================
             df_cong_all = df_tasks.copy()
-            df_cong_all["Ngày_dt"] = pd.to_datetime(df_cong_all["start_date"], errors="coerce").dt.date
 
-            if df_cong_all["Ngày_dt"].isna().all():
-                st.info("⚠ Không có công nhật nào trong dự án này (chưa có ngày bắt đầu).")
+            # --- luôn dùng start_date từ DB ---
+            df_cong_all["Ngày_dt"] = pd.to_datetime(df_cong_all["start_date_raw"], errors="coerce").dt.date
+
+            # nếu không có ngày → bỏ qua
+            df_cong_all = df_cong_all[df_cong_all["Ngày_dt"].notna()].reset_index(drop=True)
+
+            if df_cong_all.empty:
+                st.warning("⛔ Không có công nhật nào trong dự án này.")
             else:
                 st.markdown("### ⏱️ Công nhật – Lọc theo thời gian")
 
-                # ---- Chọn Năm + Quý (TẦNG 2) ----
                 today = dt.date.today()
                 year_now = today.year
 
-                colY, colQ = st.columns([1, 1])
-                year_filter = colY.selectbox(
-                    "Năm (Công nhật)",
-                    [year_now - 1, year_now, year_now + 1],
-                    index=1,
-                    key="cong_year_all_v2"
-                )
+                colY, colQ = st.columns([1,1])
+                year_filter = colY.selectbox("Năm", [year_now-1, year_now, year_now+1], index=1)
 
                 quarters = {
-                    "Q1": (dt.date(year_filter, 1, 1),  dt.date(year_filter, 3, 31)),
-                    "Q2": (dt.date(year_filter, 4, 1),  dt.date(year_filter, 6, 30)),
-                    "Q3": (dt.date(year_filter, 7, 1),  dt.date(year_filter, 9, 30)),
-                    "Q4": (dt.date(year_filter,10, 1),  dt.date(year_filter,12,31)),
+                    "Q1": (dt.date(year_filter,1,1), dt.date(year_filter,3,31)),
+                    "Q2": (dt.date(year_filter,4,1), dt.date(year_filter,6,30)),
+                    "Q3": (dt.date(year_filter,7,1), dt.date(year_filter,9,30)),
+                    "Q4": (dt.date(year_filter,10,1), dt.date(year_filter,12,31)),
                 }
 
-                q_now = (today.month - 1) // 3
-                q_name = colQ.selectbox(
-                    "Quý (Công nhật)",
-                    list(quarters.keys()),
-                    index=q_now,
-                    key="cong_quarter_all_v2"
-                )
+                q_now = (today.month - 1)//3
+                q_name = colQ.selectbox("Quý", list(quarters.keys()), index=q_now)
 
                 d_from, d_to = quarters[q_name]
 
-                # ---- Lọc theo khoảng thời gian start_date ----
-                # Ngày_dt đang là .dt.date, d_from / d_to cũng là date
+                # --- lọc theo quý ---
                 df_cong_all = df_cong_all[
-                    df_cong_all["Ngày_dt"].notna() &
                     (df_cong_all["Ngày_dt"] >= d_from) &
                     (df_cong_all["Ngày_dt"] <= d_to)
                 ].reset_index(drop=True)
 
-
                 if df_cong_all.empty:
-                    st.warning("⛔ Không có công nhật nào trong quý đã chọn.")
+                    st.warning("⛔ Không có công nhật trong quý đã chọn.")
+
                 else:
                     # ---- Hàm tách giờ trong note ----
                     def split_times(note_text: str):
