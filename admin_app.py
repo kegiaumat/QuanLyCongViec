@@ -1028,7 +1028,16 @@ def admin_app(user):
             df_cong_all = df_tasks.copy()
 
             # Chuẩn hoá cột ngày bắt đầu từ DB
-            df_cong_all["Ngày_dt"] = pd.to_datetime(df_cong_all["start_date"], errors="coerce")
+            # Chuẩn hoá start_date từ Supabase (luôn là dạng date/datetime)
+            df_cong_all["Ngày_dt"] = pd.to_datetime(df_cong_all["start_date"], errors="coerce").dt.date
+
+            # Lọc theo quý (so sánh dạng date)
+            df_cong_all = df_cong_all[
+                df_cong_all["Ngày_dt"].notna() &
+                (df_cong_all["Ngày_dt"] >= d_from) &
+                (df_cong_all["Ngày_dt"] <= d_to)
+            ].reset_index(drop=True)
+
 
             # Nếu tất cả start_date đều trống thì báo luôn
             if df_cong_all["Ngày_dt"].isna().all():
