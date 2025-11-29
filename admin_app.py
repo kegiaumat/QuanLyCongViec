@@ -1024,7 +1024,19 @@ def admin_app(user):
             #  PHẦN CÔNG NHẬT – LỌC THEO THỜI GIAN
             # ============================
 
-            df_cong_all = df_tasks[df_tasks["unit"].fillna("").str.lower() == "công"].copy()
+            # Chỉ lấy công nhật của dự án PUBLIC — không lọc theo “unit”
+            df_cong_all = df_tasks.copy()
+
+            # Chuẩn hóa start_date
+            df_cong_all["start_date_raw"] = df_cong_all["start_date"]
+            df_cong_all["Ngày_dt"] = pd.to_datetime(df_cong_all["start_date_raw"], errors="coerce")
+
+            # Lọc theo quý
+            df_cong_all = df_cong_all[
+                df_cong_all["Ngày_dt"].notna() &
+                (df_cong_all["Ngày_dt"] >= pd.to_datetime(d_from)) &
+                (df_cong_all["Ngày_dt"] <= pd.to_datetime(d_to))
+            ].reset_index(drop=True)
 
             if df_cong_all.empty:
                 st.info("⚠ Không có công nhật nào trong dự án này.")
