@@ -1026,20 +1026,8 @@ def admin_app(user):
 
             # Lấy toàn bộ task của dự án hiện tại (đã lọc theo project phía trên)
             df_cong_all = df_tasks.copy()
-
-            # Chuẩn hoá cột ngày bắt đầu từ DB
-            # Chuẩn hoá start_date từ Supabase (luôn là dạng date/datetime)
             df_cong_all["Ngày_dt"] = pd.to_datetime(df_cong_all["start_date"], errors="coerce").dt.date
 
-            # Lọc theo quý (so sánh dạng date)
-            df_cong_all = df_cong_all[
-                df_cong_all["Ngày_dt"].notna() &
-                (df_cong_all["Ngày_dt"] >= d_from) &
-                (df_cong_all["Ngày_dt"] <= d_to)
-            ].reset_index(drop=True)
-
-
-            # Nếu tất cả start_date đều trống thì báo luôn
             if df_cong_all["Ngày_dt"].isna().all():
                 st.info("⚠ Không có công nhật nào trong dự án này (chưa có ngày bắt đầu).")
             else:
@@ -1075,12 +1063,13 @@ def admin_app(user):
                 d_from, d_to = quarters[q_name]
 
                 # ---- Lọc theo khoảng thời gian start_date ----
-                # (so sánh theo ngày, không dùng unit/note)
+                # Ngày_dt đang là .dt.date, d_from / d_to cũng là date
                 df_cong_all = df_cong_all[
                     df_cong_all["Ngày_dt"].notna() &
-                    (df_cong_all["Ngày_dt"] >= pd.to_datetime(d_from)) &
-                    (df_cong_all["Ngày_dt"] <= pd.to_datetime(d_to))
+                    (df_cong_all["Ngày_dt"] >= d_from) &
+                    (df_cong_all["Ngày_dt"] <= d_to)
                 ].reset_index(drop=True)
+
 
                 if df_cong_all.empty:
                     st.warning("⛔ Không có công nhật nào trong quý đã chọn.")
