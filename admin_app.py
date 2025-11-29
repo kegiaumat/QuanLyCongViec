@@ -993,7 +993,7 @@ def admin_app(user):
         # ---------------- Danh sách công việc ----------------
         # ---------------- Danh sách công việc ----------------
         st.subheader("📋 Danh sách công việc trong dự án")
-        @st.cache_data(ttl=10)
+        @st.cache_data(ttl=1000)
         def load_tasks_by_project(project_name):
             supabase = get_supabase_client()
             data = supabase.table("tasks").select("*").eq("project", project_name).execute()
@@ -1026,17 +1026,41 @@ def admin_app(user):
 
             # Lấy toàn bộ task của dự án hiện tại (đã lọc theo project phía trên)
             # =================== LỌC CÔNG NHẬT ===================
+            # ============================ CÔNG NHẬT ============================
+
             df_cong_all = df_tasks.copy()
 
-            # --- luôn dùng start_date từ DB ---
-            df_cong_all["Ngày_dt"] = pd.to_datetime(df_cong_all["start_date_raw"], errors="coerce").dt.date
+            # --- Luôn lưu lại ngày gốc từ DB ---
+            df_cong_all["start_date_raw"] = df_cong_all["start_date"]
 
-            # nếu không có ngày → bỏ qua
+            # --- Hàm lấy ngày từ note nếu start_date NULL ---
+            def extract_date_from_note(note_text):
+                if not isinstance(note_text, str):
+                    return None
+                m = re.search(r"\((\d{4}-\d{2}-\d{2})\s*[→-]\s*\d{4}-\d{2}-\d{2}\)", note_text)
+                if m:
+                    return m.group(1)
+                return None
+
+            # --- Nếu start_date_raw = NULL → lấy ngày trong note ---
+            df_cong_all["Ngày_dt"] = df_cong_all.apply(
+                lambda r: r["start_date_raw"] 
+                          if pd.notna(r["start_date_raw"]) 
+                          else extract_date_from_note(r.get("note", "")),
+                axis=1
+            )
+
+            # --- Chuyển sang dạng date ---
+            df_cong_all["Ngày_dt"] = pd.to_datetime(df_cong_all["Ngày_dt"], errors="coerce").dt.date
+
+            # --- Loại bỏ dòng không xác định được ngày ---
             df_cong_all = df_cong_all[df_cong_all["Ngày_dt"].notna()].reset_index(drop=True)
+
 
             if df_cong_all.empty:
                 st.warning("⛔ Không có công nhật nào trong dự án này.")
             else:
+
                 st.markdown("### ⏱️ Công nhật – Lọc theo thời gian")
 
                 today = dt.date.today()
@@ -1057,7 +1081,7 @@ def admin_app(user):
 
                 d_from, d_to = quarters[q_name]
 
-                # --- lọc theo quý ---
+                # --- Lọc theo quý ---
                 df_cong_all = df_cong_all[
                     (df_cong_all["Ngày_dt"] >= d_from) &
                     (df_cong_all["Ngày_dt"] <= d_to)
