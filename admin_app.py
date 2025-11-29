@@ -1076,10 +1076,11 @@ def admin_app(user):
 
                 # ---- Lọc theo khoảng thời gian start_date ----
                 # (so sánh theo ngày, không dùng unit/note)
+                # đoạn lọc này phải xoá vì chạy trước khi người dùng chọn quý
                 df_cong_all = df_cong_all[
                     df_cong_all["Ngày_dt"].notna() &
-                    (df_cong_all["Ngày_dt"] >= pd.to_datetime(d_from)) &
-                    (df_cong_all["Ngày_dt"] <= pd.to_datetime(d_to))
+                    (df_cong_all["Ngày_dt"] >= d_from) &
+                    (df_cong_all["Ngày_dt"] <= d_to)
                 ].reset_index(drop=True)
 
                 if df_cong_all.empty:
