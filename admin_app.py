@@ -1001,6 +1001,13 @@ def admin_app(user):
 
         df_tasks = load_tasks_by_project(project)
 
+        # Lưu lại start_date trước khi merge để tránh bị đè
+        df_tasks["start_date_raw"] = df_tasks["start_date"]
+
+        jobs_units = load_job_units()
+
+        df_tasks = df_tasks.merge(jobs_units, left_on="task", right_on="name", how="left")
+
         if df_tasks.empty:
             st.info("Chưa có công việc nào trong dự án này.")
         else:
@@ -1073,15 +1080,13 @@ def admin_app(user):
                 df_cong_all["unit"] = df_cong_all["unit"].fillna("")
 
                 # Chuẩn hóa ngày bắt đầu (start_date) -> datetime
-                df_cong_all["Ngày_dt"] = pd.to_datetime(df_cong_all["start_date"], errors="coerce")
+                df_cong_all["Ngày_dt"] = pd.to_datetime(df_cong_all["start_date_raw"], errors="coerce")
 
-                # Lọc theo quý (chỉ giữ những dòng có ngày hợp lệ)
                 df_cong_all = df_cong_all[
                     df_cong_all["Ngày_dt"].notna() &
                     (df_cong_all["Ngày_dt"] >= pd.to_datetime(d_from)) &
                     (df_cong_all["Ngày_dt"] <= pd.to_datetime(d_to))
                 ].reset_index(drop=True)
-
 
                 if df_cong_all.empty:
                     st.warning("⛔ Không có công nhật nào trong quý đã chọn.")
