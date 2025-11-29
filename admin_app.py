@@ -993,7 +993,7 @@ def admin_app(user):
         # ---------------- Danh sách công việc ----------------
         # ---------------- Danh sách công việc ----------------
         st.subheader("📋 Danh sách công việc trong dự án")
-        @st.cache_data(ttl=1000)
+        @st.cache_data(ttl=50)
         def load_tasks_by_project(project_name):
             supabase = get_supabase_client()
             data = supabase.table("tasks").select("*").eq("project", project_name).execute()
