@@ -1027,7 +1027,7 @@ def admin_app(user):
             #  PHẦN CÔNG NHẬT – LỌC THEO THỜI GIAN
             # ============================
 
-            df_cong_all = df_tasks[df_tasks["unit"].str.lower() == "công"].copy()
+            df_cong_all = df_tasks[df_tasks["unit"].fillna("").str.lower() == "công"].copy()
 
             if df_cong_all.empty:
                 st.info("⚠ Không có công nhật nào trong dự án này.")
@@ -1069,11 +1069,19 @@ def admin_app(user):
                 if "approved" not in df_cong_all.columns:
                     df_cong_all["approved"] = False
 
+                # Đừng để unit bị None -> lỗi lúc .lower()
+                df_cong_all["unit"] = df_cong_all["unit"].fillna("")
+
+                # Chuẩn hóa ngày bắt đầu (start_date) -> datetime
                 df_cong_all["Ngày_dt"] = pd.to_datetime(df_cong_all["start_date"], errors="coerce")
+
+                # Lọc theo quý (chỉ giữ những dòng có ngày hợp lệ)
                 df_cong_all = df_cong_all[
-                    (df_cong_all["Ngày_dt"] >= pd.Timestamp(d_from)) &
-                    (df_cong_all["Ngày_dt"] <= pd.Timestamp(d_to))
+                    df_cong_all["Ngày_dt"].notna() &
+                    (df_cong_all["Ngày_dt"] >= pd.to_datetime(d_from)) &
+                    (df_cong_all["Ngày_dt"] <= pd.to_datetime(d_to))
                 ].reset_index(drop=True)
+
 
                 if df_cong_all.empty:
                     st.warning("⛔ Không có công nhật nào trong quý đã chọn.")
@@ -1119,7 +1127,7 @@ def admin_app(user):
 
                                 rows.append({
                                     "ID": r["id"],
-                                    "Ngày": r["Ngày_dt"].date() if pd.notna(r["Ngày_dt"]) else None,
+                                    "Ngày": r["Ngày_dt"].strftime("%Y-%m-%d") if pd.notna(r["Ngày_dt"]) else "",
                                     "Công việc": r["task"],
                                     "Giờ bắt đầu": stime,
                                     "Giờ kết thúc": etime,
