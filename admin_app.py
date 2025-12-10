@@ -1111,10 +1111,23 @@ def admin_app(user):
                     for user_name in df_cong_all["assignee_display"].unique():
 
 
-                        df_user = df_cong_all[df_cong_all["assignee_display"] == user_name].copy()
+                        # df_user = df_cong_all[df_cong_all["assignee_display"] == user_name].copy()
 
                         with st.expander(f"👤 {user_name}", expanded=False):
+                            username_real = df_users.loc[df_users["display_name"] == user_name, "username"].iloc[0]
+                            fresh = get_supabase_client().table("tasks").select("*")\
+                                    .eq("project", project)\
+                                    .eq("assignee", username_real)\
+                                    .execute()
 
+                            df_user = pd.DataFrame(fresh.data)
+
+                            if df_user.empty:
+                                st.info("Không có công nhật cho user này.")
+                                continue
+
+                            # Chuẩn hóa ngày, giờ — giữ nguyên code cũ
+                            df_user["Ngày_dt"] = pd.to_datetime(df_user["start_date"], errors="coerce").dt.date
                             rows = []
                             for _, r in df_user.iterrows():
                                 stime, etime, date_part, note_rest = split_times(r.get("note", ""))
@@ -1169,7 +1182,9 @@ def admin_app(user):
                                 allow_unsafe_jscode=True,
                                 fit_columns_on_grid_load=True,
                                 height=400,
-                                key=f"cong_grid_{project}_{user_name}".replace(" ", "_")
+                                unique_key = f"{user_name}_{time.time()}".replace(" ", "_")  
+                                key=f"grid_{unique_key}"
+
                             )
 
                             edited = pd.DataFrame(grid["data"])
