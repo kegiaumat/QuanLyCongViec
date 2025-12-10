@@ -1107,31 +1107,18 @@ def admin_app(user):
                     # ============================
                     # 5. HIỂN THỊ THEO USER
                     # ============================
+                    # 5. HIỂN THỊ THEO USER
+                    # ============================
 
                     for user_name in df_cong_all["assignee_display"].unique():
 
-
-                        # df_user = df_cong_all[df_cong_all["assignee_display"] == user_name].copy()
+                        # Lấy đúng các dòng của user đó TRONG QUÝ đã lọc
+                        df_user = df_cong_all[df_cong_all["assignee_display"] == user_name].copy()
 
                         with st.expander(f"👤 {user_name}", expanded=False):
-                            username_real = df_users.loc[df_users["display_name"] == user_name, "username"].iloc[0]
-                            fresh = get_supabase_client().table("tasks").select("*")\
-                                    .eq("project", project)\
-                                    .eq("assignee", username_real)\
-                                    .execute()
-
-                            df_user = pd.DataFrame(fresh.data)
 
                             if df_user.empty:
-                                st.info("Không có công nhật cho user này.")
-                                continue
-
-                            # 🔥 Bỏ các dòng không có start_date để tránh lỗi NaT.strftime
-                            df_user["Ngày_dt"] = pd.to_datetime(df_user["start_date"], errors="coerce").dt.date
-                            df_user = df_user[df_user["Ngày_dt"].notna()].copy()
-
-                            if df_user.empty:
-                                st.info("User này không có công nhật hợp lệ (thiếu start_date).")
+                                st.info("Không có công nhật cho user này trong quý đã chọn.")
                                 continue
 
                             rows = []
@@ -1155,10 +1142,19 @@ def admin_app(user):
                                     "approved": bool(r.get("approved", False)),
                                     "Chọn?": False,
                                 })
-                            # Create dynamic unique grid key to force rerender each click
-                            grid_key = f"grid_{user_name}_{time.time()}".replace(" ", "_")
+
+                            # Không có dòng nào thì thôi
+                            if not rows:
+                                st.info("Không có công nhật để hiển thị.")
+                                continue
 
                             df_display = pd.DataFrame(rows).sort_values("Ngày")
+
+                            # Dùng username thật để làm key cho grid (tránh trùng tên hiển thị)
+                            username_real = df_users.loc[
+                                df_users["display_name"] == user_name, "username"
+                            ].iloc[0]
+                            grid_key = f"cong_grid_{project}_{username_real}".replace(" ", "_")
 
                             # ============================
                             # 6. AG-GRID
@@ -1193,32 +1189,33 @@ def admin_app(user):
                                 key=grid_key
                             )
 
-
                             edited = pd.DataFrame(grid["data"])
                             selected = edited[edited["Chọn?"] == True]
 
                             colA, colB, colC = st.columns([1, 1, 1])
 
                             # XÓA
-                            if colA.button("🗑 Xóa dòng đã chọn", key=f"del_{user_name}"):
+                            if colA.button("🗑 Xóa dòng đã chọn", key=f"del_{username_real}"):
                                 for _, row in selected.iterrows():
                                     supabase.table("tasks").delete().eq("id", row["ID"]).execute()
                                 st.success("Đã xoá.")
                                 st.rerun()
 
-                            # DUYỆT
+                            # DUYỆT / BỎ DUYỆT
                             any_approved = bool(len(selected) and selected["approved"].any())
                             label = "❌ Bỏ duyệt" if any_approved else "✔ Duyệt"
 
-                            if colB.button(label, key=f"approve_{user_name}"):
+                            if colB.button(label, key=f"approve_{username_real}"):
                                 new_val = not any_approved
                                 for _, row in selected.iterrows():
-                                    supabase.table("tasks").update({"approved": new_val}).eq("id", row["ID"]).execute()
+                                    supabase.table("tasks").update(
+                                        {"approved": new_val}
+                                    ).eq("id", row["ID"]).execute()
                                 st.success("Đã cập nhật.")
                                 st.rerun()
 
-                            # LƯU
-                            if colC.button("💾 Lưu công nhật", key=f"save_{user_name}"):
+                            # LƯU CÔNG NHẬT
+                            if colC.button("💾 Lưu công nhật", key=f"save_{username_real}"):
                                 for _, row in edited.iterrows():
                                     supabase.table("tasks").update({
                                         "start_date": row["Ngày"],
@@ -1227,8 +1224,6 @@ def admin_app(user):
                                     }).eq("id", row["ID"]).execute()
                                 st.success("Đã lưu.")
                                 st.rerun()
-
-
 
 
 
