@@ -1031,30 +1031,12 @@ def admin_app(user):
             # ============================
 
             # Nếu start_date null → dùng note
-            def extract_date_from_note(note_text):
-                if not isinstance(note_text, str):
-                    return None
+            # Dùng trực tiếp start_date từ database, không đọc từ note
+            df_cong_all["Ngày_dt"] = pd.to_datetime(df_cong_all["start_date"], errors="coerce").dt.date
 
-                # Tìm (YYYY-MM-DD → YYYY-MM-DD) hoặc (YYYY-MM-DD - YYYY-MM-DD)
-                m = re.search(r"\((\d{4}-\d{2}-\d{2})\s*[→\-]\s*\d{4}-\d{2}-\d{2}\)", note_text)
-                if m:
-                    return m.group(1)
-                return None
-
-
-            # Tạo Ngày_dt
-            df_cong_all["Ngày_dt"] = df_cong_all.apply(
-                lambda r: r["start_date"]
-                if pd.notna(r["start_date"])
-                else extract_date_from_note(r.get("note", "")),
-                axis=1
-            )
-
-            # Convert sang date
-            df_cong_all["Ngày_dt"] = pd.to_datetime(df_cong_all["Ngày_dt"], errors="coerce").dt.date
-
-            # Xóa dòng không có ngày
+            # Bỏ hết dòng không có start_date
             df_cong_all = df_cong_all[df_cong_all["Ngày_dt"].notna()].reset_index(drop=True)
+
 
 
             if df_cong_all.empty:
