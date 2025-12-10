@@ -1018,7 +1018,7 @@ def admin_app(user):
 
             # Merge 1 lần duy nhất
             df_tasks = df_tasks.merge(jobs_units, left_on="task", right_on="name", how="left")
-            df_tasks["assignee"] = df_tasks["assignee"].map(user_map).fillna(df_tasks["assignee"])
+            df_tasks["assignee_display"] = df_tasks["assignee"].map(user_map).fillna(df_tasks["assignee"])
 
             # ============================
             #  PHẦN CÔNG NHẬT – LỌC THEO THỜI GIAN
@@ -1108,9 +1108,10 @@ def admin_app(user):
                     # 5. HIỂN THỊ THEO USER
                     # ============================
 
-                    for user_name in df_cong_all["assignee"].unique():
+                    for user_name in df_cong_all["assignee_display"].unique():
 
-                        df_user = df_cong_all[df_cong_all["assignee"] == user_name].copy()
+
+                        df_user = df_cong_all[df_cong_all["assignee_display"] == user_name].copy()
 
                         with st.expander(f"👤 {user_name}", expanded=False):
 
