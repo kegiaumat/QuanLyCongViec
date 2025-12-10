@@ -1106,85 +1106,96 @@ def admin_app(user):
 
                     # ============================
                     # ============================
-                    # 5. HIỂN THỊ THEO USER (PUBLIC)
+                    # 5. HIỂN THỊ THEO USER (PUBLIC – CÁCH 1 CHUẨN)
                     # ============================
 
-                    # Đảm bảo có cột assignee_display: username -> display_name
                     df_cong_all["assignee_display"] = (
                         df_cong_all["assignee"].map(user_map).fillna(df_cong_all["assignee"])
                     )
 
-                    # Nếu sau khi lọc quý mà không còn dòng nào
+                    # Nếu sau khi lọc quý không còn dữ liệu
                     if df_cong_all.empty:
-                        st.info("Không có công nhật nào trong khoảng thời gian đã chọn.")
+                        st.info("⛔ Không có công nhật nào trong khoảng thời gian đã chọn.")
                     else:
-                        # Lặp theo từng user hiển thị
-                        for user_name in df_cong_all["assignee_display"].unique():
 
-                            # Lọc đúng các dòng của user này
-                            df_user = df_cong_all[df_cong_all["assignee_display"] == user_name].copy()
+                        # --- Lặp theo từng user ---
+                        for user_display in sorted(df_cong_all["assignee_display"].unique()):
 
-                            with st.expander(f"👤 {user_name}", expanded=False):
+                            df_user = df_cong_all[df_cong_all["assignee_display"] == user_display].copy()
 
-                                if df_user.empty:
-                                    st.info("Không có công nhật trong quý này.")
-                                    continue
-
-                                # Chuẩn hóa ngày và bỏ dòng thiếu start_date
-                                df_user["Ngày_dt"] = pd.to_datetime(
-                                    df_user["start_date"], errors="coerce"
-                                ).dt.date
-                                df_user = df_user[df_user["Ngày_dt"].notna()].copy()
+                            with st.expander(f"👤 {user_display}", expanded=False):
 
                                 if df_user.empty:
-                                    st.info("User này không có công nhật hợp lệ (thiếu ngày bắt đầu).")
+                                    st.info("User này không có công nhật trong quý.")
                                     continue
 
-                                # ---------------- TẠO DỮ LIỆU ĐẦU VÀO AG-GRID ----------------
+                                # CHUẨN HÓA NGÀY
+                                df_user["Ngày"] = pd.to_datetime(df_user["start_date"], errors="coerce").dt.date
+                                df_user = df_user[df_user["Ngày"].notna()].copy()
+
+                                if df_user.empty:
+                                    st.info("Không còn dòng nào hợp lệ sau chuẩn hóa ngày.")
+                                    continue
+
+                                # TÁCH GIỜ
+                                def split_times(note_text):
+                                    if not isinstance(note_text, str):
+                                        return "", "", "", ""
+                                    time_re = r"⏰\s*(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})"
+                                    m1 = re.search(time_re, note_text)
+                                    stime = m1.group(1) if m1 else ""
+                                    etime = m1.group(2) if m1 else ""
+
+                                    date_re = r"\((\d{4}-\d{2}-\d{2})\s*[→\-]\s*(\d{4}-\d{2}-\d{2})\)"
+                                    m2 = re.search(date_re, note_text)
+                                    date_part = m2.group(0) if m2 else ""
+
+                                    note_rest = (
+                                        re.sub(time_re, "", note_text)
+                                    )
+                                    note_rest = re.sub(date_re, "", note_rest).strip()
+
+                                    return stime, etime, date_part, note_rest
+
+                                # CHUẨN HÓA DỮ LIỆU HIỂN THỊ
                                 rows = []
                                 for _, r in df_user.iterrows():
-                                    # Hàm split_times bạn đã có sẵn từ file cũ
                                     stime, etime, date_part, note_rest = split_times(r.get("note", ""))
 
+                                    full_note = ""
                                     if stime and etime:
-                                        full_note_display = f"⏰ {stime} - {etime} {date_part} {note_rest}".strip()
+                                        full_note = f"⏰ {stime} - {etime} {date_part} {note_rest}".strip()
                                     else:
-                                        full_note_display = note_rest.strip()
+                                        full_note = note_rest
 
                                     rows.append({
                                         "ID": r["id"],
-                                        "Ngày": r["Ngày_dt"].strftime("%Y-%m-%d"),
+                                        "Ngày": r["Ngày"].strftime("%Y-%m-%d"),
                                         "Công việc": r["task"],
                                         "Giờ bắt đầu": stime,
                                         "Giờ kết thúc": etime,
                                         "Khối lượng (giờ)": float(r.get("khoi_luong") or 0),
-                                        "Ghi chú": full_note_display,
+                                        "Ghi chú": full_note,
                                         "approved": bool(r.get("approved", False)),
                                         "Chọn?": False,
                                     })
 
-                                if not rows:
-                                    st.info("Không có công nhật để hiển thị.")
-                                    continue
+                                df_display = pd.DataFrame(rows).sort_values("Ngày").reset_index(drop=True)
 
-                                df_display = pd.DataFrame(rows).sort_values("Ngày")
-
-                                # Lấy username thật để dùng cho key (ổn định hơn, không dấu)
+                                # Tìm username thật để dùng khóa AG-Grid
                                 username_real = df_users.loc[
-                                    df_users["display_name"] == user_name, "username"
+                                    df_users["display_name"] == user_display, "username"
                                 ].iloc[0]
 
-                                grid_key = f"cong_grid_{project}_{username_real}_{int(time.time()*1000)}"
+                                # KEY CỰC KỲ ỔN ĐỊNH → KHÔNG BAO GIỜ MẤT DỮ LIỆU
+                                grid_key = f"conggrid_{project}_{username_real}_{year_filter}_{q_name}"
 
-                                # ---------------- CẤU HÌNH AG-GRID ----------------
+                                # AG-GRID CONFIG
                                 gb = GridOptionsBuilder.from_dataframe(df_display)
                                 gb.configure_default_column(editable=True)
                                 gb.configure_column("approved", hide=True)
                                 gb.configure_column("Chọn?", editable=True)
 
-                                gridOptions = gb.build()
-
-                                # Tô màu dòng đã duyệt
                                 row_style = JsCode("""
                                     function(params) {
                                         if (params.data.approved === true) {
@@ -1193,6 +1204,7 @@ def admin_app(user):
                                         return null;
                                     }
                                 """)
+                                gridOptions = gb.build()
                                 gridOptions["getRowStyle"] = row_style
 
                                 grid = AgGrid(
@@ -1202,45 +1214,46 @@ def admin_app(user):
                                     data_return_mode=DataReturnMode.AS_INPUT,
                                     allow_unsafe_jscode=True,
                                     fit_columns_on_grid_load=True,
-                                    height=400,
                                     key=grid_key,
+                                    height=420
                                 )
 
                                 edited = pd.DataFrame(grid["data"])
                                 selected = edited[edited["Chọn?"] == True]
 
-                                colA, colB, colC = st.columns([1, 1, 1])
+                                c1, c2, c3 = st.columns([1,1,1])
 
-                                # ---------- XÓA ----------
-                                if colA.button("🗑 Xóa dòng đã chọn", key=f"del_{username_real}"):
-                                    for _, row in selected.iterrows():
-                                        supabase.table("tasks").delete().eq("id", row["ID"]).execute()
-                                    st.success("Đã xoá.")
+                                # XÓA
+                                if c1.button("🗑 Xóa dòng đã chọn", key=f"del_{username_real}"):
+                                    for _, r in selected.iterrows():
+                                        supabase.table("tasks").delete().eq("id", r["ID"]).execute()
+                                    st.success("Đã xóa.")
                                     st.rerun()
 
-                                # ---------- DUYỆT / BỎ DUYỆT ----------
-                                any_approved = bool(len(selected) and selected["approved"].any())
-                                label = "❌ Bỏ duyệt" if any_approved else "✔ Duyệt"
+                                # DUYỆT / BỎ DUYỆT
+                                approved_any = bool(len(selected) and selected["approved"].any())
+                                label = "❌ Bỏ duyệt" if approved_any else "✔ Duyệt"
 
-                                if colB.button(label, key=f"approve_{username_real}"):
-                                    new_val = not any_approved
-                                    for _, row in selected.iterrows():
+                                if c2.button(label, key=f"app_{username_real}"):
+                                    for _, r in selected.iterrows():
                                         supabase.table("tasks").update(
-                                            {"approved": new_val}
-                                        ).eq("id", row["ID"]).execute()
+                                            {"approved": not approved_any}
+                                        ).eq("id", r["ID"]).execute()
                                     st.success("Đã cập nhật.")
                                     st.rerun()
 
-                                # ---------- LƯU CÔNG NHẬT ----------
-                                if colC.button("💾 Lưu công nhật", key=f"save_{username_real}"):
-                                    for _, row in edited.iterrows():
+                                # LƯU CHỈNH SỬA
+                                if c3.button("💾 Lưu công nhật", key=f"save_{username_real}"):
+                                    for _, r in edited.iterrows():
                                         supabase.table("tasks").update({
-                                            "start_date": row["Ngày"],
-                                            "khoi_luong": row["Khối lượng (giờ)"],
-                                            "note": row["Ghi chú"],
-                                        }).eq("id", row["ID"]).execute()
+                                            "start_date": r["Ngày"],
+                                            "khoi_luong": r["Khối lượng (giờ)"],
+                                            "note": r["Ghi chú"]
+                                        }).eq("id", r["ID"]).execute()
+
                                     st.success("Đã lưu.")
                                     st.rerun()
+
 
 
 
