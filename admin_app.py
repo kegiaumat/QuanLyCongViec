@@ -1126,8 +1126,14 @@ def admin_app(user):
                                 st.info("Không có công nhật cho user này.")
                                 continue
 
-                            # Chuẩn hóa ngày, giờ — giữ nguyên code cũ
+                            # 🔥 Bỏ các dòng không có start_date để tránh lỗi NaT.strftime
                             df_user["Ngày_dt"] = pd.to_datetime(df_user["start_date"], errors="coerce").dt.date
+                            df_user = df_user[df_user["Ngày_dt"].notna()].copy()
+
+                            if df_user.empty:
+                                st.info("User này không có công nhật hợp lệ (thiếu start_date).")
+                                continue
+
                             rows = []
                             for _, r in df_user.iterrows():
                                 stime, etime, date_part, note_rest = split_times(r.get("note", ""))
