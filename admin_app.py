@@ -1169,8 +1169,7 @@ def admin_app(user):
                                 allow_unsafe_jscode=True,
                                 fit_columns_on_grid_load=True,
                                 height=400,
-                                key=f"cong_grid_{project}_{r['assignee']}_{r['id']}"
-
+                                key=f"cong_grid_{project}_{user_name}".replace(" ", "_")
                             )
 
                             edited = pd.DataFrame(grid["data"])
