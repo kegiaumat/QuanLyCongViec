@@ -1155,6 +1155,8 @@ def admin_app(user):
                                     "approved": bool(r.get("approved", False)),
                                     "Chọn?": False,
                                 })
+                            # Create dynamic unique grid key to force rerender each click
+                            grid_key = f"grid_{user_name}_{time.time()}".replace(" ", "_")
 
                             df_display = pd.DataFrame(rows).sort_values("Ngày")
 
