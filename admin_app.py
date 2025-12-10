@@ -1182,10 +1182,9 @@ def admin_app(user):
                                 allow_unsafe_jscode=True,
                                 fit_columns_on_grid_load=True,
                                 height=400,
-                                unique_key = f"{user_name}_{time.time()}".replace(" ", "_")  
-                                key=f"grid_{unique_key}"
-
+                                key=grid_key
                             )
+
 
                             edited = pd.DataFrame(grid["data"])
                             selected = edited[edited["Chọn?"] == True]
