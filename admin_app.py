@@ -1174,7 +1174,7 @@ def admin_app(user):
                                     df_users["display_name"] == user_name, "username"
                                 ].iloc[0]
 
-                                grid_key = f"cong_grid_{project}_{username_real}".replace(" ", "_")
+                                grid_key = f"cong_grid_{project}_{username_real}_{int(time.time()*1000)}"
 
                                 # ---------------- CẤU HÌNH AG-GRID ----------------
                                 gb = GridOptionsBuilder.from_dataframe(df_display)
