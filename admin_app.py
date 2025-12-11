@@ -1139,18 +1139,26 @@ def admin_app(user):
                     # 4. HIỂN THỊ THEO TỪNG USER (AG-Grid + Tabs = Stable)
                     # ============================
 
-                    df_cong_all["assignee_display"] = (
-                        df_cong_all["assignee"].map(user_map).fillna(df_cong_all["assignee"])
-                    )
-                    task_options = sorted(df_cong_all["task"].dropna().unique().tolist())
+                    # Danh sách user
                     user_list = sorted(df_cong_all["assignee_display"].unique())
+
+                    # Lưu tab đang chọn
                     if "current_tab" not in st.session_state:
-                        st.session_state["current_tab"] = 0
-                    
-                    tabs = st.tabs(user_list)
+                        st.session_state.current_tab = 0
+
+                    def select_tab(i):
+                        st.session_state.current_tab = i
+
+                    # Tạo tabs có callback
+                    tabs = []
+                    for i, name in enumerate(user_list):
+                        tabs.append(st.tab(name, on_click=select_tab, args=(i,)))
+
 
                     for i, user_display in enumerate(user_list):
-                        with tabs[st.session_state["current_tab"] if i == st.session_state["current_tab"] else i]:
+                        with tabs[i]:
+                            if i != st.session_state.current_tab:
+                                continue   # chỉ render tab được chọn
 
 
                             df_user = df_cong_all[df_cong_all["assignee_display"] == user_display].copy()
@@ -1240,7 +1248,7 @@ def admin_app(user):
                                 data_return_mode=DataReturnMode.AS_INPUT,
                                 allow_unsafe_jscode=True,
                                 fit_columns_on_grid_load=True,
-                                key=f"grid_{username_real}",           # ✅ GIỮ KEY CỐ ĐỊNH
+                                key=f"grid_{username_real}_{year_filter}_{q_name}",           # ✅ GIỮ KEY CỐ ĐỊNH
                                 height=400,
                             )
 
