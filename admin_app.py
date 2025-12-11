@@ -1193,8 +1193,7 @@ def admin_app(user):
                                 gridOptions=grid_options,
                                 key=grid_key,
                                 update_mode=GridUpdateMode.NO_UPDATE,     # 👈 không rerun khi sửa ô
-                                data_return_mode=DataReturnMode.NONE
-
+                                data_return_mode=DataReturnMode.FILTERED,   # 👈 FIX
 
                                 reload_data=False,
                                 allow_unsafe_jscode=True,
