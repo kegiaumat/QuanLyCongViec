@@ -1192,7 +1192,7 @@ def admin_app(user):
                             gb = GridOptionsBuilder.from_dataframe(df_display)
                             gb.configure_default_column(editable=True)
                             gb.configure_column("ID", hide=True)
-                            gb.configure_column("approved", hide=True)
+                            gb.configure_column("approved", editable=False, hide=False, visible=False)
 
                             # TÔ MÀU DÒNG ĐÃ DUYỆT
                             row_style = JsCode("""
