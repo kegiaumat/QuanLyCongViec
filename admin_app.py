@@ -1210,7 +1210,7 @@ def admin_app(user):
                             grid = AgGrid(
                                 df_display,
                                 gridOptions=gridOptions,
-                                update_mode=GridUpdateMode.MODEL_CHANGED,  // không rerun khi edit
+                                update_mode=GridUpdateMode.MODEL_CHANGED,  # không rerun khi edit
                                 data_return_mode=DataReturnMode.AS_INPUT,
                                 allow_unsafe_jscode=True,
                                 fit_columns_on_grid_load=True,
