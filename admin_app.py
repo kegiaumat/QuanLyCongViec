@@ -1134,40 +1134,32 @@ def admin_app(user):
 
                     # ============================
                     # ============================
-                    # 4. HIỂN THỊ THEO TỪNG USER (Handsontable)
+                    # 4. HIỂN THỊ THEO TỪNG USER (AG-Grid + Tabs Stable)
                     # ============================
-                    # 4. HIỂN THỊ THEO TỪNG USER (AG-Grid + Tabs = Stable)
-                    # ============================
+
+                    # Danh sách công việc (dropdown)
+                    task_options = sorted(df_cong_all["task"].dropna().unique().tolist())
 
                     # Danh sách user
                     user_list = sorted(df_cong_all["assignee_display"].unique())
 
-                    # Lưu tab đang chọn
+                    # Khởi tạo tab mặc định
                     if "current_tab" not in st.session_state:
                         st.session_state.current_tab = 0
 
-                    def select_tab(i):
-                        st.session_state.current_tab = i
-
-                    # Tạo tabs có callback
-                    tabs = []
-                    for i, name in enumerate(user_list):
-                        tabs.append(st.tab(name, on_click=select_tab, args=(i,)))
-
+                    tabs = st.tabs(user_list)
 
                     for i, user_display in enumerate(user_list):
                         with tabs[i]:
-                            if i != st.session_state.current_tab:
-                                continue   # chỉ render tab được chọn
 
+                            # 🔥 Lưu tab đang mở tránh bị nhảy tab
+                            st.session_state.current_tab = i
 
                             df_user = df_cong_all[df_cong_all["assignee_display"] == user_display].copy()
-
                             if df_user.empty:
                                 st.info("User này không có công nhật trong quý.")
                                 continue
 
-                            df_user = df_user.copy()
                             df_user["Ngày"] = df_user["Ngày_dt"].astype(str)
 
                             # Tách giờ từ note
@@ -1194,30 +1186,24 @@ def admin_app(user):
 
                             df_display = pd.DataFrame(rows)
 
-                            # Lấy username thật
                             username_real = df_users.loc[
                                 df_users["display_name"] == user_display, "username"
                             ].iloc[0]
 
                             grid_key = f"grid_cong_{username_real}_{year_filter}_{q_name}"
 
-                            gb = GridOptionsBuilder.from_dataframe(df_display)
+                            # ============================
+                            # CONFIG AG-GRID
+                            # ============================
 
-                            # Cho phép sửa tất cả cột mặc định
+                            gb = GridOptionsBuilder.from_dataframe(df_display)
                             gb.configure_default_column(editable=True)
 
-                            # ẨN HOÀN TOÀN CỘT ID
+                            # Ẩn ID + approved
                             gb.configure_column("ID", hide=True)
+                            gb.configure_column("approved", hide=True, editable=False)
 
-                            # Ẩn hẳn cột approved
-                            gb.configure_column(
-                                "approved",
-                                editable=False,
-                                hide=True     # 👈 chỉ cần hide=True là được
-                            )
-
-
-                            # CỘT “Công việc” = SELECT BOX
+                            # Dropdown công việc
                             gb.configure_column(
                                 "Công việc",
                                 editable=True,
@@ -1225,7 +1211,7 @@ def admin_app(user):
                                 cellEditorParams={"values": task_options}
                             )
 
-                            # TÔ MÀU DÒNG ĐÃ DUYỆT
+                            # Tô màu dòng đã duyệt
                             row_style = JsCode("""
                                 function(params) {
                                     if (params.data.approved === true) {
@@ -1235,77 +1221,73 @@ def admin_app(user):
                                 }
                             """)
 
-                            gridOptions = gb.build()
-                            gridOptions["getRowStyle"] = row_style
+                            grid_options = gb.build()
+                            grid_options["getRowStyle"] = row_style
 
-                            # Lưu TAB đang chọn (để không bị nhảy tab sau rerun)
-                            st.session_state["current_tab"] = i
-
+                            # Hiển thị AG-Grid — KHÔNG rerun khi edit
                             grid = AgGrid(
                                 df_display,
-                                gridOptions=gridOptions,
-                                update_mode=GridUpdateMode.MANUAL,     # ✅ KHÔNG rerun khi edit
+                                gridOptions=grid_options,
+                                update_mode=GridUpdateMode.NO_UPDATE,        # 🔥 KHÔNG rerun khi edit
                                 data_return_mode=DataReturnMode.AS_INPUT,
                                 allow_unsafe_jscode=True,
                                 fit_columns_on_grid_load=True,
-                                key=f"grid_{username_real}_{year_filter}_{q_name}",           # ✅ GIỮ KEY CỐ ĐỊNH
+                                key=grid_key,
                                 height=400,
                             )
-
 
                             edited = pd.DataFrame(grid["data"])
                             selected = edited[edited["Chọn?"] == True]
 
                             c1, c2, c3 = st.columns([1, 1, 1])
 
-                            # ===== XÓA =====
+                            # ============================
+                            # XÓA
+                            # ============================
                             if c1.button("🗑 Xóa", key=f"xoa_{username_real}_{year_filter}_{q_name}"):
                                 for _, r in selected.iterrows():
                                     supabase.table("tasks").delete().eq("id", r["ID"]).execute()
-                                st.cache_data.clear()     # <<< THÊM DÒNG NÀY
-                                st.success("Đã xóa.")
-                                st.session_state["current_tab"] = i
 
+                                st.cache_data.clear()
+                                st.session_state.current_tab = i
+                                st.success("Đã xóa.")
                                 st.rerun()
 
-                            # ===== DUYỆT / BỎ DUYỆT =====
-                            # ===== DUYỆT / BỎ DUYỆT =====
+                            # ============================
+                            # DUYỆT / BỎ DUYỆT
+                            # ============================
                             any_approved = bool(len(selected) and selected["approved"].any())
                             label = "❌ Bỏ duyệt" if any_approved else "✔ Duyệt"
 
                             if c2.button(label, key=f"duyet_{username_real}_{year_filter}_{q_name}"):
 
                                 new_val = not any_approved
-
-                                # Cập nhật DB
                                 for _, r in selected.iterrows():
                                     supabase.table("tasks").update({"approved": new_val}).eq("id", r["ID"]).execute()
 
-
-                                # Lưu trạng thái để update màu sau rerun
                                 st.cache_data.clear()
-
+                                st.session_state.current_tab = i
                                 st.success("Đã cập nhật trạng thái duyệt.")
-                                st.session_state["current_tab"] = i
-
                                 st.rerun()
 
-
-
-                            # ===== LƯU =====
+                            # ============================
+                            # LƯU
+                            # ============================
                             if c3.button("💾 Lưu", key=f"luu_{username_real}_{year_filter}_{q_name}"):
+
                                 for _, r in edited.iterrows():
                                     supabase.table("tasks").update({
                                         "start_date": r["Ngày"],
                                         "khoi_luong": r["Khối lượng (giờ)"],
                                         "note": r["Ghi chú"],
+                                        "task": r["Công việc"]
                                     }).eq("id", r["ID"]).execute()
-                                st.cache_data.clear()     # <<< THÊM DÒNG NÀY
 
+                                st.cache_data.clear()
+                                st.session_state.current_tab = i
                                 st.success("Đã lưu chỉnh sửa.")
-                                st.session_state["current_tab"] = i
-
                                 st.rerun()
+
 
 
 
