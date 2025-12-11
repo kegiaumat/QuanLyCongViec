@@ -1094,9 +1094,19 @@ def admin_app(user):
                     (df_cong_all["Ngày_dt"] <= d_to)
                 ].copy()
 
+                # DEBUG: xem còn bao nhiêu dòng sau khi lọc
+                st.caption(f"DEBUG: Tổng công nhật sau khi lọc quý = {len(df_cong_all)}")
+                st.dataframe(
+                    df_cong_all[["id", "assignee", "start_date_final", "Ngày_dt", "task"]]
+                    .sort_values("Ngày_dt"),
+                    hide_index=True,
+                    use_container_width=True
+                )
+
                 if df_cong_all.empty:
                     st.warning("⛔ Không có công nhật nào trong quý đã chọn.")
                 else:
+
                     # ============================
                     # 3. TÁCH GIỜ TỪ NOTE
                     # ============================
@@ -1135,9 +1145,13 @@ def admin_app(user):
 
                         with st.expander(f"👤 {user_display}", expanded=False):
 
+                            # DEBUG: xem user này còn bao nhiêu dòng
+                            st.caption(f"DEBUG: {user_display} – số dòng sau lọc = {len(df_user)}")
+
                             if df_user.empty:
                                 st.info("User này không có công nhật trong quý.")
                                 continue
+
 
                             # Dùng lại cột Ngày_dt đã chuẩn hóa
                             df_user["Ngày"] = df_user["Ngày_dt"]
