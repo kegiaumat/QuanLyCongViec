@@ -1135,6 +1135,8 @@ def admin_app(user):
                     # ============================
                     # 4. HIỂN THỊ THEO TỪNG USER
                     # ============================
+                    # 4. HIỂN THỊ THEO TỪNG USER (Handsontable)
+                    # ============================
 
                     # mapping assignee -> tên hiển thị
                     df_cong_all["assignee_display"] = (
@@ -1157,73 +1159,94 @@ def admin_app(user):
                             df_user = df_user.copy()
                             df_user["Ngày"] = df_user["Ngày_dt"]
 
-                            # Lọc lại lần nữa cho chắc (bỏ dòng thiếu ngày)
+                            # Bỏ dòng thiếu ngày
                             df_user = df_user[df_user["Ngày"].notna()].copy()
                             if df_user.empty:
                                 st.info("Không còn dòng hợp lệ sau chuẩn hoá ngày.")
                                 continue
 
-                            # Chuẩn dataframe để hiển thị
-                            df_display = df_user[["id", "Ngày", "task", "khoi_luong", "note"]].copy()
-                            df_display.rename(
-                                columns={
-                                    "id": "ID",
-                                    "task": "Công việc",
-                                    "khoi_luong": "Khối lượng (giờ)",
-                                    "note": "Ghi chú",
-                                },
-                                inplace=True,
-                            )
-                            df_display["Ngày"] = df_display["Ngày"].astype(str)
-                            df_display["Chọn?"] = False
+                            # Chuẩn dữ liệu hiển thị: tách giờ từ note + full ghi chú
+                            rows = []
+                            for _, r in df_user.iterrows():
+                                stime, etime, date_part, note_rest = split_times(r.get("note", ""))
+
+                                if stime and etime:
+                                    full_note = f"⏰ {stime} - {etime} {date_part} {note_rest}".strip()
+                                else:
+                                    full_note = note_rest
+
+                                rows.append({
+                                    "ID": r["id"],
+                                    "Ngày": r["Ngày"].strftime("%Y-%m-%d"),
+                                    "Công việc": r["task"],
+                                    "Khối lượng (giờ)": float(r.get("khoi_luong") or 0),
+                                    "Ghi chú": full_note,
+                                    "Đã duyệt?": bool(r.get("approved", False)),
+                                    "Chọn": False,
+                                })
+
+                            if not rows:
+                                st.info("Không có dòng công nhật để hiển thị.")
+                                continue
+
+                            df_display = pd.DataFrame(rows).sort_values("Ngày").reset_index(drop=True)
 
                             # Lấy username thật để làm key & cập nhật DB
-                            # ---- Tạo key ổn định cho AG-Grid ----
                             username_real = df_users.loc[
                                 df_users["display_name"] == user_display, "username"
                             ].iloc[0]
 
-                            grid_key = f"congnhat_grid_{username_real}"    # ❤️ key cố định – KHÔNG phụ thuộc năm/quý/project
+                            # ========== HIỂN THỊ HANDSONTABLE ==========
 
-                            gb = GridOptionsBuilder.from_dataframe(df_display)
-                            gb.configure_default_column(editable=True)
-                            gb.configure_column("Chọn?", editable=True)
-
-                            gridOptions = gb.build()
-
-                            grid = AgGrid(
+                            edited = st.data_editor(
                                 df_display,
-                                gridOptions=gridOptions,
-                                update_mode=GridUpdateMode.NO_UPDATE,
-                                data_return_mode=DataReturnMode.AS_INPUT,
-                                allow_unsafe_jscode=True,
-                                fit_columns_on_grid_load=True,
-                                key=grid_key,           # ✔ key không đổi → Grid không bị “mù”
-                                height=400,
+                                use_container_width=True,
+                                hide_index=True,
+                                key=f"htbl_congnhat_{username_real}_{year_filter}_{q_name}",
+                                column_config={
+                                    "ID": st.column_config.NumberColumn("ID", disabled=True),
+                                    "Ngày": st.column_config.TextColumn("Ngày (YYYY-MM-DD)"),
+                                    "Công việc": st.column_config.TextColumn("Công việc", disabled=True),
+                                    "Khối lượng (giờ)": st.column_config.NumberColumn("Khối lượng (giờ)", step=0.25),
+                                    "Ghi chú": st.column_config.TextColumn("Ghi chú"),
+                                    "Đã duyệt?": st.column_config.CheckboxColumn("Đã duyệt?", disabled=True),
+                                    "Chọn": st.column_config.CheckboxColumn("Chọn"),
+                                }
                             )
 
-
-
-                            edited = pd.DataFrame(grid["data"])
-                            selected = edited[edited["Chọn?"] == True]
+                            # Các dòng được tick chọn
+                            selected = edited[edited["Chọn"] == True]
 
                             c1, c2, c3 = st.columns([1, 1, 1])
 
-                            # XÓA DÒNG
+                            # ===== XÓA DÒNG =====
                             if c1.button("🗑 Xóa dòng đã chọn", key=f"del_{username_real}_{year_filter}_{q_name}"):
-                                for _, r in selected.iterrows():
-                                    supabase.table("tasks").delete().eq("id", r["ID"]).execute()
-                                st.success("Đã xóa.")
-                                st.rerun()
+                                if selected.empty:
+                                    st.warning("Chưa chọn dòng nào để xoá.")
+                                else:
+                                    for _, r in selected.iterrows():
+                                        supabase.table("tasks").delete().eq("id", r["ID"]).execute()
+                                    st.success("Đã xóa.")
+                                    st.rerun()
 
-                            # DUYỆT / BỎ DUYỆT
-                            any_approved = False  # block đơn giản này tạm thời chưa dùng cột approved
-                            label = "✔ Duyệt"  # nếu cần duyệt thì sau thêm cột approved lại
+                            # ===== DUYỆT / BỎ DUYỆT =====
+                            # Nếu trong các dòng chọn có ít nhất 1 dòng đã duyệt → nút sẽ BỎ DUYỆT
+                            any_approved = bool(len(selected) and selected["Đã duyệt?"].any())
+                            label = "❌ Bỏ duyệt" if any_approved else "✔ Duyệt"
 
-                            if c2.button(label, key=f"app_{username_real}_{year_filter}_{q_name}"):
-                                st.info("Block đơn giản này chưa xử lý cột 'approved'. Khi bảng hiển thị ổn mình thêm sau.")
+                            if c2.button(label, key=f"approve_{username_real}_{year_filter}_{q_name}"):
+                                if selected.empty:
+                                    st.warning("Chưa chọn dòng nào.")
+                                else:
+                                    new_val = not any_approved
+                                    for _, r in selected.iterrows():
+                                        supabase.table("tasks").update(
+                                            {"approved": new_val}
+                                        ).eq("id", r["ID"]).execute()
+                                    st.success("Đã cập nhật trạng thái duyệt.")
+                                    st.rerun()
 
-                            # LƯU CHỈNH SỬA
+                            # ===== LƯU CHỈNH SỬA =====
                             if c3.button("💾 Lưu công nhật", key=f"save_{username_real}_{year_filter}_{q_name}"):
                                 for _, r in edited.iterrows():
                                     supabase.table("tasks").update({
@@ -1231,10 +1254,8 @@ def admin_app(user):
                                         "khoi_luong": r["Khối lượng (giờ)"],
                                         "note": r["Ghi chú"],
                                     }).eq("id", r["ID"]).execute()
-                                st.success("Đã lưu.")
+                                st.success("Đã lưu các chỉnh sửa.")
                                 st.rerun()
-
-
 
 
 
