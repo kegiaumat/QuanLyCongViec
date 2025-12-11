@@ -1136,38 +1136,33 @@ def admin_app(user):
                     # ============================
                     # 4. HIỂN THỊ THEO TỪNG USER (Handsontable)
                     # ============================
-                    # 4. HIỂN THỊ THEO TỪNG USER (Handsontable)
+                    # 4. HIỂN THỊ THEO TỪNG USER (Handsontable ổn định)
                     # ============================
 
-                    df_cong_all["assignee_display"] = (
-                        df_cong_all["assignee"].map(user_map).fillna(df_cong_all["assignee"])
-                    )
+                    df_cong_all["assignee_display"] = df_cong_all["assignee"].map(user_map).fillna(df_cong_all["assignee"])
 
-                    # CSS tô màu cho hàng đã duyệt
-                    st.markdown("""
-                    <style>
-                    td[data-approved="true"] {
-                        background-color: #FFF4C2 !important;
-                    }
-                    </style>
-                    """, unsafe_allow_html=True)
+                    user_list = sorted(df_cong_all["assignee_display"].unique())
 
-                    for user_display in sorted(df_cong_all["assignee_display"].unique()):
-                        df_user = df_cong_all[df_cong_all["assignee_display"] == user_display].copy()
+                    tabs = st.tabs(user_list)
 
-                        with st.expander(f"👤 {user_display}", expanded=False):
+                    for i, user_display in enumerate(user_list):
+                        with tabs[i]:
+
+                            df_user = df_cong_all[df_cong_all["assignee_display"] == user_display].copy()
 
                             if df_user.empty:
                                 st.info("User này không có công nhật trong quý.")
                                 continue
 
-                            df_user = df_user.copy()
                             df_user["Ngày"] = df_user["Ngày_dt"].astype(str)
                             df_user["Chọn"] = False
 
-                            # Chuẩn hoá ghi chú
+                            # ICON duyệt
+                            df_user["Duyệt"] = df_user["approved"].apply(lambda x: "✔️" if x else "—")
+
                             rows = []
                             for _, r in df_user.iterrows():
+
                                 stime, etime, date_part, note_rest = split_times(r.get("note", ""))
 
                                 if stime and etime:
@@ -1181,57 +1176,53 @@ def admin_app(user):
                                     "Công việc": r["task"],
                                     "Khối lượng (giờ)": float(r.get("khoi_luong") or 0),
                                     "Ghi chú": full_note,
-                                    "approved": bool(r.get("approved", False)),   # sử dụng để tô màu
+                                    "Duyệt": "✔️" if r["approved"] else "—",
+                                    "approved": r["approved"],
                                     "Chọn": False,
                                 })
 
-                            df_display = pd.DataFrame(rows).reset_index(drop=True)
+                            df_display = pd.DataFrame(rows)
 
-                            # Thêm HTML attribute cho màu
-                            df_display_html = df_display.copy()
-                            df_display_html["approved_attr"] = df_display_html["approved"].apply(lambda x: "true" if x else "false")
-
-                            # Hiển thị bảng (dùng st.data_editor)
                             edited = st.data_editor(
                                 df_display.drop(columns=["ID", "approved"]),
                                 use_container_width=True,
                                 hide_index=True,
-                                key=f"htbl_congnhat_{user_display}_{year_filter}_{q_name}",
+                                key=f"htbl_user_{user_display}_{year_filter}_{q_name}",
                                 column_config={
                                     "Ngày": st.column_config.TextColumn("Ngày"),
                                     "Công việc": st.column_config.TextColumn("Công việc", disabled=True),
                                     "Khối lượng (giờ)": st.column_config.NumberColumn("Khối lượng (giờ)", step=0.25),
                                     "Ghi chú": st.column_config.TextColumn("Ghi chú"),
                                     "Chọn": st.column_config.CheckboxColumn("Chọn"),
+                                    "Duyệt": st.column_config.TextColumn("Duyệt", disabled=True),
                                 }
                             )
 
-                            # Gộp lại để lấy ID + approved
                             edited_full = edited.join(df_display[["ID", "approved"]])
 
                             selected = edited_full[edited_full["Chọn"] == True]
 
                             c1, c2, c3 = st.columns([1, 1, 1])
 
-                            # =========== XÓA ===========
-                            if c1.button("🗑 Xóa dòng đã chọn", key=f"xoa_{user_display}_{year_filter}_{q_name}"):
+                            # XÓA
+                            if c1.button("🗑 Xóa", key=f"xoa_{user_display}_{year_filter}_{q_name}"):
                                 for _, r in selected.iterrows():
                                     supabase.table("tasks").delete().eq("id", r["ID"]).execute()
                                 st.success("Đã xóa.")
                                 st.rerun()
 
-                            # =========== DUYỆT / BỎ DUYỆT ===========
+                            # DUYỆT / BỎ DUYỆT
                             any_approved = bool(len(selected) and selected["approved"].any())
-                            label = "❌ Bỏ duyệt" if any_approved else "✔ Duyệt"
+                            label = "❌ Bỏ duyệt" if any_approved else "✔️ Duyệt"
 
                             if c2.button(label, key=f"duyet_{user_display}_{year_filter}_{q_name}"):
                                 new_val = not any_approved
                                 for _, r in selected.iterrows():
                                     supabase.table("tasks").update({"approved": new_val}).eq("id", r["ID"]).execute()
-                                st.success("Đã cập nhật trạng thái duyệt.")
+                                st.success("Đã cập nhật.")
                                 st.rerun()
 
-                            # =========== LƯU ===========
+                            # LƯU
                             if c3.button("💾 Lưu", key=f"luu_{user_display}_{year_filter}_{q_name}"):
                                 for _, r in edited_full.iterrows():
                                     supabase.table("tasks").update({
