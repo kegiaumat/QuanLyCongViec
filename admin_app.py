@@ -876,6 +876,7 @@ def admin_app(user):
 
                 st.success("✅ Đã giao công nhật")
                 st.session_state.task_rows = [0]
+                st.cache_data.clear()      # 👈 THÊM DÒNG NÀY
                 st.rerun()
 
 
