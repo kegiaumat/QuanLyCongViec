@@ -1203,8 +1203,7 @@ def admin_app(user):
                                 editable=False,
                                 hide=True     # 👈 chỉ cần hide=True là được
                             )
-                            isible=False
-                            )
+
 
                             # CỘT “Công việc” = SELECT BOX
                             gb.configure_column(
