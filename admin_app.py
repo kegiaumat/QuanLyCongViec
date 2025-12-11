@@ -1193,7 +1193,9 @@ def admin_app(user):
                                 gridOptions=grid_options,
                                 key=grid_key,
                                 update_mode=GridUpdateMode.NO_UPDATE,     # 👈 không rerun khi sửa ô
-                                data_return_mode=DataReturnMode.AS_INPUT,
+                                data_return_mode=DataReturnMode.NONE
+
+
                                 reload_data=False,
                                 allow_unsafe_jscode=True,
                                 fit_columns_on_grid_load=True,
