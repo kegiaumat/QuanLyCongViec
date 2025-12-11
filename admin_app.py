@@ -1227,6 +1227,7 @@ def admin_app(user):
                             if c1.button("🗑 Xóa", key=f"xoa_{username_real}_{year_filter}_{q_name}"):
                                 for _, r in selected.iterrows():
                                     supabase.table("tasks").delete().eq("id", r["ID"]).execute()
+                                st.cache_data.clear()     # <<< THÊM DÒNG NÀY
                                 st.success("Đã xóa.")
                                 st.rerun()
 
@@ -1243,11 +1244,11 @@ def admin_app(user):
                                 for _, r in selected.iterrows():
                                     supabase.table("tasks").update({"approved": new_val}).eq("id", r["ID"]).execute()
 
+
                                 # Lưu trạng thái để update màu sau rerun
-                                st.session_state["just_updated_approve"] = True
+                                st.cache_data.clear()
 
                                 st.success("Đã cập nhật trạng thái duyệt.")
-
                                 st.rerun()
 
 
@@ -1260,6 +1261,7 @@ def admin_app(user):
                                         "khoi_luong": r["Khối lượng (giờ)"],
                                         "note": r["Ghi chú"],
                                     }).eq("id", r["ID"]).execute()
+                                st.cache_data.clear()     # <<< THÊM DÒNG NÀY
 
                                 st.success("Đã lưu chỉnh sửa.")
                                 st.rerun()
