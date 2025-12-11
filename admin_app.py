@@ -1145,74 +1145,50 @@ def admin_app(user):
 
                         with st.expander(f"👤 {user_display}", expanded=False):
 
-                            # DEBUG: xem user này còn bao nhiêu dòng
+                            # DEBUG: xem user này có bao nhiêu dòng
                             st.caption(f"DEBUG: {user_display} – số dòng sau lọc = {len(df_user)}")
 
                             if df_user.empty:
                                 st.info("User này không có công nhật trong quý.")
                                 continue
 
-
-                            # Dùng lại cột Ngày_dt đã chuẩn hóa
+                            # Dùng cột Ngày_dt đã chuẩn hoá sẵn
+                            df_user = df_user.copy()
                             df_user["Ngày"] = df_user["Ngày_dt"]
+
+                            # Lọc lại lần nữa cho chắc (bỏ dòng thiếu ngày)
                             df_user = df_user[df_user["Ngày"].notna()].copy()
-
                             if df_user.empty:
-                                st.info("Không còn dòng hợp lệ sau chuẩn hóa ngày.")
+                                st.info("Không còn dòng hợp lệ sau chuẩn hoá ngày.")
                                 continue
 
-                            # Chuẩn dữ liệu hiển thị cho AG-Grid
-                            rows = []
-                            for _, r in df_user.iterrows():
-                                stime, etime, date_part, note_rest = split_times(r.get("note", ""))
-
-                                full_note = ""
-                                if stime and etime:
-                                    full_note = f"⏰ {stime} - {etime} {date_part} {note_rest}".strip()
-                                else:
-                                    full_note = note_rest
-
-                                rows.append({
-                                    "ID": r["id"],
-                                    "Ngày": r["Ngày"].strftime("%Y-%m-%d"),
-                                    "Công việc": r["task"],
-                                    "Giờ bắt đầu": stime,
-                                    "Giờ kết thúc": etime,
-                                    "Khối lượng (giờ)": float(r.get("khoi_luong") or 0),
-                                    "Ghi chú": full_note,
-                                    "approved": bool(r.get("approved", False)),
-                                    "Chọn?": False,
-                                })
-
-                            if not rows:
-                                st.info("Không có dòng công nhật để hiển thị.")
-                                continue
-
-                            df_display = pd.DataFrame(rows).sort_values("Ngày").reset_index(drop=True)
+                            # Chuẩn dataframe để hiển thị
+                            df_display = df_user[["id", "Ngày", "task", "khoi_luong", "note"]].copy()
+                            df_display.rename(
+                                columns={
+                                    "id": "ID",
+                                    "task": "Công việc",
+                                    "khoi_luong": "Khối lượng (giờ)",
+                                    "note": "Ghi chú",
+                                },
+                                inplace=True,
+                            )
+                            df_display["Ngày"] = df_display["Ngày"].astype(str)
+                            df_display["Chọn?"] = False
 
                             # Lấy username thật để làm key & cập nhật DB
                             username_real = df_users.loc[
                                 df_users["display_name"] == user_display, "username"
                             ].iloc[0]
 
-                            grid_key = f"conggrid_{project}_{username_real}_{year_filter}_{q_name}"
+                            grid_key = f"conggrid_simple_{project}_{username_real}_{year_filter}_{q_name}"
 
+                            # Cấu hình cực đơn giản cho AGGrid
                             gb = GridOptionsBuilder.from_dataframe(df_display)
                             gb.configure_default_column(editable=True)
-                            gb.configure_column("approved", hide=True)
                             gb.configure_column("Chọn?", editable=True)
 
-                            row_style = JsCode("""
-                                function(params) {
-                                    if (params.data.approved === true) {
-                                        return {'backgroundColor': '#fff7cc'};
-                                    }
-                                    return null;
-                                }
-                            """)
-
                             gridOptions = gb.build()
-                            gridOptions["getRowStyle"] = row_style
 
                             grid = AgGrid(
                                 df_display,
@@ -1222,7 +1198,7 @@ def admin_app(user):
                                 allow_unsafe_jscode=True,
                                 fit_columns_on_grid_load=True,
                                 key=grid_key,
-                                height=420,
+                                height=400,
                             )
 
                             edited = pd.DataFrame(grid["data"])
@@ -1230,27 +1206,21 @@ def admin_app(user):
 
                             c1, c2, c3 = st.columns([1, 1, 1])
 
-                            # ===== XÓA DÒNG =====
+                            # XÓA DÒNG
                             if c1.button("🗑 Xóa dòng đã chọn", key=f"del_{username_real}_{year_filter}_{q_name}"):
                                 for _, r in selected.iterrows():
                                     supabase.table("tasks").delete().eq("id", r["ID"]).execute()
                                 st.success("Đã xóa.")
                                 st.rerun()
 
-                            # ===== DUYỆT / BỎ DUYỆT =====
-                            any_approved = bool(len(selected) and selected["approved"].any())
-                            label = "❌ Bỏ duyệt" if any_approved else "✔ Duyệt"
+                            # DUYỆT / BỎ DUYỆT
+                            any_approved = False  # block đơn giản này tạm thời chưa dùng cột approved
+                            label = "✔ Duyệt"  # nếu cần duyệt thì sau thêm cột approved lại
 
                             if c2.button(label, key=f"app_{username_real}_{year_filter}_{q_name}"):
-                                new_val = not any_approved
-                                for _, r in selected.iterrows():
-                                    supabase.table("tasks").update(
-                                        {"approved": new_val}
-                                    ).eq("id", r["ID"]).execute()
-                                st.success("Đã cập nhật.")
-                                st.rerun()
+                                st.info("Block đơn giản này chưa xử lý cột 'approved'. Khi bảng hiển thị ổn mình thêm sau.")
 
-                            # ===== LƯU CHỈNH SỬA =====
+                            # LƯU CHỈNH SỬA
                             if c3.button("💾 Lưu công nhật", key=f"save_{username_real}_{year_filter}_{q_name}"):
                                 for _, r in edited.iterrows():
                                     supabase.table("tasks").update({
@@ -1260,6 +1230,7 @@ def admin_app(user):
                                     }).eq("id", r["ID"]).execute()
                                 st.success("Đã lưu.")
                                 st.rerun()
+
 
 
 
