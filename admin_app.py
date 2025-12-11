@@ -1190,6 +1190,7 @@ def admin_app(user):
                             gb.configure_column("Chọn?", editable=True)
 
                             gridOptions = gb.build()
+                            st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
 
                             grid = AgGrid(
                                 df_display,
