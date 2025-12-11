@@ -1238,8 +1238,21 @@ def admin_app(user):
                                 new_val = not any_approved
                                 for _, r in selected.iterrows():
                                     supabase.table("tasks").update({"approved": new_val}).eq("id", r["ID"]).execute()
+                                    # Cập nhật vào dataframe nội bộ để UI đổi màu ngay
+                                    df_display.loc[df_display["ID"] == r["ID"], "approved"] = new_val
+
                                 st.success("Đã cập nhật.")
-                                st.rerun()
+
+                                # Cập nhật lại grid data ngay lập tức
+                                AgGrid(
+                                    df_display,
+                                    gridOptions=gridOptions,
+                                    key=grid_key,
+                                    allow_unsafe_jscode=True,
+                                    update_mode=GridUpdateMode.MODEL_CHANGED,
+                                    data_return_mode=DataReturnMode.AS_INPUT,
+                                )
+
 
                             # ===== LƯU =====
                             if c3.button("💾 Lưu", key=f"luu_{username_real}_{year_filter}_{q_name}"):
