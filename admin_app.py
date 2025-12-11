@@ -808,7 +808,6 @@ def admin_app(user):
 
         # ========== FORM GIAO VIỆC ==========
         if proj_type == "public":
-            # -------- Form mới cho dự án public (công nhật) --------
             st.markdown("### ➕ Giao công nhật (Public)")
 
             if "task_rows" not in st.session_state:
@@ -823,7 +822,6 @@ def admin_app(user):
 
             for i, _ in enumerate(st.session_state.task_rows):
                 c1, c2, c3, c4, c5 = st.columns([2,2,2,2,2])
-                
 
                 with c1:
                     task_choice = st.selectbox(
@@ -835,13 +833,9 @@ def admin_app(user):
                 with c3:
                     start_time = st.time_input("", datetime.time(8, 0), key=f"pub_start_time_{i}", label_visibility="collapsed")
                 with c4:
-                    end_date = st.date_input("", key=f"pub_end_date_{i}", value=start_date,
-                                             label_visibility="collapsed")
+                    end_date = st.date_input("", key=f"pub_end_date_{i}", value=start_date, label_visibility="collapsed")
                 with c5:
-                    # Đảm bảo sử dụng datetime.time(17, 0) thay vì pd.to_datetime("17:00").time()
-                    end_time = st.time_input("", datetime.time(17, 0),  # Đã thay đổi đây
-                                             key=f"pub_end_time_{i}", label_visibility="collapsed")
-
+                    end_time = st.time_input("", datetime.time(17, 0), key=f"pub_end_time_{i}", label_visibility="collapsed")
 
             st.button("➕ Thêm dòng", key="pub_add_row",
                       on_click=lambda: st.session_state.task_rows.append(len(st.session_state.task_rows)))
@@ -853,28 +847,32 @@ def admin_app(user):
                     task = st.session_state.get(f"pub_task_{i}")
                     if not task:
                         continue
+
                     s_date = st.session_state.get(f"pub_start_date_{i}")
                     e_date = st.session_state.get(f"pub_end_date_{i}")
                     s_time = st.session_state.get(f"pub_start_time_{i}")
                     e_time = st.session_state.get(f"pub_end_time_{i}")
                     total_hours = calc_hours(s_date, e_date, s_time, e_time)
 
-                    # ✅ Ghi chú chuẩn định dạng, dùng biến pub_note
-                    note_txt = f"⏰ {s_time.strftime('%H:%M')} - {e_time.strftime('%H:%M')} ({s_date} - {e_date})"
+                    # CHUẨN HÓA start_date VÀO ĐÚNG ĐỊNH DẠNG YYYY-MM-DD
+                    start_date_str = s_date.strftime("%Y-%m-%d") if s_date else None
+
+                    # GHI CHÚ
+                    note_txt = f"⏰ {s_time.strftime('%H:%M')} - {e_time.strftime('%H:%M')} ({s_date} → {e_date})"
                     if pub_note:
                         note_txt += f" {pub_note}"
 
+                    # INSERT TASK
                     supabase.table("tasks").insert({
                         "project": project,
                         "task": task,
                         "assignee": assignee,
-                        "start_date": s_date,
+                        "start_date": start_date_str,   # ⭐ GHI CHÍNH XÁC NGÀY BẮT ĐẦU
                         "khoi_luong": total_hours,
                         "note": note_txt,
                         "progress": 0,
                         "approved": False
                     }).execute()
-
 
                 st.success("✅ Đã giao công nhật")
                 st.session_state.task_rows = [0]
