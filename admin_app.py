@@ -1183,7 +1183,7 @@ def admin_app(user):
                                 df_users["display_name"] == user_display, "username"
                             ].iloc[0]
 
-                            grid_key = f"conggrid_simple_{project}_{username_real}_{year_filter}_{q_name}"
+                            grid_key = f"congnhat_grid_{username_real}"    # ❤️ key cố định – KHÔNG phụ thuộc năm/quý/project
 
                             gb = GridOptionsBuilder.from_dataframe(df_display)
                             gb.configure_default_column(editable=True)
@@ -1198,7 +1198,7 @@ def admin_app(user):
                                 data_return_mode=DataReturnMode.AS_INPUT,
                                 allow_unsafe_jscode=True,
                                 fit_columns_on_grid_load=True,
-                                key=grid_key,           # 🔥 dùng key cố định
+                                key=grid_key,           # ✔ key không đổi → Grid không bị “mù”
                                 height=400,
                             )
 
