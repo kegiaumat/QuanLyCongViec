@@ -1190,9 +1190,28 @@ def admin_app(user):
                             grid_key = f"grid_cong_{username_real}_{year_filter}_{q_name}"
 
                             gb = GridOptionsBuilder.from_dataframe(df_display)
+
+                            # Cho phép sửa tất cả cột mặc định
                             gb.configure_default_column(editable=True)
+
+                            # ẨN HOÀN TOÀN CỘT ID
                             gb.configure_column("ID", hide=True)
-                            gb.configure_column("approved", editable=False, hide=False, visible=False)
+
+                            # ẨN CỘT APPROVED ĐÚNG CÁCH
+                            gb.configure_column(
+                                "approved",
+                                editable=False,
+                                hide=False,
+                                visible=False
+                            )
+
+                            # CỘT “Công việc” = SELECT BOX
+                            gb.configure_column(
+                                "Công việc",
+                                editable=True,
+                                cellEditor="agSelectCellEditor",
+                                cellEditorParams={"values": task_options}
+                            )
 
                             # TÔ MÀU DÒNG ĐÃ DUYỆT
                             row_style = JsCode("""
