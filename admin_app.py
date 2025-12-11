@@ -9,6 +9,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode, DataRe
 import io  # đảm bảo có import này ở đầu file
 import re
 import time
+import uuid   # 👈 thêm dòng này
 
 # ====== CACHE DỮ LIỆU TỪ SUPABASE ======
 @st.cache_data(ttl=15)
