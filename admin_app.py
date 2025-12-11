@@ -1178,19 +1178,18 @@ def admin_app(user):
                             df_display["Chọn?"] = False
 
                             # Lấy username thật để làm key & cập nhật DB
+                            # ---- Tạo key ổn định cho AG-Grid ----
                             username_real = df_users.loc[
                                 df_users["display_name"] == user_display, "username"
                             ].iloc[0]
 
-                            grid_key = f"conggrid_simple_{project}_{username_real}_{year_filter}_{q_name}_{uuid.uuid4().hex}"
+                            grid_key = f"conggrid_simple_{project}_{username_real}_{year_filter}_{q_name}"
 
-                            # Cấu hình cực đơn giản cho AGGrid
                             gb = GridOptionsBuilder.from_dataframe(df_display)
                             gb.configure_default_column(editable=True)
                             gb.configure_column("Chọn?", editable=True)
 
                             gridOptions = gb.build()
-                            st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
 
                             grid = AgGrid(
                                 df_display,
@@ -1199,10 +1198,10 @@ def admin_app(user):
                                 data_return_mode=DataReturnMode.AS_INPUT,
                                 allow_unsafe_jscode=True,
                                 fit_columns_on_grid_load=True,
-                                reload_data=True,              # 👈 thêm dòng này
-                                key=grid_key,
+                                key=grid_key,           # 🔥 dùng key cố định
                                 height=400,
                             )
+
 
 
                             edited = pd.DataFrame(grid["data"])
