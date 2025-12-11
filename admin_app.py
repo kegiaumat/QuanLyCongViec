@@ -1133,12 +1133,10 @@ def admin_app(user):
                         return stime, etime, date_part, note_rest
 
                     # ============================
-                    # 4. HIỂN THỊ THEO TỪNG USER
                     # ============================
                     # 4. HIỂN THỊ THEO TỪNG USER (Handsontable)
                     # ============================
 
-                    # mapping assignee -> tên hiển thị
                     df_cong_all["assignee_display"] = (
                         df_cong_all["assignee"].map(user_map).fillna(df_cong_all["assignee"])
                     )
@@ -1148,26 +1146,19 @@ def admin_app(user):
 
                         with st.expander(f"👤 {user_display}", expanded=False):
 
-                            # DEBUG: xem user này có bao nhiêu dòng
-                            st.caption(f"DEBUG: {user_display} – số dòng sau lọc = {len(df_user)}")
-
                             if df_user.empty:
                                 st.info("User này không có công nhật trong quý.")
                                 continue
 
-                            # Dùng cột Ngày_dt đã chuẩn hoá sẵn
+                            # Chuẩn dữ liệu hiển thị
                             df_user = df_user.copy()
-                            df_user["Ngày"] = df_user["Ngày_dt"]
+                            df_user["Ngày"] = df_user["Ngày_dt"].astype(str)
+                            df_user["Chọn"] = False
 
-                            # Bỏ dòng thiếu ngày
-                            df_user = df_user[df_user["Ngày"].notna()].copy()
-                            if df_user.empty:
-                                st.info("Không còn dòng hợp lệ sau chuẩn hoá ngày.")
-                                continue
-
-                            # Chuẩn dữ liệu hiển thị: tách giờ từ note + full ghi chú
+                            # Tách giờ từ note
                             rows = []
                             for _, r in df_user.iterrows():
+
                                 stime, etime, date_part, note_rest = split_times(r.get("note", ""))
 
                                 if stime and etime:
@@ -1177,61 +1168,63 @@ def admin_app(user):
 
                                 rows.append({
                                     "ID": r["id"],
-                                    "Ngày": r["Ngày"].strftime("%Y-%m-%d"),
+                                    "Ngày": r["Ngày"],
                                     "Công việc": r["task"],
                                     "Khối lượng (giờ)": float(r.get("khoi_luong") or 0),
                                     "Ghi chú": full_note,
-                                    "Đã duyệt?": bool(r.get("approved", False)),
+                                    "approved": bool(r.get("approved", False)),   # ẩn nhưng dùng để tô màu
                                     "Chọn": False,
                                 })
 
-                            if not rows:
-                                st.info("Không có dòng công nhật để hiển thị.")
-                                continue
-
                             df_display = pd.DataFrame(rows).sort_values("Ngày").reset_index(drop=True)
 
-                            # Lấy username thật để làm key & cập nhật DB
+                            # Lấy username thật
                             username_real = df_users.loc[
                                 df_users["display_name"] == user_display, "username"
                             ].iloc[0]
 
-                            # ========== HIỂN THỊ HANDSONTABLE ==========
+                            # Tô màu các dòng đã duyệt
+                            def highlight_approved(row):
+                                if row["approved"] is True:
+                                    return ['background-color: #FFF4C2'] * len(row)
+                                return [''] * len(row)
 
+                            styled_df = df_display.style.apply(highlight_approved, axis=1)
+
+                            # Hiển thị Handsontable (ẩn ID & approved)
                             edited = st.data_editor(
-                                df_display,
+                                df_display.drop(columns=["ID", "approved"]),   # 👈 ẨN 2 CỘT
                                 use_container_width=True,
                                 hide_index=True,
                                 key=f"htbl_congnhat_{username_real}_{year_filter}_{q_name}",
                                 column_config={
-                                    "ID": st.column_config.NumberColumn("ID", disabled=True),
-                                    "Ngày": st.column_config.TextColumn("Ngày (YYYY-MM-DD)"),
+                                    "Ngày": st.column_config.TextColumn("Ngày"),
                                     "Công việc": st.column_config.TextColumn("Công việc", disabled=True),
                                     "Khối lượng (giờ)": st.column_config.NumberColumn("Khối lượng (giờ)", step=0.25),
                                     "Ghi chú": st.column_config.TextColumn("Ghi chú"),
-                                    "Đã duyệt?": st.column_config.CheckboxColumn("Đã duyệt?", disabled=True),
                                     "Chọn": st.column_config.CheckboxColumn("Chọn"),
                                 }
                             )
 
-                            # Các dòng được tick chọn
-                            selected = edited[edited["Chọn"] == True]
+                            # Gộp 2 dataframe: edited (hiển thị) + df_display (ID + approved)
+                            edited_full = edited.join(df_display[["ID", "approved"]])
+
+                            selected = edited_full[edited_full["Chọn"] == True]
 
                             c1, c2, c3 = st.columns([1, 1, 1])
 
-                            # ===== XÓA DÒNG =====
+                            # ================= XÓA =================
                             if c1.button("🗑 Xóa dòng đã chọn", key=f"del_{username_real}_{year_filter}_{q_name}"):
                                 if selected.empty:
-                                    st.warning("Chưa chọn dòng nào để xoá.")
+                                    st.warning("Chưa chọn dòng nào để xóa.")
                                 else:
                                     for _, r in selected.iterrows():
                                         supabase.table("tasks").delete().eq("id", r["ID"]).execute()
                                     st.success("Đã xóa.")
                                     st.rerun()
 
-                            # ===== DUYỆT / BỎ DUYỆT =====
-                            # Nếu trong các dòng chọn có ít nhất 1 dòng đã duyệt → nút sẽ BỎ DUYỆT
-                            any_approved = bool(len(selected) and selected["Đã duyệt?"].any())
+                            # ================= DUYỆT / BỎ DUYỆT =================
+                            any_approved = bool(len(selected) and selected["approved"].any())
                             label = "❌ Bỏ duyệt" if any_approved else "✔ Duyệt"
 
                             if c2.button(label, key=f"approve_{username_real}_{year_filter}_{q_name}"):
@@ -1243,19 +1236,21 @@ def admin_app(user):
                                         supabase.table("tasks").update(
                                             {"approved": new_val}
                                         ).eq("id", r["ID"]).execute()
-                                    st.success("Đã cập nhật trạng thái duyệt.")
+                                    st.success("Đã cập nhật.")
                                     st.rerun()
 
-                            # ===== LƯU CHỈNH SỬA =====
+                            # ================= LƯU CHỈNH SỬA =================
                             if c3.button("💾 Lưu công nhật", key=f"save_{username_real}_{year_filter}_{q_name}"):
-                                for _, r in edited.iterrows():
+                                for _, r in edited_full.iterrows():
                                     supabase.table("tasks").update({
                                         "start_date": r["Ngày"],
                                         "khoi_luong": r["Khối lượng (giờ)"],
                                         "note": r["Ghi chú"],
                                     }).eq("id", r["ID"]).execute()
+
                                 st.success("Đã lưu các chỉnh sửa.")
                                 st.rerun()
+
 
 
 
