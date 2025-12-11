@@ -1181,7 +1181,7 @@ def admin_app(user):
                                 df_users["display_name"] == user_display, "username"
                             ].iloc[0]
 
-                            grid_key = f"conggrid_simple_{project}_{username_real}_{year_filter}_{q_name}"
+                            grid_key = f"conggrid_simple_{project}_{username_real}_{year_filter}_{q_name}_{uuid.uuid4().hex}"
 
                             # Cấu hình cực đơn giản cho AGGrid
                             gb = GridOptionsBuilder.from_dataframe(df_display)
@@ -1197,9 +1197,11 @@ def admin_app(user):
                                 data_return_mode=DataReturnMode.AS_INPUT,
                                 allow_unsafe_jscode=True,
                                 fit_columns_on_grid_load=True,
+                                reload_data=True,              # 👈 thêm dòng này
                                 key=grid_key,
                                 height=400,
                             )
+
 
                             edited = pd.DataFrame(grid["data"])
                             selected = edited[edited["Chọn?"] == True]
