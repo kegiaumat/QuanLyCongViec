@@ -1144,10 +1144,14 @@ def admin_app(user):
                     )
                     task_options = sorted(df_cong_all["task"].dropna().unique().tolist())
                     user_list = sorted(df_cong_all["assignee_display"].unique())
+                    if "current_tab" not in st.session_state:
+                        st.session_state["current_tab"] = 0
+                    
                     tabs = st.tabs(user_list)
 
                     for i, user_display in enumerate(user_list):
-                        with tabs[i]:
+                        with tabs[st.session_state["current_tab"] if i == st.session_state["current_tab"] else i]:
+
 
                             df_user = df_cong_all[df_cong_all["assignee_display"] == user_display].copy()
 
@@ -1226,16 +1230,20 @@ def admin_app(user):
                             gridOptions = gb.build()
                             gridOptions["getRowStyle"] = row_style
 
+                            # Lưu TAB đang chọn (để không bị nhảy tab sau rerun)
+                            st.session_state["current_tab"] = i
+
                             grid = AgGrid(
                                 df_display,
                                 gridOptions=gridOptions,
-                                update_mode=GridUpdateMode.MODEL_CHANGED,  # không rerun khi edit
+                                update_mode=GridUpdateMode.MANUAL,     # ✅ KHÔNG rerun khi edit
                                 data_return_mode=DataReturnMode.AS_INPUT,
                                 allow_unsafe_jscode=True,
                                 fit_columns_on_grid_load=True,
-                                key=grid_key,
+                                key=f"grid_{username_real}",           # ✅ GIỮ KEY CỐ ĐỊNH
                                 height=400,
                             )
+
 
                             edited = pd.DataFrame(grid["data"])
                             selected = edited[edited["Chọn?"] == True]
@@ -1248,6 +1256,8 @@ def admin_app(user):
                                     supabase.table("tasks").delete().eq("id", r["ID"]).execute()
                                 st.cache_data.clear()     # <<< THÊM DÒNG NÀY
                                 st.success("Đã xóa.")
+                                st.session_state["current_tab"] = i
+
                                 st.rerun()
 
                             # ===== DUYỆT / BỎ DUYỆT =====
@@ -1268,6 +1278,8 @@ def admin_app(user):
                                 st.cache_data.clear()
 
                                 st.success("Đã cập nhật trạng thái duyệt.")
+                                st.session_state["current_tab"] = i
+
                                 st.rerun()
 
 
@@ -1283,6 +1295,8 @@ def admin_app(user):
                                 st.cache_data.clear()     # <<< THÊM DÒNG NÀY
 
                                 st.success("Đã lưu chỉnh sửa.")
+                                st.session_state["current_tab"] = i
+
                                 st.rerun()
 
 
