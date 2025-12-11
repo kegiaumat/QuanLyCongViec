@@ -1142,7 +1142,7 @@ def admin_app(user):
                     df_cong_all["assignee_display"] = (
                         df_cong_all["assignee"].map(user_map).fillna(df_cong_all["assignee"])
                     )
-
+                    task_options = sorted(df_cong_all["task"].dropna().unique().tolist())
                     user_list = sorted(df_cong_all["assignee_display"].unique())
                     tabs = st.tabs(user_list)
 
@@ -1197,12 +1197,13 @@ def admin_app(user):
                             # ẨN HOÀN TOÀN CỘT ID
                             gb.configure_column("ID", hide=True)
 
-                            # ẨN CỘT APPROVED ĐÚNG CÁCH
+                            # Ẩn hẳn cột approved
                             gb.configure_column(
                                 "approved",
                                 editable=False,
-                                hide=False,
-                                visible=False
+                                hide=True     # 👈 chỉ cần hide=True là được
+                            )
+                            isible=False
                             )
 
                             # CỘT “Công việc” = SELECT BOX
