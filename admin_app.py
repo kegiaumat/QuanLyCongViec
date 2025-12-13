@@ -1166,6 +1166,7 @@ def admin_app(user):
                                 })
 
                             df_display = pd.DataFrame(rows)
+                            st.session_state.setdefault("df_cong_origin", {})[(project, username_real)] = df_display.copy()
 
                             # username thật
                             username_real = df_users.loc[
@@ -1277,10 +1278,27 @@ def admin_app(user):
                                         end_time   = None
 
                                     # ===== 2. TÍNH LẠI GIỜ (GỌI HÀM CHUẨN TRONG AUTH) =====
-                                    new_hours = calc_hours(
-                                        start_date, start_date,
-                                        start_time, end_time
-                                    )
+                                    # ===== 2. QUYẾT ĐỊNH KHỐI LƯỢNG =====
+                                    df_origin = st.session_state.get("df_cong_origin", {}).get((project, username_real))
+
+                                    old_hours = 0
+                                    if df_origin is not None:
+                                        old_row = df_origin[df_origin["ID"] == r["ID"]]
+                                        if not old_row.empty:
+                                            old_hours = float(old_row.iloc[0]["Khối lượng (giờ)"] or 0)
+
+                                    new_hours_input = float(r.get("Khối lượng (giờ)", 0) or 0)
+
+                                    if abs(new_hours_input - old_hours) > 0.001:
+                                        # ✅ user đã sửa ô khối lượng
+                                        new_hours = round(new_hours_input, 2)
+                                    else:
+                                        # ❌ user không sửa → tự tính
+                                        new_hours = calc_hours(
+                                            start_date, start_date,
+                                            start_time, end_time
+                                        )
+
 
                                     # ===== 3. XÓA GIỜ CŨ TRONG NOTE =====
                                     note_clean = re.sub(
