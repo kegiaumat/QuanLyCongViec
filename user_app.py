@@ -3,6 +3,9 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 from auth import get_connection, calc_hours
+from supabase import create_client
+from auth import SUPABASE_URL, SUPABASE_SERVICE_KEY
+
 import re
 
 def _load_visible_projects(supabase, username: str) -> pd.DataFrame:
@@ -40,7 +43,7 @@ def user_app(user):
     - Có thể tự thêm công việc trong các dự án Public
     """
     # dùng service role giống admin (read/write công public)
-    supabase = get_connection(service=True)
+    supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
     try:
         username = user[1]
