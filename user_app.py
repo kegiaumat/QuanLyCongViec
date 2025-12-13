@@ -180,7 +180,6 @@ def user_app(user):
                 gb.configure_column("Khối lượng (giờ)", width=120)
                 gb.configure_column("Ghi chú", flex=5)
                 gb.configure_column("Chọn?", width=80)
-                gb.configure_column("Chọn?", hide=True)
 
                 gb.configure_default_column(resizable=True, sortable=True, filter=True)
 
