@@ -388,8 +388,10 @@ def user_app(user):
                         "assignee": username,
                         "khoi_luong": hours,
                         "note": note_txt,
-                        "progress": 0
+                        "progress": 0,
+                        "start_date": str(start_date)   # 👈 BẮT BUỘC
                     }).execute()
+
                     
                     st.success(
                         f"✅ Đã thêm {hours} giờ công cho công việc '{task_name}'"
