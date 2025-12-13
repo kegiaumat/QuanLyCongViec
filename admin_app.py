@@ -1208,11 +1208,11 @@ def admin_app(user):
 
                                 # XÓA
                                 del_click = c1.form_submit_button("🗑 Xóa")
-                                    for _, r in selected_df.iterrows():
-                                        supabase.table("tasks").delete().eq("id", r["ID"]).execute()
-                                    st.success("Đã xóa.")
-                                    st.cache_data.clear()
-                                    st.rerun()
+                                for _, r in selected_df.iterrows():
+                                    supabase.table("tasks").delete().eq("id", r["ID"]).execute()
+                                st.success("Đã xóa.")
+                                st.cache_data.clear()
+                                st.rerun()
 
                                 # DUYỆT / BỎ DUYỆT
                                 any_approved = bool(len(selected_df) and selected_df["approved"].any())
@@ -1220,28 +1220,28 @@ def admin_app(user):
 
                                 approve_click = c2.form_submit_button(label)
 
-                                    new_val = not any_approved
-                                    for _, r in selected_df.iterrows():
-                                        supabase.table("tasks").update(
-                                            {"approved": new_val}
-                                        ).eq("id", r["ID"]).execute()
-                                    st.success("Đã cập nhật.")
-                                    st.cache_data.clear()
-                                    st.rerun()
+                                new_val = not any_approved
+                                for _, r in selected_df.iterrows():
+                                    supabase.table("tasks").update(
+                                        {"approved": new_val}
+                                    ).eq("id", r["ID"]).execute()
+                                st.success("Đã cập nhật.")
+                                st.cache_data.clear()
+                                st.rerun()
 
                                 # LƯU
                                 save_click = c3.form_submit_button("💾 Lưu")
 
-                                    for _, r in edited_df.iterrows():
-                                        supabase.table("tasks").update({
-                                            "start_date": r["Ngày"],
-                                            "task": r["Công việc"],
-                                            "khoi_luong": r["Khối lượng (giờ)"],
-                                            "note": r["Ghi chú"],
-                                        }).eq("id", r["ID"]).execute()
-                                    st.success("Đã lưu.")
-                                    st.cache_data.clear()
-                                    st.rerun()
+                                for _, r in edited_df.iterrows():
+                                    supabase.table("tasks").update({
+                                        "start_date": r["Ngày"],
+                                        "task": r["Công việc"],
+                                        "khoi_luong": r["Khối lượng (giờ)"],
+                                        "note": r["Ghi chú"],
+                                    }).eq("id", r["ID"]).execute()
+                                st.success("Đã lưu.")
+                                st.cache_data.clear()
+                                st.rerun()
 
 
 
