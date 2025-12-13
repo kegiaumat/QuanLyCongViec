@@ -64,7 +64,6 @@ def user_app(user):
         proj_deadline = prow["deadline"]
         proj_type = (prow["project_type"] or "group").strip().lower()
         is_public = True   # ép chạy AG-Grid để test
-        st.info(f"DEBUG project_type = '{proj_type}', is_public = {is_public}")
 
         # ======= Danh sách task của user =======
         data = supabase.table("tasks").select(
