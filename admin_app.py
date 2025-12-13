@@ -1189,12 +1189,13 @@ def admin_app(user):
                             grid_options = gb.build()
                             grid_options["getRowStyle"] = row_style
 
+                            
                             with st.form(f"form_cong_{project}_{username_real}", clear_on_submit=False):
                                 grid = AgGrid(
                                     df_display,
                                     gridOptions=grid_options,
                                     key=grid_key,
-                                    update_mode=GridUpdateMode.MANUAL,   # 🔥 QUAN TRỌNG
+                                    update_mode=GridUpdateMode.MANUAL,
                                     data_return_mode=DataReturnMode.AS_INPUT,
                                     reload_data=False,
                                     allow_unsafe_jscode=True,
@@ -1204,23 +1205,25 @@ def admin_app(user):
 
                                 edited_df   = pd.DataFrame(grid["data"])
                                 selected_df = edited_df[edited_df["Chọn?"] == True]
+
                                 c1, c2, c3 = st.columns(3)
 
-                                # XÓA
-                                del_click = c1.form_submit_button("🗑 Xóa")
+                                del_click     = c1.form_submit_button("🗑 Xóa")
+                                approve_click = c2.form_submit_button(label)
+                                save_click    = c3.form_submit_button("💾 Lưu")
+
+
+                            # ===== XÓA =====
+                            if del_click:
                                 for _, r in selected_df.iterrows():
                                     supabase.table("tasks").delete().eq("id", r["ID"]).execute()
                                 st.success("Đã xóa.")
                                 st.cache_data.clear()
                                 st.rerun()
 
-                                # DUYỆT / BỎ DUYỆT
-                                any_approved = bool(len(selected_df) and selected_df["approved"].any())
-                                label = "❌ Bỏ duyệt" if any_approved else "✔ Duyệt"
-
-                                approve_click = c2.form_submit_button(label)
-
-                                new_val = not any_approved
+                            # ===== DUYỆT / BỎ DUYỆT =====
+                            if approve_click:
+                                new_val = not bool(len(selected_df) and selected_df["approved"].any())
                                 for _, r in selected_df.iterrows():
                                     supabase.table("tasks").update(
                                         {"approved": new_val}
@@ -1229,9 +1232,8 @@ def admin_app(user):
                                 st.cache_data.clear()
                                 st.rerun()
 
-                                # LƯU
-                                save_click = c3.form_submit_button("💾 Lưu")
-
+                            # ===== LƯU =====
+                            if save_click:
                                 for _, r in edited_df.iterrows():
                                     supabase.table("tasks").update({
                                         "start_date": r["Ngày"],
@@ -1242,8 +1244,6 @@ def admin_app(user):
                                 st.success("Đã lưu.")
                                 st.cache_data.clear()
                                 st.rerun()
-
-
 
 
 
