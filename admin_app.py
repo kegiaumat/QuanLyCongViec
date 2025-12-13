@@ -1261,14 +1261,49 @@ def admin_app(user):
                             # ===== LƯU =====
                             if save_click:
                                 for _, r in edited_df.iterrows():
+                                    # ===== 1. LẤY DỮ LIỆU =====
+                                    start_date = pd.to_datetime(r["Ngày"], errors="coerce").date()
+
+                                    start_time_str = r.get("Giờ bắt đầu", "")
+                                    end_time_str   = r.get("Giờ kết thúc", "")
+                                    old_note       = r.get("Ghi chú", "") or ""
+
+                                    # Parse HH:MM -> time
+                                    try:
+                                        start_time = dt.datetime.strptime(start_time_str, "%H:%M").time()
+                                        end_time   = dt.datetime.strptime(end_time_str, "%H:%M").time()
+                                    except:
+                                        start_time = None
+                                        end_time   = None
+
+                                    # ===== 2. TÍNH LẠI GIỜ (GỌI HÀM CHUẨN TRONG AUTH) =====
+                                    new_hours = calc_hours(
+                                        start_date, start_date,
+                                        start_time, end_time
+                                    )
+
+                                    # ===== 3. XÓA GIỜ CŨ TRONG NOTE =====
+                                    note_clean = re.sub(
+                                        r"⏰\s*\d{1,2}:\d{2}(:\d{2})?\s*[-–]\s*\d{1,2}:\d{2}(:\d{2})?",
+                                        "",
+                                        old_note
+                                    ).strip()
+
+                                    # ===== 4. GHÉP GIỜ MỚI =====
+                                    if start_time and end_time:
+                                        new_note = f"⏰ {start_time_str} - {end_time_str} {note_clean}".strip()
+                                    else:
+                                        new_note = note_clean
+
+                                    # ===== 5. UPDATE DB =====
                                     supabase.table("tasks").update({
-                                        "start_date": r["Ngày"],
+                                        "start_date": start_date.strftime("%Y-%m-%d"),
                                         "task": r["Công việc"],
-                                        "khoi_luong": r["Khối lượng (giờ)"],
-                                        "note": r["Ghi chú"],
+                                        "khoi_luong": new_hours,   # ⭐ GIỜ ĐƯỢC TÍNH LẠI
+                                        "note": new_note           # ⭐ NOTE ĐƯỢC CHUẨN HÓA
                                     }).eq("id", r["ID"]).execute()
 
-                                st.success("Đã lưu.")
+                                st.success(f"✅ Đã cập nhật công nhật của **{user_display}**")
                                 st.cache_data.clear()
                                 st.rerun()
 
