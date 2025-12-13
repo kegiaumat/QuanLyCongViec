@@ -39,8 +39,9 @@ def user_app(user):
     - Xem & sửa công việc của mình (khối lượng, tiến độ)
     - Có thể tự thêm công việc trong các dự án Public
     """
-    # st.set_page_config(layout="wide")  # Chỉ nên gọi 1 lần trong app.py
-    supabase = get_connection()
+    # dùng service role giống admin (read/write công public)
+    supabase = get_connection(service=True)
+
     try:
         username = user[1]
         supabase.table("users").update({"last_seen": datetime.utcnow().isoformat(timespec="seconds")}).eq("username", username).execute()
