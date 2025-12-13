@@ -1178,8 +1178,24 @@ def admin_app(user):
 
                             grid_key = f"grid_cong_{project}_{username_real}"
                             gb = GridOptionsBuilder.from_dataframe(df_display)
-                            gb.configure_default_column(editable=True)
-                            
+
+                            # 🔹 CẤU HÌNH CHUNG
+                            gb.configure_default_column(
+                                editable=True,
+                                resizable=True,
+                                sortable=True,
+                                filter=False
+                            )
+
+                            # 🔹 CHỈNH ĐỘ RỘNG TỪNG CỘT
+                            gb.configure_column("Ngày", width=100)
+                            gb.configure_column("Công việc", flex=4)
+                            gb.configure_column("Giờ bắt đầu", width=80)
+                            gb.configure_column("Giờ kết thúc", width=80)
+                            gb.configure_column("Khối lượng (giờ)", width=50)
+                            gb.configure_column("Ghi chú", flex=7)
+                            gb.configure_column("Chọn?", width=80)
+
                             gb.configure_column(
                                 "Giờ bắt đầu",
                                 editable=True,
@@ -1228,8 +1244,11 @@ def admin_app(user):
                                     data_return_mode=DataReturnMode.AS_INPUT,
                                     reload_data=False,
                                     allow_unsafe_jscode=True,
+                                    
+                                    
                                     fit_columns_on_grid_load=True,
                                     height=420,
+                                    width="100%",                    # ⭐ TRÀN KHUNG
                                 )
 
                                 edited_df   = pd.DataFrame(grid["data"])
