@@ -1246,7 +1246,7 @@ def admin_app(user):
                                     allow_unsafe_jscode=True,
                                     
                                     
-                                    fit_columns_on_grid_load=True,
+                                    fit_columns_on_grid_load=False,
                                     height=420,
                                     width="100%",                    # ⭐ TRÀN KHUNG
                                 )
