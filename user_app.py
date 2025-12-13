@@ -179,7 +179,7 @@ def user_app(user):
                 gb.configure_column("Giờ kết thúc", width=110)
                 gb.configure_column("Khối lượng (giờ)", width=120)
                 gb.configure_column("Ghi chú", flex=5)
-                gb.configure_column("Chọn", width=80)
+                gb.configure_column("Chọn?", width=80)
                 gb.configure_column("Chọn?", hide=True)
 
                 gb.configure_default_column(resizable=True, sortable=True, filter=True)
@@ -200,7 +200,7 @@ def user_app(user):
                 gb.configure_column("Khối lượng (giờ)", editable=editable_guard)
 
                 # checkbox chọn xóa: không cho tick nếu đã duyệt
-                gb.configure_column("Chọn", editable=editable_guard)
+                # gb.configure_column("Chọn", editable=editable_guard)
 
                 # ẩn cột approved khỏi UI (nhưng giữ trong data)
                 gb.configure_column("approved", hide=True)
