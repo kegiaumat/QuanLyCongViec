@@ -301,7 +301,7 @@ def user_app(user):
                     blocked = 0
 
                     for i, row in edited.iterrows():
-                        if not row.get("Chọn"):
+                        if not row.get("Chọn?"):
                             continue
 
                         if bool(row.get("approved", False)):
