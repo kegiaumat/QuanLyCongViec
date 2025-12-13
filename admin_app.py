@@ -1206,40 +1206,40 @@ def admin_app(user):
                                 selected_df = edited_df[edited_df["Chọn?"] == True]
                                 c1, c2, c3 = st.columns(3)
 
-                            # XÓA
-                            if c1.button("🗑 Xóa", key=f"xoa_{username_real}_{q_name}"):
-                                for _, r in selected_df.iterrows():
-                                    supabase.table("tasks").delete().eq("id", r["ID"]).execute()
-                                st.success("Đã xóa.")
-                                st.cache_data.clear()
-                                st.rerun()
+                                # XÓA
+                                if c1.button("🗑 Xóa", key=f"xoa_{username_real}_{q_name}"):
+                                    for _, r in selected_df.iterrows():
+                                        supabase.table("tasks").delete().eq("id", r["ID"]).execute()
+                                    st.success("Đã xóa.")
+                                    st.cache_data.clear()
+                                    st.rerun()
 
-                            # DUYỆT / BỎ DUYỆT
-                            any_approved = bool(len(selected_df) and selected_df["approved"].any())
-                            label = "❌ Bỏ duyệt" if any_approved else "✔ Duyệt"
+                                # DUYỆT / BỎ DUYỆT
+                                any_approved = bool(len(selected_df) and selected_df["approved"].any())
+                                label = "❌ Bỏ duyệt" if any_approved else "✔ Duyệt"
 
-                            if c2.button(label, key=f"duyet_{username_real}_{q_name}"):
-                                new_val = not any_approved
-                                for _, r in selected_df.iterrows():
-                                    supabase.table("tasks").update(
-                                        {"approved": new_val}
-                                    ).eq("id", r["ID"]).execute()
-                                st.success("Đã cập nhật.")
-                                st.cache_data.clear()
-                                st.rerun()
+                                if c2.button(label, key=f"duyet_{username_real}_{q_name}"):
+                                    new_val = not any_approved
+                                    for _, r in selected_df.iterrows():
+                                        supabase.table("tasks").update(
+                                            {"approved": new_val}
+                                        ).eq("id", r["ID"]).execute()
+                                    st.success("Đã cập nhật.")
+                                    st.cache_data.clear()
+                                    st.rerun()
 
-                            # LƯU
-                            if c3.button("💾 Lưu", key=f"luu_{username_real}_{q_name}"):
-                                for _, r in edited_df.iterrows():
-                                    supabase.table("tasks").update({
-                                        "start_date": r["Ngày"],
-                                        "task": r["Công việc"],
-                                        "khoi_luong": r["Khối lượng (giờ)"],
-                                        "note": r["Ghi chú"],
-                                    }).eq("id", r["ID"]).execute()
-                                st.success("Đã lưu.")
-                                st.cache_data.clear()
-                                st.rerun()
+                                # LƯU
+                                if c3.button("💾 Lưu", key=f"luu_{username_real}_{q_name}"):
+                                    for _, r in edited_df.iterrows():
+                                        supabase.table("tasks").update({
+                                            "start_date": r["Ngày"],
+                                            "task": r["Công việc"],
+                                            "khoi_luong": r["Khối lượng (giờ)"],
+                                            "note": r["Ghi chú"],
+                                        }).eq("id", r["ID"]).execute()
+                                    st.success("Đã lưu.")
+                                    st.cache_data.clear()
+                                    st.rerun()
 
 
 
