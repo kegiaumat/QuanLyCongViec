@@ -42,7 +42,8 @@ def user_app(user):
     - Có thể tự thêm công việc trong các dự án Public
     """
     # dùng service role giống admin (read/write công public)
-    supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    # supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    supabase = get_connection()
 
     try:
         username = user[1]
