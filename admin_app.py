@@ -1117,6 +1117,16 @@ def admin_app(user):
                         note_rest = re.sub(date_re, "", note_rest).strip()
 
                         return stime, etime, date_part, note_rest
+                    def build_time_options(start="07:00", end="21:00", step=15):
+                        times = []
+                        t = pd.to_datetime(start)
+                        t_end = pd.to_datetime(end)
+                        while t <= t_end:
+                            times.append(t.strftime("%H:%M"))
+                            t += pd.Timedelta(minutes=step)
+                        return times
+
+                    time_options = build_time_options("07:00", "21:00", 15)
 
                     # nhớ tab đang mở (optional)
                     if "current_tab" not in st.session_state:
@@ -1165,6 +1175,21 @@ def admin_app(user):
                             grid_key = f"grid_cong_{project}_{username_real}"
                             gb = GridOptionsBuilder.from_dataframe(df_display)
                             gb.configure_default_column(editable=True)
+                            
+                            gb.configure_column(
+                                "Giờ bắt đầu",
+                                editable=True,
+                                cellEditor="agSelectCellEditor",
+                                cellEditorParams={"values": time_options},
+                            )
+
+                            gb.configure_column(
+                                "Giờ kết thúc",
+                                editable=True,
+                                cellEditor="agSelectCellEditor",
+                                cellEditorParams={"values": time_options},
+                            )
+
                             gb.configure_column("ID", hide=True)
                             gb.configure_column("approved", hide=True)
 
