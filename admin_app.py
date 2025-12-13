@@ -1207,7 +1207,7 @@ def admin_app(user):
                                 c1, c2, c3 = st.columns(3)
 
                                 # XÓA
-                                if c1.button("🗑 Xóa", key=f"xoa_{username_real}_{q_name}"):
+                                del_click = c1.form_submit_button("🗑 Xóa")
                                     for _, r in selected_df.iterrows():
                                         supabase.table("tasks").delete().eq("id", r["ID"]).execute()
                                     st.success("Đã xóa.")
@@ -1218,7 +1218,8 @@ def admin_app(user):
                                 any_approved = bool(len(selected_df) and selected_df["approved"].any())
                                 label = "❌ Bỏ duyệt" if any_approved else "✔ Duyệt"
 
-                                if c2.button(label, key=f"duyet_{username_real}_{q_name}"):
+                                approve_click = c2.form_submit_button(label)
+
                                     new_val = not any_approved
                                     for _, r in selected_df.iterrows():
                                         supabase.table("tasks").update(
@@ -1229,7 +1230,8 @@ def admin_app(user):
                                     st.rerun()
 
                                 # LƯU
-                                if c3.button("💾 Lưu", key=f"luu_{username_real}_{q_name}"):
+                                save_click = c3.form_submit_button("💾 Lưu")
+
                                     for _, r in edited_df.iterrows():
                                         supabase.table("tasks").update({
                                             "start_date": r["Ngày"],
