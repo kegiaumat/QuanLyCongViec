@@ -1166,12 +1166,15 @@ def admin_app(user):
                                 })
 
                             df_display = pd.DataFrame(rows)
-                            st.session_state.setdefault("df_cong_origin", {})[(project, username_real)] = df_display.copy()
 
-                            # username thật
+                            # username thật (PHẢI LẤY TRƯỚC)
                             username_real = df_users.loc[
                                 df_users["display_name"] == user_display, "username"
                             ].iloc[0]
+
+                            # lưu dataframe gốc để so sánh khi Lưu
+                            st.session_state.setdefault("df_cong_origin", {})[(project, username_real)] = df_display.copy()
+
 
                             grid_key = f"grid_cong_{project}_{username_real}"
                             gb = GridOptionsBuilder.from_dataframe(df_display)
