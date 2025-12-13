@@ -62,7 +62,10 @@ def user_app(user):
         is_public = proj_type == "public"
 
         # ======= Danh sách task của user =======
-        data = supabase.table("tasks").select("id, task, khoi_luong, progress, deadline, note").eq("project", project).eq("assignee", username).execute()
+        data = supabase.table("tasks").select(
+            "id, task, khoi_luong, progress, deadline, note, approved, start_date"
+        ).eq("project", project).eq("assignee", username).execute()
+
         df_tasks = pd.DataFrame(data.data)
 
         # ✅ Fix: Nếu user chưa có task ⇒ không xử lý tiếp phần tách giờ
@@ -121,113 +124,184 @@ def user_app(user):
                     ]
                     df_show = df_show.drop(columns=drop_cols, errors="ignore")
 
-                edited = st.data_editor(
-                    df_show,
-                    key="user_tasks_editor",
-                    width="stretch",
-                    hide_index=True,
-                    column_config={
-                        "Công việc": st.column_config.TextColumn(disabled=True),
-                        "Giờ bắt đầu": st.column_config.TimeColumn("Giờ bắt đầu", format="HH:mm"),
-                        "Giờ kết thúc": st.column_config.TimeColumn("Giờ kết thúc", format="HH:mm"),
-                        "Ghi chú": st.column_config.TextColumn(),
-                        "Chọn": st.column_config.CheckboxColumn("Xóa?", help="Tick để xóa dòng này"),
-                    },
-                )
+                from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode, JsCode
 
+                # tạo options giờ 15 phút (đặt ngay trước khi build grid)
+                def build_time_options(start="07:00", end="21:00", step=15):
+                    times = []
+                    t = pd.to_datetime(start)
+                    t_end = pd.to_datetime(end)
+                    while t <= t_end:
+                        times.append(t.strftime("%H:%M"))
+                        t += pd.Timedelta(minutes=step)
+                    return times
 
-                col1, col2 = st.columns([2, 1])
-                with col1:
-                    if st.button("💾 Lưu thay đổi"):
-                        from datetime import time, date
+                time_options = build_time_options("07:00", "21:00", 15)
 
-                        def _fmt_time(t):  # -> "HH:MM"
-                            if isinstance(t, time):
-                                return t.strftime("%H:%M")
-                            s = str(t).strip()
-                            for fmt in ("%H:%M", "%H:%M:%S"):
-                                try:
-                                    return datetime.strptime(s, fmt).strftime("%H:%M")
-                                except Exception:
-                                    pass
-                            return ""
+                # thêm cột approved để style/lock (ẩn đi cũng được)
+                if "approved" not in df_show.columns and "approved" in df_tasks.columns:
+                    df_show["approved"] = df_tasks["approved"].fillna(False)
 
-                        def _parse_time(t):  # -> datetime (today + time) hoặc None
-                            if isinstance(t, time):
-                                return datetime.combine(date.today(), t)
-                            s = str(t).strip()
-                            for fmt in ("%H:%M", "%H:%M:%S"):
-                                try:
-                                    return datetime.strptime(s, fmt)
-                                except Exception:
-                                    pass
-                            return None
+                # style dòng đã duyệt
+                row_style = JsCode("""
+                function(params) {
+                  if (params.data && params.data.approved === true) {
+                    return {'backgroundColor': '#fff3cd'};
+                  }
+                }
+                """)
 
-                        for i, row in edited.iterrows():
-                            task_id = int(df_tasks.iloc[i]["id"])
-                            update_data = {}
+                # khóa edit/tick khi approved (JS guard)
+                editable_guard = JsCode("""
+                function(params) {
+                  return !(params.data && params.data.approved === true);
+                }
+                """)
 
-                            # 🕒 Lấy giờ và ghi chú
-                            start_time = row.get("Giờ bắt đầu", "")
-                            end_time = row.get("Giờ kết thúc", "")
-                            note_text = str(row.get("Ghi chú", "")).strip()
+                gb = GridOptionsBuilder.from_dataframe(df_show)
 
-                            # 🧹 Giữ lại phần ngày nếu có
-                            match_date = re.search(r"\(\d{4}-\d{2}-\d{2}\s*-\s*\d{4}-\d{2}-\d{2}\)", note_text)
-                            date_part = match_date.group(0) if match_date else ""
+                gb.configure_default_column(resizable=True, sortable=True, filter=True)
 
-                            # 🧹 Xóa phần giờ cũ + ngày cũ để tránh lặp
-                            note_text = re.sub(r"^⏰\s*\d{2}:\d{2}(?::\d{2})?\s*-\s*\d{2}:\d{2}(?::\d{2})?", "", note_text)
-                            note_text = re.sub(r"\(\d{4}-\d{2}-\d{2}\s*-\s*\d{4}-\d{2}-\d{2}\)", "", note_text).strip()
+                # cột công việc không cho sửa
+                gb.configure_column("Công việc", editable=False)
 
-                            # 🕒 Ghép lại ghi chú mới
-                            start_str = _fmt_time(start_time)
-                            end_str = _fmt_time(end_time)
-                            if start_str and end_str:
-                                new_note = f"⏰ {start_str} - {end_str} {date_part} {note_text}".strip()
-                            else:
-                                new_note = note_text
-                            update_data["note"] = new_note
+                # giờ chọn dropdown
+                gb.configure_column("Giờ bắt đầu", editable=editable_guard,
+                                    cellEditor="agSelectCellEditor",
+                                    cellEditorParams={"values": time_options})
+                gb.configure_column("Giờ kết thúc", editable=editable_guard,
+                                    cellEditor="agSelectCellEditor",
+                                    cellEditorParams={"values": time_options})
 
-                            # 🧮 Tính lại khối lượng (giờ)
-                            st_dt = _parse_time(start_time)
-                            en_dt = _parse_time(end_time)
-                            if st_dt and en_dt:
-                                if en_dt < st_dt:
-                                    en_dt = en_dt.replace(day=st_dt.day + 1)
-                                hours = (en_dt - st_dt).total_seconds() / 3600
-                                if hours > 0:
-                                    update_data["khoi_luong"] = round(hours, 2)
-                                    df_show.at[i, "Khối lượng (giờ)"] = round(hours, 2)
+                # ghi chú/khối lượng: chỉ sửa khi chưa duyệt
+                gb.configure_column("Ghi chú", editable=editable_guard)
+                gb.configure_column("Khối lượng (giờ)", editable=editable_guard)
 
-                            # 📊 Tiến độ
-                            if "Tiến độ (%)" in row and not pd.isna(row["Tiến độ (%)"]):
-                                update_data["progress"] = float(row["Tiến độ (%)"])
+                # checkbox chọn xóa: không cho tick nếu đã duyệt
+                gb.configure_column("Chọn", editable=editable_guard)
 
-                            # 💾 Ghi xuống database
-                            if update_data:
-                                supabase.table("tasks").update(update_data).eq("id", task_id).execute()
+                # ẩn cột approved khỏi UI (nhưng giữ trong data)
+                gb.configure_column("approved", hide=True)
 
-                        st.success("✅ Đã cập nhật giờ, ghi chú và khối lượng!")
-                        st.rerun()
+                grid_options = gb.build()
+                grid_options["getRowStyle"] = row_style
+
+                with st.form(f"user_public_form_{project}_{username}", clear_on_submit=False):
+                    grid = AgGrid(
+                        df_show,
+                        gridOptions=grid_options,
+                        key=f"user_public_grid_{project}_{username}",
+                        update_mode=GridUpdateMode.MANUAL,
+                        data_return_mode=DataReturnMode.AS_INPUT,
+                        allow_unsafe_jscode=True,
+                        reload_data=False,
+                        fit_columns_on_grid_load=False,
+                        width="100%",
+                        height=420,
+                    )
+                    edited = pd.DataFrame(grid["data"])
+
+                    c1, c2 = st.columns([2, 1])
+                    save_click = c1.form_submit_button("💾 Lưu thay đổi")
+                    del_click  = c2.form_submit_button("🗑️ Xóa các dòng đã chọn")
 
 
 
-                with col2:
-                    if st.button("🗑️ Xóa các dòng đã chọn", key="delete_my_tasks_btn"):
-                        ids_to_delete = [
-                            int(df_tasks.iloc[i]["id"])
-                            for i, row in edited.iterrows()
-                            if row.get("Chọn")
-                        ]
-                        if ids_to_delete:
-                            for tid in ids_to_delete:
-                                supabase.table("tasks").delete().eq("id", tid).execute()
-                            
-                            st.success(f"✅ Đã xóa {len(ids_to_delete)} dòng")
-                            st.rerun()
+                # ===== LƯU =====
+                if save_click:
+                    updated = 0
+                    blocked = 0
+
+                    for i, row in edited.iterrows():
+                        # chặn đã duyệt
+                        if bool(row.get("approved", False)):
+                            blocked += 1
+                            continue
+
+                        task_id = int(df_tasks.iloc[i]["id"])
+                        update_data = {}
+
+                        # giờ + note (giữ logic mày đang làm)
+                        start_time = row.get("Giờ bắt đầu", "")
+                        end_time = row.get("Giờ kết thúc", "")
+                        note_text = str(row.get("Ghi chú", "")).strip()
+
+                        match_date = re.search(r"\(\d{4}-\d{2}-\d{2}\s*-\s*\d{4}-\d{2}-\d{2}\)", note_text)
+                        date_part = match_date.group(0) if match_date else ""
+
+                        note_text = re.sub(r"^⏰\s*\d{2}:\d{2}(?::\d{2})?\s*-\s*\d{2}:\d{2}(?::\d{2})?", "", note_text)
+                        note_text = re.sub(r"\(\d{4}-\d{2}-\d{2}\s*-\s*\d{4}-\d{2}-\d{2}\)", "", note_text).strip()
+
+                        # chuẩn hóa HH:MM
+                        def _fmt_hhmm(x):
+                            s = str(x).strip()
+                            m = re.search(r"(\d{1,2}:\d{2})", s)
+                            return m.group(1) if m else ""
+
+                        start_str = _fmt_hhmm(start_time)
+                        end_str   = _fmt_hhmm(end_time)
+
+                        if start_str and end_str:
+                            new_note = f"⏰ {start_str} - {end_str} {date_part} {note_text}".strip()
                         else:
-                            st.warning("⚠️ Chưa chọn dòng nào để xóa")
+                            new_note = note_text
+
+                        update_data["note"] = new_note
+
+                        # ✅ start_date: lấy từ start_date trong row nếu có, không thì fallback hôm nay
+                        # (khuyến nghị: sau này thêm cột 'Ngày' riêng giống admin để chắc chắn)
+                        sd = df_tasks.iloc[i].get("start_date", None)
+                        if sd:
+                            update_data["start_date"] = str(sd)[:10]
+                        else:
+                            update_data["start_date"] = datetime.utcnow().date().strftime("%Y-%m-%d")
+
+                        # nếu có giờ thì tính lại khối lượng
+                        try:
+                            st_dt = datetime.strptime(start_str, "%H:%M")
+                            en_dt = datetime.strptime(end_str, "%H:%M")
+                            if en_dt > st_dt:
+                                hours = (en_dt - st_dt).total_seconds() / 3600
+                                update_data["khoi_luong"] = round(hours, 2)
+                        except:
+                            pass
+
+                        if update_data:
+                            supabase.table("tasks").update(update_data).eq("id", task_id).execute()
+                            updated += 1
+
+                    if blocked > 0:
+                        st.warning(f"⚠️ Có {blocked} dòng đã duyệt nên không thể sửa.")
+                    st.success(f"✅ Đã cập nhật {updated} dòng.")
+                    st.rerun()
+
+                # ===== XÓA =====
+                if del_click:
+                    ids_to_delete = []
+                    blocked = 0
+
+                    for i, row in edited.iterrows():
+                        if not row.get("Chọn"):
+                            continue
+
+                        if bool(row.get("approved", False)):
+                            blocked += 1
+                            continue
+
+                        ids_to_delete.append(int(df_tasks.iloc[i]["id"]))
+
+                    if ids_to_delete:
+                        for tid in ids_to_delete:
+                            supabase.table("tasks").delete().eq("id", tid).execute()
+                        st.success(f"✅ Đã xóa {len(ids_to_delete)} dòng.")
+                    else:
+                        st.warning("⚠️ Chưa chọn dòng nào để xóa (hoặc các dòng đã chọn đều đã duyệt).")
+
+                    if blocked > 0:
+                        st.warning(f"⚠️ {blocked} dòng đã duyệt nên không thể xóa.")
+
+                    st.rerun()
+
 
         # ======= Tự thêm công việc (nếu public) =======
         if is_public:
