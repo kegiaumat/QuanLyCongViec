@@ -1095,7 +1095,10 @@ def admin_app(user):
                     st.warning("⛔ Không có công nhật nào trong quý này.")
                 else:
                     # ===== 2. Chuẩn bị dữ liệu cho grid =====
-                    task_options = sorted(df_cong_all["task"].dropna().unique().tolist())
+                    task_options = sorted(
+                        jobs["name"].dropna().unique().tolist()
+                    )
+
                     user_list    = sorted(df_cong_all["assignee_display"].unique())
 
                     def split_times(note_text: str):
@@ -1159,8 +1162,7 @@ def admin_app(user):
                                 df_users["display_name"] == user_display, "username"
                             ].iloc[0]
 
-                            grid_key = f"grid_cong_{project}_{username_real}_{year_filter}_{q_name}"
-
+                            grid_key = f"grid_cong_{project}_{username_real}"
                             gb = GridOptionsBuilder.from_dataframe(df_display)
                             gb.configure_default_column(editable=True)
                             gb.configure_column("ID", hide=True)
