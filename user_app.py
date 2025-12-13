@@ -114,18 +114,20 @@ def user_app(user):
                     "deadline": "Deadline",
                     "note": "Ghi chú",
                 }
-                df_show = df_tasks.rename(columns=rename_map).drop(columns=["id"])
-                # chèn cột Ngày lên đầu bảng
-                if "Ngày" in df_tasks.columns and "Ngày" not in df_show.columns:
-                    df_show.insert(0, "Ngày", df_tasks["Ngày"])
-                
-                df_show["Chọn"] = False
-                # Thêm 2 cột giờ bắt đầu/kết thúc nếu chưa có
-                if "Giờ bắt đầu" in df_tasks.columns and "Giờ bắt đầu" not in df_show.columns:
-                    df_show.insert(1, "Giờ bắt đầu", df_tasks["Giờ bắt đầu"])
+                df_show = pd.DataFrame({
+                    "Ngày": df_tasks["Ngày"],
+                    "Công việc": df_tasks["task"],
+                    "Giờ bắt đầu": df_tasks["Giờ bắt đầu"],
+                    "Giờ kết thúc": df_tasks["Giờ kết thúc"],
+                    "Khối lượng (giờ)": df_tasks["khoi_luong"],
+                    "Ghi chú": df_tasks["note"],
+                    "Chọn?": False,
+                })
 
-                if "Giờ kết thúc" in df_tasks.columns and "Giờ kết thúc" not in df_show.columns:
-                    df_show.insert(2, "Giờ kết thúc", df_tasks["Giờ kết thúc"])
+                # giữ approved để xử lý logic (ẩn sau)
+                if "approved" in df_tasks.columns:
+                    df_show["approved"] = df_tasks["approved"].fillna(False)
+
 
 
                 # Nếu public -> bỏ Tiến độ, Deadline
@@ -170,6 +172,14 @@ def user_app(user):
                 """)
 
                 gb = GridOptionsBuilder.from_dataframe(df_show)
+                # 🔹 CHỈNH ĐỘ RỘNG TỪNG CỘT
+                gb.configure_column("Ngày", width=100)
+                gb.configure_column("Công việc", flex=4)
+                gb.configure_column("Giờ bắt đầu", width=110)
+                gb.configure_column("Giờ kết thúc", width=110)
+                gb.configure_column("Khối lượng (giờ)", width=120)
+                gb.configure_column("Ghi chú", flex=5)
+                gb.configure_column("Chọn?", width=80)
 
                 gb.configure_default_column(resizable=True, sortable=True, filter=True)
 
