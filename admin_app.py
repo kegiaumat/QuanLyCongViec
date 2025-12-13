@@ -1242,9 +1242,11 @@ def admin_app(user):
                                         "khoi_luong": r["Khối lượng (giờ)"],
                                         "note": r["Ghi chú"],
                                     }).eq("id", r["ID"]).execute()
+
                                 st.success("Đã lưu.")
                                 st.cache_data.clear()
                                 st.rerun()
+
 
 
 
