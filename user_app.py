@@ -73,34 +73,36 @@ def user_app(user):
 
         df_tasks = pd.DataFrame(data.data)
 
+        # === HIỂN THỊ NGÀY CÔNG TỪ start_date ===
+        if "start_date" in df_tasks.columns:
+            df_tasks["Ngày"] = (
+                pd.to_datetime(df_tasks["start_date"], errors="coerce")
+                .dt.strftime("%Y-%m-%d")
+                .fillna("")
+            )
+        else:
+            df_tasks["Ngày"] = ""
+
         # ✅ Fix: Nếu user chưa có task ⇒ không xử lý tiếp phần tách giờ
         if df_tasks.empty:
             st.warning("⚠️ Bạn chưa có công việc nào trong dự án này.")        
         else:
-            # === Tách giờ bắt đầu và kết thúc từ note nếu có dạng "⏰ 08:00 - 17:00 (...)" ===
+            # === Tách giờ bắt đầu và kết thúc từ note nếu có dạng ...
+
             def extract_times(note):
                 match = re.search(r"(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})", str(note))
                 if match:
                     return match.group(1), match.group(2)
                 return "", ""
 
-            df_tasks["Giờ bắt đầu"], df_tasks["Giờ kết thúc"] = zip(*df_tasks["note"].map(extract_times))
-            # Chuyển "HH:MM" -> datetime.time để dùng được với TimeColumn
-            def _to_time(x):
-                if x is None or str(x).strip() == "":
-                    return None
-                try:
-                    # đúng định dạng HH:MM
-                    return pd.to_datetime(str(x), format="%H:%M").time()
-                except Exception:
-                    try:
-                        # fallback nếu về sau dữ liệu có giây HH:MM:SS
-                        return pd.to_datetime(str(x)).time()
-                    except Exception:
-                        return None
+            df_tasks["Giờ bắt đầu"], df_tasks["Giờ kết thúc"] = zip(
+                *df_tasks["note"].map(extract_times)
+            )
 
-            df_tasks["Giờ bắt đầu"] = df_tasks["Giờ bắt đầu"].map(_to_time)
-            df_tasks["Giờ kết thúc"] = df_tasks["Giờ kết thúc"].map(_to_time)
+            # ❗ GIỮ NGUYÊN DẠNG STRING HH:MM – KHÔNG CONVERT
+            df_tasks["Giờ bắt đầu"] = df_tasks["Giờ bắt đầu"].fillna("").astype(str)
+            df_tasks["Giờ kết thúc"] = df_tasks["Giờ kết thúc"].fillna("").astype(str)
+
 
             if df_tasks.empty:
                 st.warning("⚠️ Bạn chưa có công việc nào trong dự án này.")
@@ -113,6 +115,10 @@ def user_app(user):
                     "note": "Ghi chú",
                 }
                 df_show = df_tasks.rename(columns=rename_map).drop(columns=["id"])
+                # chèn cột Ngày lên đầu bảng
+                if "Ngày" in df_tasks.columns and "Ngày" not in df_show.columns:
+                    df_show.insert(0, "Ngày", df_tasks["Ngày"])
+                
                 df_show["Chọn"] = False
                 # Thêm 2 cột giờ bắt đầu/kết thúc nếu chưa có
                 if "Giờ bắt đầu" in df_tasks.columns and "Giờ bắt đầu" not in df_show.columns:
@@ -255,11 +261,10 @@ def user_app(user):
 
                         # ✅ start_date: lấy từ start_date trong row nếu có, không thì fallback hôm nay
                         # (khuyến nghị: sau này thêm cột 'Ngày' riêng giống admin để chắc chắn)
-                        sd = df_tasks.iloc[i].get("start_date", None)
-                        if sd:
-                            update_data["start_date"] = str(sd)[:10]
-                        else:
-                            update_data["start_date"] = datetime.utcnow().date().strftime("%Y-%m-%d")
+                        start_date_str = str(row.get("Ngày", "")).strip()
+                        if start_date_str:
+                            update_data["start_date"] = start_date_str
+
 
                         # nếu có giờ thì tính lại khối lượng
                         try:
