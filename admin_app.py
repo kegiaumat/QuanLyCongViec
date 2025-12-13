@@ -1189,23 +1189,22 @@ def admin_app(user):
                             grid_options = gb.build()
                             grid_options["getRowStyle"] = row_style
 
-                            grid = AgGrid(
-                                df_display,
-                                gridOptions=grid_options,
-                                key=grid_key,
-                                update_mode=GridUpdateMode.NO_UPDATE,     # 👈 không rerun khi sửa ô
-                                data_return_mode=DataReturnMode.FILTERED,   # 👈 FIX
+                            with st.form(f"form_cong_{project}_{username_real}", clear_on_submit=False):
+                                grid = AgGrid(
+                                    df_display,
+                                    gridOptions=grid_options,
+                                    key=grid_key,
+                                    update_mode=GridUpdateMode.MANUAL,   # 🔥 QUAN TRỌNG
+                                    data_return_mode=DataReturnMode.AS_INPUT,
+                                    reload_data=False,
+                                    allow_unsafe_jscode=True,
+                                    fit_columns_on_grid_load=True,
+                                    height=420,
+                                )
 
-                                reload_data=False,
-                                allow_unsafe_jscode=True,
-                                fit_columns_on_grid_load=True,
-                                height=420,
-                            )
-
-                            edited_df   = pd.DataFrame(grid["data"])
-                            selected_df = edited_df[edited_df["Chọn?"] == True]
-
-                            c1, c2, c3 = st.columns(3)
+                                edited_df   = pd.DataFrame(grid["data"])
+                                selected_df = edited_df[edited_df["Chọn?"] == True]
+                                c1, c2, c3 = st.columns(3)
 
                             # XÓA
                             if c1.button("🗑 Xóa", key=f"xoa_{username_real}_{q_name}"):
