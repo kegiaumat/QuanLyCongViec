@@ -4,7 +4,6 @@ import pandas as pd
 from datetime import datetime
 from auth import get_connection, calc_hours
 from supabase import create_client
-from auth import SUPABASE_URL, SUPABASE_SERVICE_KEY
 
 import re
 
