@@ -1209,7 +1209,8 @@ def admin_app(user):
                                 c1, c2, c3 = st.columns(3)
 
                                 del_click     = c1.form_submit_button("🗑 Xóa")
-                                approve_click = c2.form_submit_button(label)
+                                approve_click = c2.form_submit_button("✔ Duyệt / ❌ Bỏ duyệt")
+
                                 save_click    = c3.form_submit_button("💾 Lưu")
 
 
