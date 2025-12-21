@@ -1355,12 +1355,27 @@ def admin_app(user):
 
                     def build_export_df(df):
                         rows = []
+
                         for _, r in df.iterrows():
-                            stime, etime, _, note_rest = split_times(r.get("note"))
+                            stime, etime, date_part, note_rest = split_times(r.get("note"))
+
+                            # ===== NGÀY BẮT ĐẦU / KẾT THÚC =====
+                            start_date = r["Ngày_dt"]
+                            end_date   = r["Ngày_dt"]
+
+                            if isinstance(date_part, str) and "→" in date_part:
+                                try:
+                                    d1, d2 = re.findall(r"\d{4}-\d{2}-\d{2}", date_part)
+                                    start_date = d1
+                                    end_date   = d2
+                                except:
+                                    start_date = r["Ngày_dt"]
+                                    end_date   = r["Ngày_dt"]
 
                             rows.append({
                                 "User": r["assignee_display"],
-                                "Ngày": r["Ngày_dt"].strftime("%Y-%m-%d"),
+                                "Ngày bắt đầu": str(start_date),
+                                "Ngày kết thúc": str(end_date),
                                 "Công việc": r["task"],
                                 "Giờ bắt đầu": stime,
                                 "Giờ kết thúc": etime,
@@ -1369,12 +1384,15 @@ def admin_app(user):
                             })
 
                         df_out = pd.DataFrame(rows)
+
+                        # ===== SẮP XẾP =====
                         df_out = df_out.sort_values(
-                            by=["User", "Ngày", "Giờ bắt đầu"],
+                            by=["User", "Ngày bắt đầu", "Giờ bắt đầu"],
                             ascending=[True, True, True]
                         ).reset_index(drop=True)
 
                         return df_out
+
 
 
                     export_df = build_export_df(df_cong_all)
