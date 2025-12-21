@@ -1347,6 +1347,59 @@ def admin_app(user):
                                 st.cache_data.clear()
                                 st.rerun()
 
+                    # ======================================================
+                    # 📤 XUẤT DANH SÁCH CÔNG NHẬT (TOÀN BỘ USER – 1 SHEET)
+                    # ======================================================
+                    st.divider()
+                    st.markdown("### 📤 Xuất công nhật theo quý")
+
+                    def build_export_df(df):
+                        rows = []
+                        for _, r in df.iterrows():
+                            stime, etime, _, note_rest = split_times(r.get("note"))
+
+                            rows.append({
+                                "User": r["assignee_display"],
+                                "Ngày": r["Ngày_dt"].strftime("%Y-%m-%d"),
+                                "Công việc": r["task"],
+                                "Giờ bắt đầu": stime,
+                                "Giờ kết thúc": etime,
+                                "Khối lượng (giờ)": float(r.get("khoi_luong") or 0),
+                                "Ghi chú": note_rest,
+                            })
+
+                        df_out = pd.DataFrame(rows)
+                        df_out = df_out.sort_values(
+                            by=["User", "Ngày", "Giờ bắt đầu"],
+                            ascending=[True, True, True]
+                        ).reset_index(drop=True)
+
+                        return df_out
+
+
+                    export_df = build_export_df(df_cong_all)
+
+                    if export_df.empty:
+                        st.info("Không có dữ liệu để xuất.")
+                    else:
+                        output = io.BytesIO()
+                        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+                            export_df.to_excel(
+                                writer,
+                                sheet_name="Cong_nhat_quy",
+                                index=False
+                            )
+
+                            ws = writer.sheets["Cong_nhat_quy"]
+                            for i, col in enumerate(export_df.columns):
+                                ws.set_column(i, i, 18)
+
+                        st.download_button(
+                            "⬇️ Xuất danh sách công nhật (Excel)",
+                            data=output.getvalue(),
+                            file_name=f"cong_nhat_{project}_{year_filter}_{q_name}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
 
 
 
