@@ -500,7 +500,7 @@ def admin_app(user):
             # ====================
             with col2:
                 if st.button("❌ Xóa công việc đã chọn"):
-                    if not selected:
+                    if selected.empty:
                         st.warning("⚠️ Bạn chưa tick công việc nào để xoá")
                     else:
                         st.session_state["confirm_delete_jobs"] = selected
