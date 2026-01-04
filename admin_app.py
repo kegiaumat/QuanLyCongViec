@@ -428,7 +428,7 @@ def admin_app(user):
             # Tô màu dòng cha
             row_style = JsCode("""
             function(params) {
-                if (params.data && params.data._is_parent) {
+                if (params.data && params.data._is_parent === true) {
                     return {'backgroundColor': '#e8f4ff'};
                 }
                 return {};
