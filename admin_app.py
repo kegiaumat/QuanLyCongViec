@@ -408,15 +408,14 @@ def admin_app(user):
             meta_cols = [c for c in df_display.columns if c.startswith("_")]
 
             # -----------------------------
+            # -----------------------------
             # CONFIG AGGRID
             # -----------------------------
             gb = GridOptionsBuilder.from_dataframe(df_display)
 
-            # Cho phép sửa trực tiếp
-            gb.configure_columns(
-                ["Cha", "Con", "Đơn vị", "Nhóm dự án"],
-                editable=True,
-            )
+            # ✅ cấu hình từng cột (tránh configure_columns gây lỗi columnDefs)
+            for col in ["Cha", "Con", "Đơn vị", "Nhóm dự án"]:
+                gb.configure_column(col, editable=True)
 
             # Checkbox xoá
             gb.configure_column("Xóa?", editable=True)
@@ -435,8 +434,9 @@ def admin_app(user):
             }
             """)
 
-            grid_options = gb.build()              # ✅ build 1 lần
+            grid_options = gb.build()              # ✅ build đúng 1 lần
             grid_options["getRowStyle"] = row_style
+
 
 
             st.markdown("### ✏️ Danh sách công việc – AG Grid (Editable)")
