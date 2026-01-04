@@ -435,10 +435,9 @@ def admin_app(user):
             }
             """)
 
-            grid_options = gb.build()
+            grid_options = gb.build()              # ✅ build 1 lần
             grid_options["getRowStyle"] = row_style
 
-            grid_options = gb.build()
 
             st.markdown("### ✏️ Danh sách công việc – AG Grid (Editable)")
 
