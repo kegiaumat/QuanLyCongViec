@@ -422,8 +422,6 @@ def admin_app(user):
                 "Xóa?",
                 headerName="Xóa?",
                 editable=True,
-                cellRenderer="agCheckboxCellRenderer",
-                cellEditor="agCheckboxCellEditor",
                 width=90
             )
 
