@@ -450,8 +450,9 @@ def admin_app(user):
                 height=500
             )
 
-            edited = grid["data"]        # bản cập nhật không gây rerun
-            selected = [r for r in edited if r["Xóa?"]]
+            edited = pd.DataFrame(grid["data"])
+            selected = edited[edited["Xóa?"] == True]
+
 
             # ======================================
             # 3) HAI NÚT: CẬP NHẬT & XOÁ
