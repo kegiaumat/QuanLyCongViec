@@ -426,16 +426,17 @@ def admin_app(user):
                 gb.configure_column(col, hide=True)
 
             # Tô màu dòng cha
-            gb.configure_row_style(
-                js_code="""
-                    function(params) {
-                        if (params.data._is_parent){
-                            return {'backgroundColor': '#e8f4ff'};
-                        }
-                        return {};
-                    }
-                """
-            )
+            row_style = JsCode("""
+            function(params) {
+                if (params.data && params.data._is_parent) {
+                    return {'backgroundColor': '#e8f4ff'};
+                }
+                return {};
+            }
+            """)
+
+            grid_options = gb.build()
+            grid_options["getRowStyle"] = row_style
 
             grid_options = gb.build()
 
