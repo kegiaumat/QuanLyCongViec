@@ -1239,6 +1239,10 @@ def admin_app(user):
                             )
 
                             grid_options = gb.build()
+
+                            grid_options["rowSelection"] = "multiple"
+                            grid_options["suppressRowClickSelection"] = False
+                            
                             grid_options["getRowStyle"] = row_style
 
                             
