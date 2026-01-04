@@ -418,7 +418,15 @@ def admin_app(user):
                 gb.configure_column(col, editable=True)
 
             # Checkbox xoá
-            gb.configure_column("Xóa?", editable=True)
+            gb.configure_column(
+                "Xóa?",
+                headerName="Xóa?",
+                editable=True,
+                cellRenderer="agCheckboxCellRenderer",
+                cellEditor="agCheckboxCellEditor",
+                width=90
+            )
+
 
             # Ẩn cột metadata
             for col in meta_cols:
