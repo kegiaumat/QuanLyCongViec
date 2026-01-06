@@ -4,5 +4,5 @@ plotly
 streamlit-cookies-manager
 supabase
 xlsxwriter
-streamlit-aggrid==0.3.6
+streamlit-aggrid==0.3.5
 
