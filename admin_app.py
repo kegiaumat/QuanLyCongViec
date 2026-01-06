@@ -1260,15 +1260,14 @@ def admin_app(user):
                                     gridOptions=grid_options,
                                     key=grid_key,
                                     update_mode=GridUpdateMode.MANUAL,
-                                    data_return_mode=DataReturnMode.AS_INPUT,
-                                    reload_data=False,
+                                    data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
+                                    reload_data=True,
                                     allow_unsafe_jscode=True,
-                                    
-                                    
                                     fit_columns_on_grid_load=False,
                                     height=420,
-                                    width="100%",                    # ⭐ TRÀN KHUNG
+                                    width="100%",
                                 )
+
 
                                 edited_df   = pd.DataFrame(grid["data"])
                                 selected_df = edited_df[edited_df["Chọn?"] == True]
