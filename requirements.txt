@@ -3,7 +3,6 @@ pandas
 plotly
 streamlit-cookies-manager
 supabase
-streamlit-aggrid
 xlsxwriter
 streamlit-aggrid==0.3.6
 
