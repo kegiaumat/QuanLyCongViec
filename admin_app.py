@@ -1173,6 +1173,7 @@ def admin_app(user):
                                 })
 
                             df_display = pd.DataFrame(rows)
+                            df_display["Chọn?"] = df_display["Chọn?"].astype(bool)
 
                             # username thật (PHẢI LẤY TRƯỚC)
                             username_real = df_users.loc[
@@ -1259,6 +1260,7 @@ def admin_app(user):
                                     df_display,
                                     gridOptions=grid_options,
                                     key=grid_key,
+                                    theme="streamlit",   # ⭐ DÒNG QUYẾT ĐỊNH
                                     update_mode=GridUpdateMode.MANUAL,
                                     data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
                                     reload_data=True,
@@ -1267,6 +1269,7 @@ def admin_app(user):
                                     height=420,
                                     width="100%",
                                 )
+
 
 
                                 edited_df   = pd.DataFrame(grid["data"])
