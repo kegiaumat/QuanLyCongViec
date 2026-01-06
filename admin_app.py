@@ -1206,10 +1206,10 @@ def admin_app(user):
                                 "Chọn?",
                                 headerName="Chọn?",
                                 editable=True,
-                                cellRenderer="agCheckboxCellRenderer",
-                                cellEditor="agCheckboxCellEditor",
+                                type=["booleanColumn"],   # ⭐ DÒNG QUYẾT ĐỊNH
                                 width=80
                             )
+
 
 
                             gb.configure_column(
