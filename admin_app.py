@@ -1201,7 +1201,15 @@ def admin_app(user):
                             gb.configure_column("Giờ kết thúc", width=110)
                             gb.configure_column("Khối lượng (giờ)", width=120)
                             gb.configure_column("Ghi chú", flex=5)
-                            gb.configure_column("Chọn?", width=80)
+                            gb.configure_column(
+                                "Chọn?",
+                                headerName="Chọn?",
+                                editable=True,
+                                cellRenderer="agCheckboxCellRenderer",
+                                cellEditor="agCheckboxCellEditor",
+                                width=80
+                            )
+
 
                             gb.configure_column(
                                 "Giờ bắt đầu",
