@@ -5,4 +5,5 @@ streamlit-cookies-manager
 supabase
 streamlit-aggrid
 xlsxwriter
-streamlit-aggrid==0.3.4.post3
+streamlit-aggrid==0.3.6
+
