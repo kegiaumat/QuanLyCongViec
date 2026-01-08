@@ -1797,29 +1797,75 @@ def admin_app(user):
         st.divider()
         st.markdown("## 📊 Thống kê tổng hợp theo tháng")
         st.divider()
-        st.markdown("## 📤 Xuất dữ liệu chấm công")
+        st.markdown("## 📤 Xuất dữ liệu chấm công (1 sheet)")
 
-        df_export_full = st.session_state["attendance_buffer"].copy()
+        # ===== BẢNG CHI TIẾT (PHÍA TRÊN) =====
+        df_detail = st.session_state["attendance_buffer"].copy()
+        df_detail = df_detail.drop(columns=["username"], errors="ignore")
 
-        # bỏ cột username nội bộ
-        df_export_full = df_export_full.drop(columns=["username"], errors="ignore")
+        # ===== BẢNG TỔNG HỢP (PHÍA DƯỚI) =====
+        summary_cols = ["User", "Tổng K", "Tổng P", "Tổng L", "Tổng H", "Tổng Công"]
+        df_summary = df_stat[summary_cols].copy()
 
-        output_full = io.BytesIO()
-        with pd.ExcelWriter(output_full, engine="xlsxwriter") as writer:
-            df_export_full.to_excel(
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+
+            sheet_name = f"Cham_cong_{month_str}"
+            df_detail.to_excel(
                 writer,
-                sheet_name=f"Cham_cong_{month_str}",
-                index=False
+                sheet_name=sheet_name,
+                index=False,
+                startrow=2
             )
 
-            ws = writer.sheets[f"Cham_cong_{month_str}"]
-            ws.set_column(0, 0, 20)   # cột User
-            ws.set_column(1, len(df_export_full.columns), 6)
+            ws = writer.sheets[sheet_name]
 
+            # ----- TIÊU ĐỀ -----
+            ws.merge_range(
+                0, 0,
+                0, len(df_detail.columns) - 1,
+                f"BẢNG CHẤM CÔNG THÁNG {month_str}",
+                writer.book.add_format({
+                    "bold": True,
+                    "font_size": 14,
+                    "align": "center"
+                })
+            )
+
+            # ----- FORMAT CỘT -----
+            ws.set_column(0, 0, 20)  # User
+            ws.set_column(1, len(df_detail.columns), 6)
+
+            # ===== VỊ TRÍ BẮT ĐẦU BẢNG TỔNG HỢP =====
+            start_summary_row = len(df_detail) + 6
+
+            # ----- TIÊU ĐỀ TỔNG HỢP -----
+            ws.merge_range(
+                start_summary_row - 2, 0,
+                start_summary_row - 2, len(summary_cols) - 1,
+                "BẢNG TỔNG HỢP THEO THÁNG",
+                writer.book.add_format({
+                    "bold": True,
+                    "font_size": 12,
+                    "align": "left"
+                })
+            )
+
+            # ----- GHI BẢNG TỔNG HỢP -----
+            df_summary.to_excel(
+                writer,
+                sheet_name=sheet_name,
+                index=False,
+                startrow=start_summary_row
+            )
+
+            ws.set_column(1, len(summary_cols), 12)
+
+        # ===== NÚT DOWNLOAD =====
         st.download_button(
-            "⬇️ Xuất BẢNG CHẤM CÔNG (giống màn hình)",
-            data=output_full.getvalue(),
-            file_name=f"bang_cham_cong_{month_str}.xlsx",
+            "⬇️ Xuất CHẤM CÔNG + TỔNG HỢP (1 sheet)",
+            data=output.getvalue(),
+            file_name=f"cham_cong_1_sheet_{month_str}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
