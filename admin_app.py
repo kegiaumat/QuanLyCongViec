@@ -1796,6 +1796,32 @@ def admin_app(user):
         # ==============================
         st.divider()
         st.markdown("## 📊 Thống kê tổng hợp theo tháng")
+        st.divider()
+        st.markdown("## 📤 Xuất dữ liệu chấm công")
+
+        df_export_full = st.session_state["attendance_buffer"].copy()
+
+        # bỏ cột username nội bộ
+        df_export_full = df_export_full.drop(columns=["username"], errors="ignore")
+
+        output_full = io.BytesIO()
+        with pd.ExcelWriter(output_full, engine="xlsxwriter") as writer:
+            df_export_full.to_excel(
+                writer,
+                sheet_name=f"Cham_cong_{month_str}",
+                index=False
+            )
+
+            ws = writer.sheets[f"Cham_cong_{month_str}"]
+            ws.set_column(0, 0, 20)   # cột User
+            ws.set_column(1, len(df_export_full.columns), 6)
+
+        st.download_button(
+            "⬇️ Xuất BẢNG CHẤM CÔNG (giống màn hình)",
+            data=output_full.getvalue(),
+            file_name=f"bang_cham_cong_{month_str}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
         df_stat = st.session_state["attendance_buffer"].copy()
         day_cols = [c for c in df_stat.columns if "/" in c]
