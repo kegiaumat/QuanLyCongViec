@@ -1799,67 +1799,77 @@ def admin_app(user):
         st.divider()
         st.markdown("## 📤 Xuất dữ liệu chấm công (1 sheet)")
 
-        # ===== BẢNG CHI TIẾT (PHÍA TRÊN) =====
+        # ===== BẢNG CHI TIẾT =====
         df_detail = st.session_state["attendance_buffer"].copy()
         df_detail = df_detail.drop(columns=["username"], errors="ignore")
 
-        # ===== BẢNG TỔNG HỢP (PHÍA DƯỚI) =====
-        summary_cols = ["User", "Tổng K", "Tổng P", "Tổng L", "Tổng H", "Tổng Công"]
-        df_summary = df_stat[summary_cols].copy()
+        day_cols = [c for c in df_detail.columns if "/" in c]
 
+        # ===== TẠO BẢNG TỔNG HỢP (TỰ TÍNH LẠI) =====
+        def count_code(row, code):
+            return sum(1 for c in day_cols if str(row[c]).strip().upper() == code)
+
+        df_summary = df_detail[["User"]].copy()
+        df_summary["Tổng K"] = df_detail.apply(lambda r: count_code(r, "K"), axis=1)
+        df_summary["Tổng P"] = df_detail.apply(lambda r: count_code(r, "P"), axis=1)
+        df_summary["Tổng L"] = df_detail.apply(lambda r: count_code(r, "L"), axis=1)
+        df_summary["Tổng H"] = df_detail.apply(lambda r: count_code(r, "H"), axis=1)
+        df_summary["Tổng Công"] = (
+            df_summary["Tổng K"]
+            + df_summary["Tổng P"]
+            + df_summary["Tổng H"]
+        )
+
+        # ===== GHI 1 SHEET =====
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
 
-            sheet_name = f"Cham_cong_{month_str}"
+            sheet = f"Cham_cong_{month_str}"
+
+            # --- Bảng chi tiết ---
             df_detail.to_excel(
                 writer,
-                sheet_name=sheet_name,
+                sheet_name=sheet,
                 index=False,
                 startrow=2
             )
 
-            ws = writer.sheets[sheet_name]
+            ws = writer.sheets[sheet]
+            wb = writer.book
 
-            # ----- TIÊU ĐỀ -----
+            # Tiêu đề
             ws.merge_range(
-                0, 0,
-                0, len(df_detail.columns) - 1,
+                0, 0, 0, len(df_detail.columns) - 1,
                 f"BẢNG CHẤM CÔNG THÁNG {month_str}",
-                writer.book.add_format({
+                wb.add_format({
                     "bold": True,
                     "font_size": 14,
                     "align": "center"
                 })
             )
 
-            # ----- FORMAT CỘT -----
-            ws.set_column(0, 0, 20)  # User
+            ws.set_column(0, 0, 20)
             ws.set_column(1, len(df_detail.columns), 6)
 
-            # ===== VỊ TRÍ BẮT ĐẦU BẢNG TỔNG HỢP =====
-            start_summary_row = len(df_detail) + 6
+            # --- Bảng tổng hợp ---
+            start_row = len(df_detail) + 6
 
-            # ----- TIÊU ĐỀ TỔNG HỢP -----
             ws.merge_range(
-                start_summary_row - 2, 0,
-                start_summary_row - 2, len(summary_cols) - 1,
+                start_row - 2, 0,
+                start_row - 2, len(df_summary.columns) - 1,
                 "BẢNG TỔNG HỢP THEO THÁNG",
-                writer.book.add_format({
+                wb.add_format({
                     "bold": True,
-                    "font_size": 12,
-                    "align": "left"
+                    "font_size": 12
                 })
             )
 
-            # ----- GHI BẢNG TỔNG HỢP -----
             df_summary.to_excel(
                 writer,
-                sheet_name=sheet_name,
+                sheet_name=sheet,
                 index=False,
-                startrow=start_summary_row
+                startrow=start_row
             )
-
-            ws.set_column(1, len(summary_cols), 12)
 
         # ===== NÚT DOWNLOAD =====
         st.download_button(
