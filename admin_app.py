@@ -1229,7 +1229,7 @@ def admin_app(user):
                             # gb.configure_column("ID", hide=True)
                             gb.configure_column(
                                 "ID",
-                                editable=False,
+                                editable=True,   # ❗ QUAN TRỌNG
                                 width=1,
                                 headerName="",
                                 cellStyle={
@@ -1275,7 +1275,9 @@ def admin_app(user):
                                     key=grid_key,
                                     theme="streamlit",   # ⭐ DÒNG QUYẾT ĐỊNH
                                     update_mode=GridUpdateMode.MANUAL,
-                                    data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
+                                    # data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
+                                    data_return_mode=DataReturnMode.AS_INPUT,
+
                                     reload_data=True,
                                     allow_unsafe_jscode=True,
                                     fit_columns_on_grid_load=False,
