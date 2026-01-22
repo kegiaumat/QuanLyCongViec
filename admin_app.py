@@ -1313,7 +1313,8 @@ def admin_app(user):
                                     # .astype(int)
                                     # .tolist()
                                 # )
-                                ids = selected_df["_id"].dropna().astype(int).tolist()
+                                ids = selected_df["ID"].dropna().astype(int).tolist()
+
 
                                 if not ids:
                                     st.error("❌ Không tìm thấy ID hợp lệ để xóa")
