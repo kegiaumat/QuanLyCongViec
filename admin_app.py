@@ -1161,7 +1161,8 @@ def admin_app(user):
                                     formatted_note = f"⏰ {stime} - {etime} {date_part} {note_rest}".strip()
 
                                 rows.append({
-                                    "ID": r["id"],
+                                    # "ID": r["id"],
+                                    "_id": r["id"],   # 👈 ID ẩn
                                     "Ngày": r["Ngày"],
                                     "Công việc": r["task"],
                                     "Giờ bắt đầu": stime,
@@ -1227,18 +1228,18 @@ def admin_app(user):
                             )
 
                             # gb.configure_column("ID", hide=True)
-                            gb.configure_column(
-                                "ID",
-                                editable=True,   # ❗ QUAN TRỌNG
-                                width=1,
-                                headerName="",
-                                cellStyle={
-                                    "color": "transparent",
-                                    "backgroundColor": "transparent",
-                                    "border": "none",
-                                    "padding": "0"
-                                }
-                            )
+                            # gb.configure_column(
+                                # "ID",
+                                # editable=True,   # ❗ QUAN TRỌNG
+                                # width=1,
+                                # headerName="",
+                                # cellStyle={
+                                    # "color": "transparent",
+                                    # "backgroundColor": "transparent",
+                                    # "border": "none",
+                                    # "padding": "0"
+                                # }
+                            # )
                             
                             gb.configure_column("approved", hide=True)
 
@@ -1306,12 +1307,13 @@ def admin_app(user):
                                 # st.cache_data.clear()
                                 # st.rerun()
                             if del_click:
-                                ids = (
-                                    selected_df["ID"]
-                                    .dropna()
-                                    .astype(int)
-                                    .tolist()
-                                )
+                                # ids = (
+                                    # selected_df["ID"]
+                                    # .dropna()
+                                    # .astype(int)
+                                    # .tolist()
+                                # )
+                                ids = selected_df["_id"].dropna().astype(int).tolist()
 
                                 if not ids:
                                     st.error("❌ Không tìm thấy ID hợp lệ để xóa")
