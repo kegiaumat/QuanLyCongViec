@@ -1226,7 +1226,20 @@ def admin_app(user):
                                 cellEditorParams={"values": time_options},
                             )
 
-                            gb.configure_column("ID", hide=True)
+                            # gb.configure_column("ID", hide=True)
+                            gb.configure_column(
+                                "ID",
+                                editable=False,
+                                width=1,
+                                headerName="",
+                                cellStyle={
+                                    "color": "transparent",
+                                    "backgroundColor": "transparent",
+                                    "border": "none",
+                                    "padding": "0"
+                                }
+                            )
+                            
                             gb.configure_column("approved", hide=True)
 
                             gb.configure_column(
