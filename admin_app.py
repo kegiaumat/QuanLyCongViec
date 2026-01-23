@@ -1249,8 +1249,8 @@ def admin_app(user):
 
                             grid_options = gb.build()
 
-                            # grid_options["rowSelection"] = "multiple"
-                            # grid_options["suppressRowClickSelection"] = False
+                            grid_options["rowSelection"] = "multiple"
+                            grid_options["suppressRowClickSelection"] = False
                             
                             grid_options["getRowStyle"] = row_style
 
@@ -1300,16 +1300,16 @@ def admin_app(user):
 
                             # LẤY DATA SAU GRID
                             edited_df   = pd.DataFrame(grid["data"])
-                            # selected_rows = grid["selected_rows"]
-                            # ids = [r["ID"] for r in selected_rows]
-                            edited_df = pd.DataFrame(grid["data"])
+                            selected_rows = grid["selected_rows"]
+                            ids = [r["ID"] for r in selected_rows]
+                            # edited_df = pd.DataFrame(grid["data"])
 
-                            ids = (
-                                edited_df
-                                .loc[edited_df["Chọn?"] == True, "ID"]
-                                .astype(int)
-                                .tolist()
-                            )
+                            # ids = (
+                                # edited_df
+                                # .loc[edited_df["Chọn?"] == True, "ID"]
+                                # .astype(int)
+                                # .tolist()
+                            # )
 
                             # NÚT BẤM BÌNH THƯỜNG (KHÔNG FORM)
                             c1, c2, c3 = st.columns(3)
