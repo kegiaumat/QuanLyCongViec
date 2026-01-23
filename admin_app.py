@@ -1204,10 +1204,10 @@ def admin_app(user):
                             gb.configure_column("Ghi chú", flex=5)
                             gb.configure_column(
                                 "Chọn?",
-                                headerName="Chọn?",
                                 editable=True,
-                                type=["booleanColumn"],   # ⭐ DÒNG QUYẾT ĐỊNH
-                                width=80
+                                cellEditor="agCheckboxCellEditor",
+                                cellRenderer="agCheckboxCellRenderer",
+                                width=90,
                             )
 
 
@@ -1321,6 +1321,9 @@ def admin_app(user):
                                 )
 
                                 st.write("DEBUG ids:", ids)  # test 1 lần
+                                st.write(
+                                    edited_df[["ID", "Chọn?"]].head(10)
+                                )
 
                                 if ids:
                                     supabase.table("tasks").delete().in_("id", ids).execute()
