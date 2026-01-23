@@ -170,9 +170,10 @@ def user_app(user):
                   return !(params.data && params.data.approved === true);
                 }
                 """)
-                gb.configure_column("ID", hide=True)
+                
 
                 gb = GridOptionsBuilder.from_dataframe(df_show)
+                gb.configure_column("ID", hide=True)
                 # 🔹 CHỈNH ĐỘ RỘNG TỪNG CỘT
                 gb.configure_column(
                     "Ngày",
