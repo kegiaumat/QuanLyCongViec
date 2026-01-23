@@ -1196,19 +1196,24 @@ def admin_app(user):
                             )
 
                             # 🔹 CHỈNH ĐỘ RỘNG TỪNG CỘT
-                            gb.configure_column("Ngày", width=100)
+                            gb.configure_column(
+                                "Ngày", 
+                                width=100,                                
+                                checkboxSelection=True,
+                                headerCheckboxSelection=True
+                            )
                             gb.configure_column("Công việc", flex=4)
                             gb.configure_column("Giờ bắt đầu", width=110)
                             gb.configure_column("Giờ kết thúc", width=110)
                             gb.configure_column("Khối lượng (giờ)", width=120)
                             gb.configure_column("Ghi chú", flex=5)
-                            gb.configure_column(
-                                "Chọn?",
-                                editable=True,
-                                cellEditor="agCheckboxCellEditor",
-                                cellRenderer="agCheckboxCellRenderer",
-                                width=90,
-                            )
+                            # gb.configure_column(
+                                # "Chọn?",
+                                # editable=True,
+                                # cellEditor="agCheckboxCellEditor",
+                                # cellRenderer="agCheckboxCellRenderer",
+                                # width=90,
+                            # )
 
 
 
@@ -1301,7 +1306,8 @@ def admin_app(user):
                             # LẤY DATA SAU GRID
                             edited_df   = pd.DataFrame(grid["data"])
                             selected_rows = grid["selected_rows"]
-                            ids = [r["ID"] for r in selected_rows]
+                            ids = [int(r["ID"]) for r in selected_rows]
+
                             # edited_df = pd.DataFrame(grid["data"])
 
                             # ids = (
