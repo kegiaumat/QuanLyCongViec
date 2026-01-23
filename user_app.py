@@ -252,7 +252,12 @@ def user_app(user):
                     updated = 0
                     blocked = 0
 
-                    for row in selected_rows:
+                    selected_ids = {int(r["ID"]) for r in selected_rows}
+
+                    for _, row in edited.iterrows():
+                        if int(row["ID"]) not in selected_ids:
+                            continue
+
                         # chặn đã duyệt
                         if bool(row.get("approved", False)):
                             blocked += 1
