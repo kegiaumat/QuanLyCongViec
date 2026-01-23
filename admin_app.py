@@ -1161,8 +1161,7 @@ def admin_app(user):
                                     formatted_note = f"⏰ {stime} - {etime} {date_part} {note_rest}".strip()
 
                                 rows.append({
-                                    # "ID": r["id"],
-                                    "_id": r["id"],   # 👈 ID ẩn
+                                    "ID": r["id"],
                                     "Ngày": r["Ngày"],
                                     "Công việc": r["task"],
                                     "Giờ bắt đầu": stime,
@@ -1227,20 +1226,7 @@ def admin_app(user):
                                 cellEditorParams={"values": time_options},
                             )
 
-                            # gb.configure_column("ID", hide=True)
-                            # gb.configure_column(
-                                # "ID",
-                                # editable=True,   # ❗ QUAN TRỌNG
-                                # width=1,
-                                # headerName="",
-                                # cellStyle={
-                                    # "color": "transparent",
-                                    # "backgroundColor": "transparent",
-                                    # "border": "none",
-                                    # "padding": "0"
-                                # }
-                            # )
-                            
+                            gb.configure_column("ID", hide=True)
                             gb.configure_column("approved", hide=True)
 
                             gb.configure_column(
@@ -1269,61 +1255,65 @@ def admin_app(user):
                             grid_options["getRowStyle"] = row_style
 
                             
-                            with st.form(f"form_cong_{project}_{username_real}", clear_on_submit=False):
-                                grid = AgGrid(
-                                    df_display,
-                                    gridOptions=grid_options,
-                                    key=grid_key,
-                                    theme="streamlit",   # ⭐ DÒNG QUYẾT ĐỊNH
-                                    update_mode=GridUpdateMode.MANUAL,
+                            # with st.form(f"form_cong_{project}_{username_real}", clear_on_submit=False):
+                                # grid = AgGrid(
+                                    # df_display,
+                                    # gridOptions=grid_options,
+                                    # key=grid_key,
+                                    # theme="streamlit",   # ⭐ DÒNG QUYẾT ĐỊNH
+                                    # update_mode=GridUpdateMode.MANUAL,
                                     # data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
-                                    data_return_mode=DataReturnMode.AS_INPUT,
-
-                                    reload_data=True,
-                                    allow_unsafe_jscode=True,
-                                    fit_columns_on_grid_load=False,
-                                    height=420,
-                                    width="100%",
-                                )
+                                    # reload_data=True,
+                                    # allow_unsafe_jscode=True,
+                                    # fit_columns_on_grid_load=False,
+                                    # height=420,
+                                    # width="100%",
+                                # )
 
 
 
-                                edited_df   = pd.DataFrame(grid["data"])
-                                selected_df = edited_df[edited_df["Chọn?"] == True]
+                                # edited_df   = pd.DataFrame(grid["data"])
+                                # selected_df = edited_df[edited_df["Chọn?"] == True]
 
-                                c1, c2, c3 = st.columns(3)
+                                # c1, c2, c3 = st.columns(3)
 
-                                del_click     = c1.form_submit_button("🗑 Xóa")
-                                approve_click = c2.form_submit_button("✔ Duyệt / ❌ Bỏ duyệt")
+                                # del_click     = c1.form_submit_button("🗑 Xóa")
+                                # approve_click = c2.form_submit_button("✔ Duyệt / ❌ Bỏ duyệt")
 
-                                save_click    = c3.form_submit_button("💾 Lưu")
+                                # save_click    = c3.form_submit_button("💾 Lưu")
 
+                            grid = AgGrid(
+                                df_display,
+                                gridOptions=grid_options,
+                                key=grid_key,
+                                theme="streamlit",
+                                update_mode=GridUpdateMode.NO_UPDATE,   # ⭐ KHÔNG RERUN KHI EDIT
+                                data_return_mode=DataReturnMode.AS_INPUT,
+                                reload_data=False,                      # ⭐ KHÔNG RESET CHECKBOX
+                                allow_unsafe_jscode=True,
+                                fit_columns_on_grid_load=False,
+                                height=420,
+                                width="100%",
+                            )
+
+                            # LẤY DATA SAU GRID
+                            edited_df   = pd.DataFrame(grid["data"])
+                            selected_df = edited_df[edited_df["Chọn?"] == True]
+
+                            # NÚT BẤM BÌNH THƯỜNG (KHÔNG FORM)
+                            c1, c2, c3 = st.columns(3)
+
+                            del_click     = c1.button("🗑 Xóa", key=f"del_{project}_{username_real}")
+                            approve_click = c2.button("✔ Duyệt / ❌ Bỏ duyệt", key=f"appr_{project}_{username_real}")
+                            save_click    = c3.button("💾 Lưu", key=f"save_{project}_{username_real}")
 
                             # ===== XÓA =====
-                            # if del_click:
-                                # for _, r in selected_df.iterrows():
-                                    # supabase.table("tasks").delete().eq("id", r["ID"]).execute()
-                                # st.success("Đã xóa.")
-                                # st.cache_data.clear()
-                                # st.rerun()
                             if del_click:
-                                # ids = (
-                                    # selected_df["ID"]
-                                    # .dropna()
-                                    # .astype(int)
-                                    # .tolist()
-                                # )
-                                ids = selected_df["ID"].dropna().astype(int).tolist()
-
-
-                                if not ids:
-                                    st.error("❌ Không tìm thấy ID hợp lệ để xóa")
-                                else:
-                                    supabase.table("tasks").delete().in_("id", ids).execute()
-
-                                    st.success(f"🗑️ Đã xóa {len(ids)} công việc")
-                                    st.cache_data.clear()
-                                    st.rerun()
+                                for _, r in selected_df.iterrows():
+                                    supabase.table("tasks").delete().eq("id", r["ID"]).execute()
+                                st.success("Đã xóa.")
+                                st.cache_data.clear()
+                                st.rerun()
 
                             # ===== DUYỆT / BỎ DUYỆT =====
                             if approve_click:
@@ -1830,88 +1820,6 @@ def admin_app(user):
         # ==============================
         st.divider()
         st.markdown("## 📊 Thống kê tổng hợp theo tháng")
-        st.divider()
-        st.markdown("## 📤 Xuất dữ liệu chấm công (1 sheet)")
-
-        # ===== BẢNG CHI TIẾT =====
-        df_detail = st.session_state["attendance_buffer"].copy()
-        df_detail = df_detail.drop(columns=["username"], errors="ignore")
-
-        day_cols = [c for c in df_detail.columns if "/" in c]
-
-        # ===== TẠO BẢNG TỔNG HỢP (TỰ TÍNH LẠI) =====
-        def count_code(row, code):
-            return sum(1 for c in day_cols if str(row[c]).strip().upper() == code)
-
-        df_summary = df_detail[["User"]].copy()
-        df_summary["Tổng K"] = df_detail.apply(lambda r: count_code(r, "K"), axis=1)
-        df_summary["Tổng P"] = df_detail.apply(lambda r: count_code(r, "P"), axis=1)
-        df_summary["Tổng L"] = df_detail.apply(lambda r: count_code(r, "L"), axis=1)
-        df_summary["Tổng H"] = df_detail.apply(lambda r: count_code(r, "H"), axis=1)
-        df_summary["Tổng Công"] = (
-            df_summary["Tổng K"]
-            + df_summary["Tổng P"]
-            + df_summary["Tổng H"]
-        )
-
-        # ===== GHI 1 SHEET =====
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-
-            sheet = f"Cham_cong_{month_str}"
-
-            # --- Bảng chi tiết ---
-            df_detail.to_excel(
-                writer,
-                sheet_name=sheet,
-                index=False,
-                startrow=2
-            )
-
-            ws = writer.sheets[sheet]
-            wb = writer.book
-
-            # Tiêu đề
-            ws.merge_range(
-                0, 0, 0, len(df_detail.columns) - 1,
-                f"BẢNG CHẤM CÔNG THÁNG {month_str}",
-                wb.add_format({
-                    "bold": True,
-                    "font_size": 14,
-                    "align": "center"
-                })
-            )
-
-            ws.set_column(0, 0, 20)
-            ws.set_column(1, len(df_detail.columns), 6)
-
-            # --- Bảng tổng hợp ---
-            start_row = len(df_detail) + 6
-
-            ws.merge_range(
-                start_row - 2, 0,
-                start_row - 2, len(df_summary.columns) - 1,
-                "BẢNG TỔNG HỢP THEO THÁNG",
-                wb.add_format({
-                    "bold": True,
-                    "font_size": 12
-                })
-            )
-
-            df_summary.to_excel(
-                writer,
-                sheet_name=sheet,
-                index=False,
-                startrow=start_row
-            )
-
-        # ===== NÚT DOWNLOAD =====
-        st.download_button(
-            "⬇️ Xuất CHẤM CÔNG + TỔNG HỢP (1 sheet)",
-            data=output.getvalue(),
-            file_name=f"cham_cong_1_sheet_{month_str}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
 
         df_stat = st.session_state["attendance_buffer"].copy()
         day_cols = [c for c in df_stat.columns if "/" in c]
