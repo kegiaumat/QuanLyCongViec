@@ -1292,7 +1292,8 @@ def admin_app(user):
                                 gridOptions=grid_options,
                                 key=grid_key,
                                 theme="streamlit",
-                                update_mode=GridUpdateMode.MANUAL,
+                                update_mode=GridUpdateMode.MODEL_CHANGED,
+
                                 data_return_mode=DataReturnMode.AS_INPUT,   # ⭐ BẮT BUỘC
                                 reload_data=False,                          # ⭐ BẮT BUỘC
                                 allow_unsafe_jscode=True,
