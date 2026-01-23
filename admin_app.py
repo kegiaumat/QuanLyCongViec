@@ -1295,6 +1295,7 @@ def admin_app(user):
                                 height=420,
                                 width="100%",
                             )
+                            st.write("DEBUG số dòng chọn:", len(selected_df))
 
                             # LẤY DATA SAU GRID
                             edited_df   = pd.DataFrame(grid["data"])
