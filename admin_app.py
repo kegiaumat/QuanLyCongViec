@@ -1287,15 +1287,15 @@ def admin_app(user):
                                 gridOptions=grid_options,
                                 key=grid_key,
                                 theme="streamlit",
-                                update_mode=GridUpdateMode.MANUAL,          # giữ nguyên
-                                data_return_mode=DataReturnMode.AS_INPUT,  # 🔥 SỬA Ở ĐÂY
-                                reload_data=False,                          # 🔥 SỬA Ở ĐÂY
-
+                                update_mode=GridUpdateMode.MANUAL,
+                                data_return_mode=DataReturnMode.AS_INPUT,   # ⭐ BẮT BUỘC
+                                reload_data=False,                          # ⭐ BẮT BUỘC
                                 allow_unsafe_jscode=True,
                                 fit_columns_on_grid_load=False,
                                 height=420,
                                 width="100%",
                             )
+
                             
 
                             # LẤY DATA SAU GRID
@@ -1311,7 +1311,16 @@ def admin_app(user):
 
                             # ===== XÓA =====
                             if del_click:
-                                ids = selected_df["ID"].dropna().astype(int).tolist()
+                                ids = (
+                                    selected_df["ID"]
+                                    .astype(str)
+                                    .str.strip()
+                                    .replace("nan", None)
+                                    .dropna()
+                                    .tolist()
+                                )
+
+                                st.write("DEBUG ids:", ids)  # test 1 lần
 
                                 if ids:
                                     supabase.table("tasks").delete().in_("id", ids).execute()
@@ -1320,6 +1329,7 @@ def admin_app(user):
                                     st.rerun()
                                 else:
                                     st.warning("⚠️ Không có dòng hợp lệ để xóa")
+
 
 
                             # ===== DUYỆT / BỎ DUYỆT =====
