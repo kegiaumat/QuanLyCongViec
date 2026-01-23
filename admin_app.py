@@ -1169,11 +1169,11 @@ def admin_app(user):
                                     "Khối lượng (giờ)": float(r.get("khoi_luong") or 0),
                                     "Ghi chú": formatted_note,
                                     "approved": bool(r.get("approved")),
-                                    "Chọn?": False,
+                                    # "Chọn?": False,
                                 })
 
                             df_display = pd.DataFrame(rows)
-                            df_display["Chọn?"] = df_display["Chọn?"].astype(bool)
+                            # df_display["Chọn?"] = df_display["Chọn?"].astype(bool)
 
                             # username thật (PHẢI LẤY TRƯỚC)
                             username_real = df_users.loc[
@@ -1259,33 +1259,6 @@ def admin_app(user):
                             
                             grid_options["getRowStyle"] = row_style
 
-                            
-                            # with st.form(f"form_cong_{project}_{username_real}", clear_on_submit=False):
-                                # grid = AgGrid(
-                                    # df_display,
-                                    # gridOptions=grid_options,
-                                    # key=grid_key,
-                                    # theme="streamlit",   # ⭐ DÒNG QUYẾT ĐỊNH
-                                    # update_mode=GridUpdateMode.MANUAL,
-                                    # data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
-                                    # reload_data=True,
-                                    # allow_unsafe_jscode=True,
-                                    # fit_columns_on_grid_load=False,
-                                    # height=420,
-                                    # width="100%",
-                                # )
-
-
-
-                                # edited_df   = pd.DataFrame(grid["data"])
-                                # selected_df = edited_df[edited_df["Chọn?"] == True]
-
-                                # c1, c2, c3 = st.columns(3)
-
-                                # del_click     = c1.form_submit_button("🗑 Xóa")
-                                # approve_click = c2.form_submit_button("✔ Duyệt / ❌ Bỏ duyệt")
-
-                                # save_click    = c3.form_submit_button("💾 Lưu")
 
                             grid = AgGrid(
                                 df_display,
@@ -1334,22 +1307,6 @@ def admin_app(user):
                                     st.success(f"🗑️ Đã xóa {len(ids)} dòng")
                                     st.cache_data.clear()
                                     st.rerun()
-                                st.markdown("### 🔍 DEBUG AG-GRID")
-
-                                st.write("grid.keys():", grid.keys())
-
-                                st.write("selected_rows:")
-                                st.write(grid.get("selected_rows"))
-
-                                st.write("data (5 dòng đầu):")
-                                st.write(pd.DataFrame(grid.get("data", [])).head())
-
-                                if grid.get("selected_rows"):
-                                    st.write("ID từ selected_rows:")
-                                    st.write([r.get("ID") for r in grid["selected_rows"]])
-                                else:
-                                    st.warning("❌ selected_rows rỗng")
-
 
 
 
