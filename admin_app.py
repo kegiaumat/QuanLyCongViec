@@ -1311,14 +1311,16 @@ def admin_app(user):
 
                             # ===== XÓA =====
                             if del_click:
-                                for _, r in selected_df.iterrows():
-                                    # supabase.table("tasks").delete().eq("id", r["ID"]).execute()
-                                    ids = selected_df["id"].dropna().tolist()
-                                    supabase.table("tasks").delete().in_("id", ids).execute()
+                                ids = selected_df["ID"].dropna().astype(int).tolist()
 
-                                st.success("Đã xóa.")
-                                st.cache_data.clear()
-                                st.rerun()
+                                if ids:
+                                    supabase.table("tasks").delete().in_("id", ids).execute()
+                                    st.success(f"🗑️ Đã xóa {len(ids)} công nhật")
+                                    st.cache_data.clear()
+                                    st.rerun()
+                                else:
+                                    st.warning("⚠️ Không có dòng hợp lệ để xóa")
+
 
                             # ===== DUYỆT / BỎ DUYỆT =====
                             if approve_click:
