@@ -1287,7 +1287,8 @@ def admin_app(user):
                                 gridOptions=grid_options,
                                 key=grid_key,
                                 theme="streamlit",
-                                update_mode=GridUpdateMode.NO_UPDATE,   # ⭐ KHÔNG RERUN KHI EDIT
+                                update_mode=GridUpdateMode.MANUAL
+
                                 data_return_mode=DataReturnMode.AS_INPUT,
                                 reload_data=False,                      # ⭐ KHÔNG RESET CHECKBOX
                                 allow_unsafe_jscode=True,
