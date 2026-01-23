@@ -1333,6 +1333,21 @@ def admin_app(user):
                                     st.success(f"🗑️ Đã xóa {len(ids)} dòng")
                                     st.cache_data.clear()
                                     st.rerun()
+                                st.markdown("### 🔍 DEBUG AG-GRID")
+
+                                st.write("grid.keys():", grid.keys())
+
+                                st.write("selected_rows:")
+                                st.write(grid.get("selected_rows"))
+
+                                st.write("data (5 dòng đầu):")
+                                st.write(pd.DataFrame(grid.get("data", [])).head())
+
+                                if grid.get("selected_rows"):
+                                    st.write("ID từ selected_rows:")
+                                    st.write([r.get("ID") for r in grid["selected_rows"]])
+                                else:
+                                    st.warning("❌ selected_rows rỗng")
 
 
 
