@@ -114,13 +114,14 @@ def user_app(user):
                     "note": "Ghi chú",
                 }
                 df_show = pd.DataFrame({
+                    "ID": df_tasks["id"],          # 👈 THÊM DÒNG NÀY
                     "Ngày": df_tasks["Ngày"],
                     "Công việc": df_tasks["task"],
                     "Giờ bắt đầu": df_tasks["Giờ bắt đầu"],
                     "Giờ kết thúc": df_tasks["Giờ kết thúc"],
                     "Khối lượng (giờ)": df_tasks["khoi_luong"],
                     "Ghi chú": df_tasks["note"],
-                    "Chọn?": False,
+                    # "Chọn?": False,
                 })
 
                 # giữ approved để xử lý logic (ẩn sau)
@@ -169,28 +170,36 @@ def user_app(user):
                   return !(params.data && params.data.approved === true);
                 }
                 """)
+                gb.configure_column("ID", hide=True)
 
                 gb = GridOptionsBuilder.from_dataframe(df_show)
                 # 🔹 CHỈNH ĐỘ RỘNG TỪNG CỘT
-                gb.configure_column("Ngày", width=100)
+                gb.configure_column(
+                    "Ngày",
+                    width=150,
+                    checkboxSelection=True,
+                    headerCheckboxSelection=True
+                )
+                gb.configure_column("Ngày", editable=editable_guard)
                 gb.configure_column("Công việc", flex=4)
                 gb.configure_column("Giờ bắt đầu", width=110)
                 gb.configure_column("Giờ kết thúc", width=110)
                 gb.configure_column("Khối lượng (giờ)", width=120)
                 gb.configure_column("Ghi chú", flex=5)
-                gb.configure_column("Chọn?", width=80)
-                gb.configure_column(
-                    "Chọn?",
-                    editable=editable_guard,
-                    cellRenderer="agCheckboxCellRenderer",
-                    cellEditor="agCheckboxCellEditor",
-                    width=80
-                )
+                # gb.configure_column("Chọn?", width=80)
+                # gb.configure_column(
+                    # "Chọn?",
+                    # editable=editable_guard,
+                    # cellRenderer="agCheckboxCellRenderer",
+                    # cellEditor="agCheckboxCellEditor",
+                    # width=80
+                # )
 
                 gb.configure_default_column(resizable=True, sortable=True, filter=True)
+                
 
                 # cột công việc không cho sửa
-                gb.configure_column("Công việc", editable=False)
+                gb.configure_column("Công việc", editable=editable_guard)
 
                 # giờ chọn dropdown
                 gb.configure_column("Giờ bắt đầu", editable=editable_guard,
@@ -212,13 +221,15 @@ def user_app(user):
 
                 grid_options = gb.build()
                 grid_options["getRowStyle"] = row_style
+                grid_options["rowSelection"] = "multiple"
+                grid_options["suppressRowClickSelection"] = False
 
                 with st.form(f"user_public_form_{project}_{username}", clear_on_submit=False):
                     grid = AgGrid(
                         df_show,
                         gridOptions=grid_options,
                         key=f"user_public_grid_{project}_{username}",
-                        update_mode=GridUpdateMode.MANUAL,
+                        update_mode=GridUpdateMode.SELECTION_CHANGED,
                         data_return_mode=DataReturnMode.AS_INPUT,
                         allow_unsafe_jscode=True,
                         reload_data=False,
@@ -227,6 +238,7 @@ def user_app(user):
                         height=420,
                     )
                     edited = pd.DataFrame(grid["data"])
+                    selected_rows = grid.get("selected_rows", [])
 
                     c1, c2 = st.columns([2, 1])
                     save_click = c1.form_submit_button("💾 Lưu thay đổi")
@@ -239,13 +251,13 @@ def user_app(user):
                     updated = 0
                     blocked = 0
 
-                    for i, row in edited.iterrows():
+                    for row in selected_rows:
                         # chặn đã duyệt
                         if bool(row.get("approved", False)):
                             blocked += 1
                             continue
 
-                        task_id = int(df_tasks.iloc[i]["id"])
+                        task_id = int(row["ID"])
                         update_data = {}
 
                         # giờ + note (giữ logic mày đang làm)
@@ -306,27 +318,24 @@ def user_app(user):
                     ids_to_delete = []
                     blocked = 0
 
-                    for i, row in edited.iterrows():
-                        if not row.get("Chọn?"):
-                            continue
-
+                    for row in selected_rows:
                         if bool(row.get("approved", False)):
                             blocked += 1
                             continue
 
-                        ids_to_delete.append(int(df_tasks.iloc[i]["id"]))
+                        ids_to_delete.append(int(row["ID"]))
 
                     if ids_to_delete:
-                        for tid in ids_to_delete:
-                            supabase.table("tasks").delete().eq("id", tid).execute()
+                        supabase.table("tasks").delete().in_("id", ids_to_delete).execute()
                         st.success(f"✅ Đã xóa {len(ids_to_delete)} dòng.")
                     else:
-                        st.warning("⚠️ Chưa chọn dòng nào để xóa (hoặc các dòng đã chọn đều đã duyệt).")
+                        st.warning("⚠️ Chưa chọn dòng nào để xóa.")
 
                     if blocked > 0:
                         st.warning(f"⚠️ {blocked} dòng đã duyệt nên không thể xóa.")
 
                     st.rerun()
+
 
 
         # ======= Tự thêm công việc (nếu public) =======
