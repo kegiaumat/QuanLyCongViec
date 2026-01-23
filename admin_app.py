@@ -1313,18 +1313,25 @@ def admin_app(user):
 
                             # ===== DUYỆT / BỎ DUYỆT =====
                             if approve_click:
-                                new_val = not bool(len(selected_df) and selected_df["approved"].any())
-                                for _, r in selected_df.iterrows():
-                                    supabase.table("tasks").update(
-                                        {"approved": new_val}
-                                    ).eq("id", r["ID"]).execute()
-                                st.success("Đã cập nhật.")
-                                st.cache_data.clear()
-                                st.rerun()
+                                if not selected_rows:
+                                    st.warning("⚠️ Chưa chọn dòng nào")
+                                else:
+                                    current_vals = [bool(r["approved"]) for r in selected_rows]
+                                    new_val = not all(current_vals)
+
+                                    for r in selected_rows:
+                                        supabase.table("tasks").update(
+                                            {"approved": new_val}
+                                        ).eq("id", int(r["ID"])).execute()
+
+                                    st.success("✅ Đã cập nhật duyệt / bỏ duyệt")
+                                    st.cache_data.clear()
+                                    st.rerun()
+
 
                             # ===== LƯU =====
                             if save_click:
-                                for _, r in edited_df.iterrows():
+                                for r in selected_rows:
                                     # ===== 1. LẤY DỮ LIỆU =====
                                     start_date = pd.to_datetime(r["Ngày"], errors="coerce").date()
 
