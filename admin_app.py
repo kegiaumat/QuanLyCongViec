@@ -1249,8 +1249,8 @@ def admin_app(user):
 
                             grid_options = gb.build()
 
-                            grid_options["rowSelection"] = "multiple"
-                            grid_options["suppressRowClickSelection"] = False
+                            # grid_options["rowSelection"] = "multiple"
+                            # grid_options["suppressRowClickSelection"] = False
                             
                             grid_options["getRowStyle"] = row_style
 
@@ -1300,7 +1300,16 @@ def admin_app(user):
 
                             # LẤY DATA SAU GRID
                             edited_df   = pd.DataFrame(grid["data"])
-                            selected_df = edited_df[edited_df["Chọn?"] == True]
+                            # selected_rows = grid["selected_rows"]
+                            # ids = [r["ID"] for r in selected_rows]
+                            edited_df = pd.DataFrame(grid["data"])
+
+                            ids = (
+                                edited_df
+                                .loc[edited_df["Chọn?"] == True, "ID"]
+                                .astype(int)
+                                .tolist()
+                            )
 
                             # NÚT BẤM BÌNH THƯỜNG (KHÔNG FORM)
                             c1, c2, c3 = st.columns(3)
@@ -1311,27 +1320,15 @@ def admin_app(user):
 
                             # ===== XÓA =====
                             if del_click:
-                                ids = (
-                                    selected_df["ID"]
-                                    .astype(str)
-                                    .str.strip()
-                                    .replace("nan", None)
-                                    .dropna()
-                                    .tolist()
-                                )
-
-                                st.write("DEBUG ids:", ids)  # test 1 lần
-                                st.write(
-                                    edited_df[["ID", "Chọn?"]].head(10)
-                                )
-
-                                if ids:
+                                if not ids:
+                                    st.warning("⚠️ Không có dòng hợp lệ để xóa")
+                                else:
                                     supabase.table("tasks").delete().in_("id", ids).execute()
-                                    st.success(f"🗑️ Đã xóa {len(ids)} công nhật")
+                                    st.success(f"🗑️ Đã xóa {len(ids)} dòng")
                                     st.cache_data.clear()
                                     st.rerun()
-                                else:
-                                    st.warning("⚠️ Không có dòng hợp lệ để xóa")
+
+
 
 
 
