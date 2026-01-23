@@ -1287,15 +1287,16 @@ def admin_app(user):
                                 gridOptions=grid_options,
                                 key=grid_key,
                                 theme="streamlit",
-                                update_mode=GridUpdateMode.MANUAL,
-                                data_return_mode=DataReturnMode.AS_INPUT,
-                                reload_data=False,                      # ⭐ KHÔNG RESET CHECKBOX
+                                update_mode=GridUpdateMode.MANUAL,          # giữ nguyên
+                                data_return_mode=DataReturnMode.AS_INPUT,  # 🔥 SỬA Ở ĐÂY
+                                reload_data=False,                          # 🔥 SỬA Ở ĐÂY
+
                                 allow_unsafe_jscode=True,
                                 fit_columns_on_grid_load=False,
                                 height=420,
                                 width="100%",
                             )
-                            st.write("DEBUG số dòng chọn:", len(selected_df))
+                            
 
                             # LẤY DATA SAU GRID
                             edited_df   = pd.DataFrame(grid["data"])
@@ -1311,7 +1312,10 @@ def admin_app(user):
                             # ===== XÓA =====
                             if del_click:
                                 for _, r in selected_df.iterrows():
-                                    supabase.table("tasks").delete().eq("id", r["ID"]).execute()
+                                    # supabase.table("tasks").delete().eq("id", r["ID"]).execute()
+                                    ids = selected_df["id"].dropna().tolist()
+                                    supabase.table("tasks").delete().in_("id", ids).execute()
+
                                 st.success("Đã xóa.")
                                 st.cache_data.clear()
                                 st.rerun()
