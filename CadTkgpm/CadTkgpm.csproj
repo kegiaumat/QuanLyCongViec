@@ -1,0 +1,77 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Plugin AutoCAD dùng chung cho AutoCAD 2020 -> 2026.
+    AutoCAD 2020–2026 đều chạy .NET Framework 4.8 nên chỉ cần một TargetFramework.
+
+    Build một năm:   dotnet build -c Release -p:AcadYear=2024
+    Build tất cả:    powershell -ExecutionPolicy Bypass -File build.ps1
+    Tên DLL sẽ có đuôi ngày, ví dụ: CadTkgpm_AC2026_20261112.dll
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <PlatformTarget>x64</PlatformTarget>
+    <OutputType>Library</OutputType>
+    <RootNamespace>CadTkgpm</RootNamespace>
+    <Deterministic>true</Deterministic>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+
+    <!-- Năm AutoCAD cần build. Mặc định 2026. -->
+    <AcadYear Condition="'$(AcadYear)' == ''">2026</AcadYear>
+
+    <!-- Thư mục cài AutoCAD. Có thể override: -p:AcadRoot="D:\Autodesk\AutoCAD 2024" -->
+    <AcadRoot Condition="'$(AcadRoot)' == ''">$(ProgramFiles)\Autodesk\AutoCAD $(AcadYear)</AcadRoot>
+
+    <!-- Ngày build, định dạng yyyyMMdd -->
+    <BuildDate Condition="'$(BuildDate)' == ''">$([System.DateTime]::Now.ToString('yyyyMMdd'))</BuildDate>
+
+    <!-- Đuôi ngày nằm trong tên DLL -->
+    <AssemblyName>CadTkgpm_AC$(AcadYear)_$(BuildDate)</AssemblyName>
+
+    <!-- Output gom theo năm trong thư mục dist -->
+    <OutputPath>$(MSBuildThisFileDirectory)dist\AutoCAD$(AcadYear)\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)obj\AutoCAD$(AcadYear)\</BaseIntermediateOutputPath>
+  </PropertyGroup>
+
+  <!-- Ghi năm AutoCAD và ngày build vào metadata của DLL, đọc bằng reflection trong AssemblyInfo -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadata">
+      <_Parameter1>AcadYear</_Parameter1>
+      <_Parameter2>$(AcadYear)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadata">
+      <_Parameter1>BuildDate</_Parameter1>
+      <_Parameter2>$(BuildDate)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="acdbmgd">
+      <HintPath>$(AcadRoot)\acdbmgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="acmgd">
+      <HintPath>$(AcadRoot)\acmgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="accoremgd">
+      <HintPath>$(AcadRoot)\accoremgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="CheckAcadRoot" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(AcadRoot)\acdbmgd.dll')"
+           Text="Không tìm thấy AutoCAD $(AcadYear) tại '$(AcadRoot)'. Đặt AcadRoot hoặc cài AutoCAD $(AcadYear)." />
+  </Target>
+
+</Project>
